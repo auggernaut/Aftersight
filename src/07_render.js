@@ -1185,6 +1185,7 @@ function collectLights() {
   }
   LIGHTS.push({ x: 1520, y: 960, r: 80, a: 0.3 });
   if (online('workshop')) LIGHTS.push({ x: 1725, y: 940, r: 120, a: 0.4, c: [255, 200, 130] });
+  if (online('compute')) LIGHTS.push({ x: 175, y: 1080, r: 110, a: 0.35, c: [140, 255, 200] });
   if (online('greenhouse')) LIGHTS.push({ x: 960, y: 1300, r: 120, a: 0.32, c: [200, 140, 255] });
   if (S.projects.solar.upgrades.canopy) for (let i = 0; i < 6; i++) LIGHTS.push({ x: 1070 + i * 32, y: 940, r: 40, a: 0.5, c: [255, 220, 150] });
   if (S.creations.kitchen.status === 'built') LIGHTS.push({ x: 1440, y: 640, r: 150, a: 0.45, c: [255, 190, 110] });

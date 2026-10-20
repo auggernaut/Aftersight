@@ -27,6 +27,7 @@ const LOTS = {
   kitchen:   { x: 1320, y: 584, w: 240, d: 110, name: 'The old terrace' },
   garden:    { x: 1740, y: 300, w: 160, d: 110, name: 'Waterfall overlook' },
   pavilion:  { x: 790, y: 944, w: 180, d: 100, name: 'Plaza green' },
+  compute:   { x: 100, y: 1056, w: 150, d: 70, name: 'Yard beside the old depot' },
 };
 
 const POI = {

@@ -206,11 +206,16 @@ const log = (...a) => console.log(...a);
   for (const id of ['mara', 'teo', 'juno', 'odile']) log(id, ':', (await talk(id)).slice(0, 70));
   for (let d = 0; d < 14; d++) {
     const b = await buyUpgrades();
+    // optional side project: Community Compute (Juno's idea)
+    const cst = await ev(() => __AL.S.projects.compute.status);
+    if (cst === 'locked') await talk('juno');
+    else if (cst === 'idea') { await workbenchDraft(); log('compute drafted'); }
+    if ((await ev(() => __AL.S.projects.compute.status)) === 'drafted') log('compute meeting:', await meeting(OPTION));
     if (await ev(() => __AL.objectives().some(o => o.text.startsWith('Odile wants')))) { log('odile share beat:', (await talk('odile')).slice(0, 60)); }
     if (await ev(() => __AL.objectives().some(o => o.text.startsWith('Buy back')))) {
       await useAt('notice');
       const bb = await page.$('#panel .pcard .btn.primary');
-      if (bb && !(await bb.isDisabled())) { await bb.click(); log('bought back the array'); }
+      if (bb && !(await bb.isDisabled())) { await bb.click(); log('bought back', await ev(() => Object.keys(__AL.S.flags).filter(k => k.startsWith('bought_')).join(','))); }
       await settle();
     }
     log(`day ${(await state()).day} upgrades:`, b.join(', ') || '-', '|', fmtE(await econ()), '| parts', (await state()).parts, 'fund', (await state()).fund);
@@ -244,8 +249,8 @@ const log = (...a) => console.log(...a);
   await aps[2].click();
   await page.waitForTimeout(300);
   await snap('kitchen-planner');
-  const kb = await page.$('#panel .pfoot .btn.primary');
-  for (let d = 0; d < 5 && await kb.isDisabled(); d++) { await page.click('#panel .close'); await nextMorning(); await useAt('creation', 'kitchen'); }
+  const kbDisabled = async () => { const b = await page.$('#panel .pfoot .btn.primary'); return !b || await b.isDisabled(); };
+  for (let d = 0; d < 6 && await kbDisabled(); d++) { await page.click('#panel .close'); await nextMorning(); await useAt('creation', 'kitchen'); }
   await page.click('#panel .pfoot .btn.primary');
   log('kitchen building', JSON.stringify(await state()));
   for (let d = 0; d < 4 && (await state()).quest !== 'breakfast'; d++) await nextMorning();
@@ -257,6 +262,7 @@ const log = (...a) => console.log(...a);
   await finishDialog(t => t.findIndex(x => x.includes('next Sunday')));
   await page.waitForTimeout(900);
   await snap('epilogue');
+  log('ENDING:', await page.$eval('#cutscene h1', e => e.innerText).catch(() => '?'), '|', await page.$eval('#cutscene .cs-inner', e => e.innerText.split('\n').slice(1,8).join(' / ')).catch(() => ''));
   await settle();
   log('final', JSON.stringify(await state()), fmtE(await econ()));
   // save + reload restores

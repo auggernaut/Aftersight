@@ -65,6 +65,8 @@ function addProjectItems(items, vis) {
   const gp = P.greenhouse;
   if (gp.status === 'building' || gp.status === 'online') items.push({ y: LOTS.greenhouse.y + LOTS.greenhouse.d - 24, f: () => drawGreenhouse(gp) });
   if (gp.upgrades.aqua || gp.pending === 'aqua') items.push({ y: 1384, f: drawAqua });
+  const cpj = P.compute;
+  if (cpj.status === 'building' || cpj.status === 'online') items.push({ y: LOTS.compute.y + LOTS.compute.d - 4, f: () => drawCompute(cpj) });
   // creations
   const C = S.creations;
   if (C.kitchen.status === 'built' || C.kitchen.status === 'building') {
@@ -242,6 +244,37 @@ function drawWorkshop(wp) {
     for (let i = 0; i <= 4; i++) { ctx.beginPath(); ctx.moveTo(x + i * w / 4, front); ctx.lineTo(x + i * w / 4, front - h); ctx.stroke(); }
     for (let j = 1; j <= 3; j++) { ctx.beginPath(); ctx.moveTo(x, front - j * h / 3); ctx.lineTo(x + w, front - j * h / 3); ctx.stroke(); }
   }
+}
+function drawCompute(cp) {
+  const L = LOTS.compute;
+  const x = L.x, w = L.w, front = L.y + L.d - 4, h = 84;
+  const prog = cp.status === 'online' ? 1 : clamp(1 - cp.buildLeft / cp.buildTotal + 0.25, 0, 1);
+  const top = front - h * prog;
+  ctx.fillStyle = 'rgba(30,25,40,0.2)'; ctx.fillRect(x - 4, front - 3, w + 8, 8);
+  if (prog < 1) { scaffold(x, top, w, front - top); return; }
+  const glass = cp.style === 'glass';
+  ctx.fillStyle = col(glass ? '#dfe6e8' : '#9c7b58'); ctx.fillRect(x, top, w, front - top);
+  if (!glass) { ctx.strokeStyle = col('#7f6246'); ctx.lineWidth = 1; for (let xx = x + 10; xx < x + w; xx += 10) { ctx.beginPath(); ctx.moveTo(xx, top); ctx.lineTo(xx, front); ctx.stroke(); } }
+  // racks with blinking lights
+  const racks = 4, rw = 24, gap = (w - 24 - racks * rw) / (racks - 1);
+  for (let r = 0; r < racks; r++) {
+    const rx = x + 12 + r * (rw + gap), ry = front - 64;
+    ctx.fillStyle = col('#2b2a33'); ctx.fillRect(rx, ry, rw, 58);
+    for (let k = 0; k < 7; k++) {
+      const on = Math.sin(TIME * (3 + k * 0.7) + r * 5 + k) > 0.2;
+      ctx.fillStyle = on ? (S.projects.compute.option === 'brightline' ? '#7fb2ff' : '#8ff4b0') : '#3d3c48';
+      ctx.fillRect(rx + 4, ry + 5 + k * 7.6, 3, 3); ctx.fillRect(rx + 12, ry + 5 + k * 7.6, 8, 2);
+    }
+  }
+  if (glass) { ctx.fillStyle = 'rgba(170,210,225,0.28)'; ctx.fillRect(x, top, w, front - top); }
+  // roof with a strip of panels
+  ctx.fillStyle = col('#6e6a66'); ctx.beginPath(); ctx.moveTo(x - 10, top + 4); ctx.lineTo(x + w + 10, top + 4); ctx.lineTo(x + w - 16, top - 26); ctx.lineTo(x + 16, top - 26); ctx.fill();
+  panelQuad(x + 10, x + w - 10, top, top - 22, 10, 30);
+  if (cp.upgrades.heat) { ctx.strokeStyle = col('#c8743c'); ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x + w, front - 20); ctx.lineTo(x + w + 30, front - 20); ctx.stroke(); }
+  const brand = cp.option === 'brightline';
+  ctx.fillStyle = col(brand ? '#2e4a8a' : '#2f2a28'); rrect(ctx, x + w / 2 - 58, top + 6, 116, 16, 4); ctx.fill();
+  ctx.fillStyle = brand ? '#cfe0ff' : col('#8ff4e0'); ctx.font = '800 10px Nunito, system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(brand ? 'BRIGHTLINE COMPUTE' : 'STREET COMPUTE', x + w / 2, top + 14);
 }
 function drawBikeRack() {
   const cols2 = ['#e0503a', '#4fa3c4', '#e8c25a', '#8ac06a'];

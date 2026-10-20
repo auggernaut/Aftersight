@@ -195,6 +195,8 @@ th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacin
 #cutscene, #title { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 20px; }
 #cutscene[hidden], #title[hidden] { display: none; }
 .cutscene.afterlight { background: radial-gradient(ellipse at 50% 120%, rgba(255, 196, 120, 0.95), rgba(214, 120, 120, 0.85) 35%, rgba(40, 46, 96, 0.92) 80%); animation: fadein 1.4s ease-out; }
+.cutscene.epilogue .cs-inner { max-height: 94vh; overflow-y: auto; padding: 8px 4px; }
+.cutscene.epilogue h1 { font-size: clamp(36px, 7vw, 64px); }
 .cutscene.epilogue { background: linear-gradient(160deg, rgba(30, 48, 52, 0.92), rgba(120, 70, 80, 0.88)); animation: fadein 1s ease-out; }
 .sweep { position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(255, 240, 200, 0.55) 50%, transparent 70%); background-size: 300% 100%; animation: sweep 3.2s ease-out forwards; pointer-events: none; }
 @keyframes sweep { from { background-position: 100% 0; } to { background-position: -50% 0; } }
@@ -426,6 +428,7 @@ const LOTS = {
   kitchen:   { x: 1320, y: 584, w: 240, d: 110, name: 'The old terrace' },
   garden:    { x: 1740, y: 300, w: 160, d: 110, name: 'Waterfall overlook' },
   pavilion:  { x: 790, y: 944, w: 180, d: 100, name: 'Plaza green' },
+  compute:   { x: 100, y: 1056, w: 150, d: 70, name: 'Yard beside the old depot' },
 };
 
 const POI = {
@@ -743,8 +746,8 @@ const PROJECTS = {
       { id: 'leaf', name: "Juno's leaf canopy", desc: 'Panels shaped like leaves on curved stems. Juno sketched it.', requires: 'junoLeaf' },
     ],
     upgrades: [
-      { id: 'battery', name: 'Battery bank', parts: 30, revenue: 45, idea: 'odile', desc: 'Stores midday sun and sells it at six in the evening, when power is dear.' },
-      { id: 'canopy', name: 'Plaza canopy', parts: 40, revenue: 55, idea: 'juno', desc: 'A solar shade over the plaza: more power, and a cool place to sit.' },
+      { id: 'battery', name: 'Battery bank', parts: 20, revenue: 45, idea: 'odile', desc: 'Stores midday sun and sells it at six in the evening, when power is dear.' },
+      { id: 'canopy', name: 'Plaza canopy', parts: 28, revenue: 55, idea: 'juno', desc: 'A solar shade over the plaza: more power, and a cool place to sit.' },
     ],
     options: ['equal', 'need', 'odile', 'brightline'],
   },
@@ -758,10 +761,10 @@ const PROJECTS = {
       { id: 'glass', name: 'Glass workshop', desc: 'Light and open, so anyone walking by can watch the robots work.' },
     ],
     upgrades: [
-      { id: 'bay', name: 'Second repair bay', parts: 40, revenue: 95, fab: 10, idea: 'teo', desc: 'Twice the repair capacity, and ten more parts a day.' },
-      { id: 'bikes', name: 'Cargo bike fleet', parts: 25, revenue: 0, idea: 'mara', desc: 'Shared electric cargo bikes. Transport costs fall by another 40%.' },
+      { id: 'bay', name: 'Second repair bay', parts: 28, revenue: 95, fab: 10, idea: 'teo', desc: 'Twice the repair capacity, and ten more parts a day.' },
+      { id: 'bikes', name: 'Cargo bike fleet', parts: 18, revenue: 0, idea: 'mara', desc: 'Shared electric cargo bikes. Transport costs fall by another 40%.' },
     ],
-    options: ['equal', 'need', 'odile'],
+    options: ['equal', 'need', 'odile', 'brightline'],
   },
   greenhouse: {
     name: 'Automated Greenhouse', icon: 'sprout', parts: 90, op: 12, revenue: 50, lot: 'greenhouse',
@@ -773,9 +776,23 @@ const PROJECTS = {
       { id: 'dome', name: 'Geodesic dome', desc: 'A bright faceted dome. Juno says it looks like a beehive.' },
     ],
     upgrades: [
-      { id: 'aqua', name: 'Aquaponics tanks', parts: 30, revenue: 30, idea: 'juno', desc: 'Fish and greens grown together. More produce to sell; food bills fall another 20%.' },
+      { id: 'aqua', name: 'Aquaponics tanks', parts: 20, revenue: 30, idea: 'juno', desc: 'Fish and greens grown together. More produce to sell; food bills fall another 20%.' },
     ],
     options: ['equal', 'need'],
+  },
+  compute: {
+    name: 'Community Compute', icon: 'wrench', parts: 60, op: 10, revenue: 120, lot: 'compute', side: true,
+    blurb: "Server racks in a shed beside the old rail depot, running on the street's own sunlight. The valley rents time on them for AI work, and whoever owns the racks owns what they earn.",
+    service: "The town runs its own models. Juno's image-labeling gig for a city AI company is no longer needed. Racks draw power from the array, which is cheap only if the street owns the array.",
+    output: 'Compute time rented to the valley',
+    styles: [
+      { id: 'shed', name: 'Timber server shed', desc: 'Plain boards, louvered vents, a vine climbing toward the warm air.' },
+      { id: 'glass', name: 'Glass server house', desc: 'Glass walls, so anyone walking past can watch the racks blink.' },
+    ],
+    upgrades: [
+      { id: 'heat', name: 'Heat reuse loop', parts: 18, revenue: 30, idea: 'teo', desc: "Pipes the racks' waste heat to the greenhouse. Less cooling, more to sell." },
+    ],
+    options: ['equal', 'need', 'odile', 'brightline'],
   },
 };
 
@@ -783,12 +800,12 @@ const OWNERSHIP = {
   equal: { name: 'Neighborhood co-op', tag: 'Equal shares', desc: 'Every household owns an equal share. 20% goes to the Commons Fund for upkeep and future projects.' },
   need: { name: 'Co-op, weighted by need', tag: 'Need-weighted', desc: 'Households still short of their essentials get bigger shares. 20% goes to the Commons Fund.' },
   odile: { name: "Odile's investment", tag: 'Investor-led', desc: 'Odile pays for half the parts from her savings and takes half the shares. The rest is split among the others and the Commons Fund.' },
-  brightline: { name: 'Brightline Co. builds it', tag: 'Outside company', desc: 'A company from the city pays for everything and keeps the profits. Residents get 25% off their power bill. 5% goes to the Commons Fund.' },
+  brightline: { name: 'Brightline Co. builds it', tag: 'Outside company', desc: 'A company from the city pays for everything, sets the prices and keeps the profits. Residents get an introductory discount. 5% goes to the Commons Fund.' },
 };
 
 const CREATIONS = {
   kitchen: {
-    name: 'Shared Kitchen', lot: 'kitchen', base: 40, who: 'mara',
+    name: 'Shared Kitchen', lot: 'kitchen', base: 25, who: 'mara',
     blurb: 'Turn the empty terrace into a kitchen anyone can use.',
     features: [
       { id: 'oven', name: 'Wood-fired bread oven', who: 'mara', parts: 15 },
@@ -882,8 +899,8 @@ function expensesOf(id) {
   const b = RES[id].base;
   const P = S.projects;
   let power = b.power, food = b.food, transport = b.transport;
-  if (online('solar')) power = P.solar.option === 'brightline' ? b.power * 0.75 : 2;
-  if (online('workshop')) transport = b.transport * 0.35 * (P.workshop.upgrades.bikes ? 0.6 : 1);
+  if (online('solar')) power = P.solar.option === 'brightline' ? b.power * (S.flags.blHike ? 1.1 : 0.75) : 2;
+  if (online('workshop')) transport = b.transport * (P.workshop.option === 'brightline' ? 0.6 : 0.35) * (P.workshop.upgrades.bikes ? 0.6 : 1);
   if (online('greenhouse')) food = b.food * 0.5 * (P.greenhouse.upgrades.aqua ? 0.8 : 1);
   const total = b.housing + food + power + transport + b.other;
   const baseTotal = b.housing + b.food + b.power + b.transport + b.other;
@@ -900,10 +917,13 @@ function projectEcon(pid, actual) {
   if (pid === 'solar') revenue *= (actual ? WEATHER[S.weather].solar : 0.9) * (p.damaged ? 0.55 : 1);
   if (pid === 'greenhouse' && actual && S.weather === 'rain') revenue *= 1.1;
   if (pid === 'workshop') { revenue *= p.ramp; fab = Math.round(fab * p.ramp); }
-  const op = d.op + nUp * 4;
+  let op = d.op + nUp * 4;
+  if (pid === 'compute') op += computePowerCost();
   return { revenue, op, net: revenue - op, fab };
 }
 
+// Compute racks run on the array: nearly free if the street owns it, a real bill if Brightline does or there is no array.
+function computePowerCost() { return !online('solar') ? 34 : S.projects.solar.option === 'brightline' ? 26 : 2; }
 function incomeOf(id, actual) {
   const by = {};
   let total = 0;
@@ -1025,7 +1045,7 @@ function endOfDay() {
       const c = (p.owners.commons || 0) * net;
       S.fund += c; report.fund += c;
     }
-    if (e.fab) { S.parts += e.fab; report.parts += e.fab; }
+    if (e.fab) { const f = Math.round(e.fab * (p.owners && p.owners.brightline ? 0.4 : 1)); S.parts += f; report.parts += f; }
   }
   // 2. construction
   const finished = [];
@@ -1045,6 +1065,12 @@ function endOfDay() {
   S.day++;
   if (S.flags.stormArmed && !S.flags.stormDone && online('solar')) { S.flags.stormNext = true; S.flags.stormDone = true; }
   S.weather = rollWeather(S.day);
+  // Brightline's introductory discount ends
+  if (online('solar') && S.projects.solar.option === 'brightline' && !S.flags.blHike && S.day - S.projects.solar.builtDay >= 2) {
+    S.flags.blHike = true;
+    report.events.push('A letter from Brightline: the introductory discount has ended. Power on the street now costs 10% more than it did before the array.');
+    logEvent('Brightline ended its discount. Power bills went up.', 'note');
+  }
   if (S.weather === 'storm' && online('solar') && !S.projects.solar.damaged) {
     S.projects.solar.damaged = true;
     report.events.push('A windstorm tore loose a row of panels on Sunfield. The array is running at half strength.');
@@ -1054,9 +1080,10 @@ function endOfDay() {
   for (const id of RES_IDS) {
     const h = H(id);
     const before = h.work;
+    h.worked = (h.worked || 0) + h.work;
     const req = requiredWork(id);
     let nw;
-    if (req < h.work) nw = Math.max(req, h.work - 3.5);
+    if (req < h.work) nw = Math.max(req, h.work - 4.5);
     else nw = req;
     nw = nw <= 0.05 ? 0 : Math.ceil(nw * 2) / 2;
     h.work = nw;
@@ -1070,7 +1097,7 @@ function endOfDay() {
     else if (prev === 'overworked' || prev === 'easing') { h.stage = 'rest'; h.stageDays = 0; h.coveredDay = S.day; }
     else if (prev === 'rest') {
       h.stageDays++;
-      const need = { mara: 2, teo: 1, juno: 1, odile: 1 }[id];
+      const need = { mara: 1, teo: 1, juno: 1, odile: 1 }[id];
       if ((h.stageDays >= need && (h.nudged || id === 'odile' || id === 'mara')) || h.stageDays >= need + 2) { h.stage = 'thriving'; h.stageDays = 0; }
     } else if (prev === 'thriving') h.stageDays++;
     if (prev !== h.stage) report.households[id] = { from: prev, to: h.stage };
@@ -1228,7 +1255,10 @@ function objectives() {
   // side objectives
   if (S.projects.solar.damaged) out.push({ text: 'Repair the storm-damaged array', detail: 'Costs 8 parts. Sunfield meadow, south-east.', target: POI.sunfield, side: true });
   if (odileShareReady()) out.push({ text: 'Odile wants a word', detail: 'Something about her shares.', target: resPos('odile'), side: true });
-  if (buybackAvailable()) out.push({ text: 'Buy back the array from Brightline', detail: `The Commons Fund has ${fmtMoney(S.fund)} of the ${fmtMoney(buybackPrice())} needed. Use the notice board.`, target: POI.notice, side: true });
+  if (buybackAvailable()) { const bp = buybackPid(); out.push({ text: `Buy back the ${PROJECTS[bp].name} from ${buybackSeller(bp)}`, detail: `The Commons Fund has ${fmtMoney(S.fund)} of the ${fmtMoney(buybackPrice(bp))} needed.${S.projects[bp].option === 'brightline' ? ' The price goes up every day.' : ''} Use the notice board.`, target: POI.notice, side: true }); }
+  const cp = S.projects.compute;
+  if (cp.status === 'idea') out.push({ text: "Juno's idea: draft Community Compute", detail: 'At your workbench. Racks in the old depot yard, running on the array.', target: POI.workbench, side: true });
+  if (cp.status === 'drafted' && !Object.keys(PROJECTS).some(k => k !== 'compute' && S.projects[k].status === 'drafted')) out.push({ text: 'Call a town meeting: Community Compute', detail: `Who owns the racks? Parts on hand: ${S.parts} of ${PROJECTS.compute.parts}.`, target: POI.notice, side: true });
   return out;
 }
 function lotCenter(lot) { const L = LOTS[lot]; return { x: L.x + L.w / 2, y: L.y + L.d + 10 }; }
@@ -1238,17 +1268,46 @@ function odileShareReady() {
   const any = Object.values(S.projects).some(p => p.status === 'online' && p.option === 'odile');
   return any && H('odile').work <= 0 && RES_IDS.some(id => id !== 'odile' && H(id).work > 0);
 }
-function buybackPrice() { return Math.round(Math.max(150, projectEcon('solar').net * 3) / 10) * 10; }
-function buybackAvailable() { return online('solar') && S.projects.solar.option === 'brightline'; }
-function doBuyback() {
-  const price = buybackPrice();
+// Projects the Commons Fund can buy back: anything Brightline owns, or Odile's stake if she chose to keep it.
+function buybackPid() {
+  for (const pid in PROJECTS) { const p = S.projects[pid]; if (p.status === 'online' && (p.option === 'brightline' || (p.option === 'odile' && S.flags.odileKept))) return pid; }
+  return null;
+}
+function buybackSeller(pid) { return S.projects[pid].option === 'brightline' ? 'Brightline' : 'Odile'; }
+function buybackPrice(pid = buybackPid()) {
+  if (!pid) return 0;
+  const p = S.projects[pid], net = Math.max(0, projectEcon(pid).net);
+  if (p.option === 'odile') return Math.round(Math.max(100, p.owners.odile * net * 5) / 10) * 10;
+  const days = clamp(S.day - p.builtDay, 0, 10);
+  return Math.round(Math.max(150, net * 3) * (1 + 0.1 * days) / 10) * 10;
+}
+function buybackAvailable() { return !!buybackPid(); }
+function doBuyback(pid = buybackPid()) {
+  if (!pid) return false;
+  const price = buybackPrice(pid);
   if (S.fund < price) return false;
+  const seller = buybackSeller(pid);
   S.fund -= price;
-  const p = S.projects.solar;
+  const p = S.projects[pid];
   p.option = 'equal'; p.owners = ownersFor('equal');
-  addStory(p, `Day ${S.day}: the street bought the array back from Brightline for ${fmtMoney(price)}.`);
-  logEvent('The street bought the solar array back from Brightline.', 'milestone');
+  S.flags['bought_' + pid] = seller;
+  addStory(p, `Day ${S.day}: the Commons Fund bought the ${PROJECTS[pid].name} from ${seller} for ${fmtMoney(price)}.`);
+  logEvent(`The street bought the ${PROJECTS[pid].name} from ${seller}.`, 'milestone');
   return true;
+}
+function doOdileKeep() {
+  S.flags.odileShared = true; S.flags.odileKept = true;
+  logEvent('Odile kept her stake. The Commons Fund can still buy it from her.', 'note');
+}
+// Who owns the street's engine: each owner's slice of what every running project earns.
+function engineShares() {
+  const out = {}; let tot = 0;
+  for (const pid in PROJECTS) {
+    const p = S.projects[pid]; if (p.status !== 'online' || !p.owners) continue;
+    const net = Math.max(0, projectEcon(pid).net);
+    for (const k in p.owners) { out[k] = (out[k] || 0) + p.owners[k] * net; tot += p.owners[k] * net; }
+  }
+  return { by: out, tot };
 }
 function doOdileShare() {
   S.flags.odileShared = true;
@@ -1765,6 +1824,22 @@ function talkJuno(h) {
       FX(() => { see('juno_gh'); S.flags.junoAqua = true; }),
     ];
   }
+  if (S.projects.compute.status === 'locked' && online('solar') && online('workshop') && seen('juno_ws')) {
+    return [
+      L('juno', 'Can I tell you what the night gig actually is? I label pictures so a company in the city can teach its AI. Their racks do the real work. I just feed them.', 'neutral'),
+      L('juno', 'The old depot yard gets sun all afternoon. What if the street had its own racks? On our own power. Renting compute to the valley instead of renting ourselves to it.', 'neutral'),
+      CH(
+        { t: 'Let’s draft it.', then: [L('juno', 'Okay. Okay. I’ll stop labeling cats the day it turns on.', 'happy')], fx: () => befriend('juno', 6) },
+        { t: 'Who would own the racks?', then: [L('juno', 'That’s the whole question, isn’t it. Same as the panels.', 'neutral')], fx: () => befriend('juno', 4) },
+      ),
+      FX(() => { S.projects.compute.status = 'idea'; logEvent("Juno's idea: Community Compute in the old depot yard.", 'idea'); hooks.changed(); }),
+    ];
+  }
+  if (online('compute') && !seen('juno_compute')) {
+    const o = S.projects.compute.option;
+    const t = o === 'brightline' ? 'Brightline’s racks hum all night in our depot. I still label for them. It’s closer to home, at least.' : 'I logged off the labeling site for the last time. Our racks are training a model for the valley clinic. We own that.';
+    return [L('juno', t, o === 'brightline' ? 'tired' : 'happy'), FX(() => see('juno_compute'))];
+  }
   if (online('workshop') && !seen('juno_ws')) {
     return [L('juno', 'There’s a robot in Teo’s workshop that hums while it solders. I’m going to draw it someday. Someday.', 'neutral'), FX(() => see('juno_ws'))];
   }
@@ -1804,7 +1879,7 @@ function talkOdile(h) {
       L('odile', 'And Juno still runs for the bus every morning. Mara too. I see them through the window.', 'neutral'),
       CH(
         { t: 'Would you share some of your stake with them?', then: [L('odile', 'Half. Put half of mine in their names, the ones who still need it. And don’t make a speech about it.', 'calm')], fx: () => { doOdileShare(); befriend('odile', 10); hooks.changed(); } },
-        { t: 'It was your money. You earned it.', then: [L('odile', 'I did. And I’m not sure what I earned it for, if not this. Half. Put half in their names.', 'calm')], fx: () => { doOdileShare(); befriend('odile', 6); hooks.changed(); } },
+        { t: 'It was your money. Keep it.', then: [L('odile', 'Good. I worked forty years for that money. If the Commons Fund wants my stake, it can make me an offer like anyone else.', 'neutral')], fx: () => { doOdileKeep(); hooks.changed(); } },
       ),
     ];
   }
@@ -3104,6 +3179,7 @@ function collectLights() {
   }
   LIGHTS.push({ x: 1520, y: 960, r: 80, a: 0.3 });
   if (online('workshop')) LIGHTS.push({ x: 1725, y: 940, r: 120, a: 0.4, c: [255, 200, 130] });
+  if (online('compute')) LIGHTS.push({ x: 175, y: 1080, r: 110, a: 0.35, c: [140, 255, 200] });
   if (online('greenhouse')) LIGHTS.push({ x: 960, y: 1300, r: 120, a: 0.32, c: [200, 140, 255] });
   if (S.projects.solar.upgrades.canopy) for (let i = 0; i < 6; i++) LIGHTS.push({ x: 1070 + i * 32, y: 940, r: 40, a: 0.5, c: [255, 220, 150] });
   if (S.creations.kitchen.status === 'built') LIGHTS.push({ x: 1440, y: 640, r: 150, a: 0.45, c: [255, 190, 110] });
@@ -3263,6 +3339,8 @@ function addProjectItems(items, vis) {
   const gp = P.greenhouse;
   if (gp.status === 'building' || gp.status === 'online') items.push({ y: LOTS.greenhouse.y + LOTS.greenhouse.d - 24, f: () => drawGreenhouse(gp) });
   if (gp.upgrades.aqua || gp.pending === 'aqua') items.push({ y: 1384, f: drawAqua });
+  const cpj = P.compute;
+  if (cpj.status === 'building' || cpj.status === 'online') items.push({ y: LOTS.compute.y + LOTS.compute.d - 4, f: () => drawCompute(cpj) });
   // creations
   const C = S.creations;
   if (C.kitchen.status === 'built' || C.kitchen.status === 'building') {
@@ -3440,6 +3518,37 @@ function drawWorkshop(wp) {
     for (let i = 0; i <= 4; i++) { ctx.beginPath(); ctx.moveTo(x + i * w / 4, front); ctx.lineTo(x + i * w / 4, front - h); ctx.stroke(); }
     for (let j = 1; j <= 3; j++) { ctx.beginPath(); ctx.moveTo(x, front - j * h / 3); ctx.lineTo(x + w, front - j * h / 3); ctx.stroke(); }
   }
+}
+function drawCompute(cp) {
+  const L = LOTS.compute;
+  const x = L.x, w = L.w, front = L.y + L.d - 4, h = 84;
+  const prog = cp.status === 'online' ? 1 : clamp(1 - cp.buildLeft / cp.buildTotal + 0.25, 0, 1);
+  const top = front - h * prog;
+  ctx.fillStyle = 'rgba(30,25,40,0.2)'; ctx.fillRect(x - 4, front - 3, w + 8, 8);
+  if (prog < 1) { scaffold(x, top, w, front - top); return; }
+  const glass = cp.style === 'glass';
+  ctx.fillStyle = col(glass ? '#dfe6e8' : '#9c7b58'); ctx.fillRect(x, top, w, front - top);
+  if (!glass) { ctx.strokeStyle = col('#7f6246'); ctx.lineWidth = 1; for (let xx = x + 10; xx < x + w; xx += 10) { ctx.beginPath(); ctx.moveTo(xx, top); ctx.lineTo(xx, front); ctx.stroke(); } }
+  // racks with blinking lights
+  const racks = 4, rw = 24, gap = (w - 24 - racks * rw) / (racks - 1);
+  for (let r = 0; r < racks; r++) {
+    const rx = x + 12 + r * (rw + gap), ry = front - 64;
+    ctx.fillStyle = col('#2b2a33'); ctx.fillRect(rx, ry, rw, 58);
+    for (let k = 0; k < 7; k++) {
+      const on = Math.sin(TIME * (3 + k * 0.7) + r * 5 + k) > 0.2;
+      ctx.fillStyle = on ? (S.projects.compute.option === 'brightline' ? '#7fb2ff' : '#8ff4b0') : '#3d3c48';
+      ctx.fillRect(rx + 4, ry + 5 + k * 7.6, 3, 3); ctx.fillRect(rx + 12, ry + 5 + k * 7.6, 8, 2);
+    }
+  }
+  if (glass) { ctx.fillStyle = 'rgba(170,210,225,0.28)'; ctx.fillRect(x, top, w, front - top); }
+  // roof with a strip of panels
+  ctx.fillStyle = col('#6e6a66'); ctx.beginPath(); ctx.moveTo(x - 10, top + 4); ctx.lineTo(x + w + 10, top + 4); ctx.lineTo(x + w - 16, top - 26); ctx.lineTo(x + 16, top - 26); ctx.fill();
+  panelQuad(x + 10, x + w - 10, top, top - 22, 10, 30);
+  if (cp.upgrades.heat) { ctx.strokeStyle = col('#c8743c'); ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x + w, front - 20); ctx.lineTo(x + w + 30, front - 20); ctx.stroke(); }
+  const brand = cp.option === 'brightline';
+  ctx.fillStyle = col(brand ? '#2e4a8a' : '#2f2a28'); rrect(ctx, x + w / 2 - 58, top + 6, 116, 16, 4); ctx.fill();
+  ctx.fillStyle = brand ? '#cfe0ff' : col('#8ff4e0'); ctx.font = '800 10px Nunito, system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(brand ? 'BRIGHTLINE COMPUTE' : 'STREET COMPUTE', x + w / 2, top + 14);
 }
 function drawBikeRack() {
   const cols2 = ['#e0503a', '#4fa3c4', '#e8c25a', '#8ac06a'];
@@ -4111,11 +4220,12 @@ function panelWorkbench(body) {
 function panelMeeting(body) {
   const pid = Object.keys(PROJECTS).find(k => S.projects[k].status === 'drafted');
   if (buybackAvailable()) {
-    const price = buybackPrice();
-    const box = el('div', { class: 'pcard' }, `<div class="pc-head"><h3>Buy back the array from Brightline</h3></div><p>Brightline will sell its stake for ${fmtMoney(price)}, about three days of its earnings. The array would then belong to the four households (20% each) and the Commons Fund (20%).</p><p class="muted">Commons Fund: ${fmtMoney(S.fund)}</p>`);
+    const bp = buybackPid(), price = buybackPrice(bp), seller = buybackSeller(bp), nm = PROJECTS[bp].name;
+    const why = seller === 'Brightline' ? `Brightline will sell its stake for ${fmtMoney(price)}. Every day the street waits, the price goes up, and Brightline's share of the earnings leaves town.` : `Odile will sell the stake she kept for ${fmtMoney(price)}, about five days of what it pays her. She says it's a fair price. It is.`;
+    const box = el('div', { class: 'pcard' }, `<div class="pc-head"><h3>Buy the ${nm} from ${seller}</h3></div><p>${why} The ${nm} would then belong to the four households (20% each) and the Commons Fund (20%).</p><p class="muted">Commons Fund: ${fmtMoney(S.fund)}</p>`);
     const b = el('button', { class: 'btn primary' }, S.fund >= price ? `Buy it back · ${fmtMoney(price)}` : `Need ${fmtMoney(price - S.fund)} more`);
     b.disabled = S.fund < price;
-    b.onclick = () => { if (doBuyback()) { hooks.sfx('quest'); toast('The array belongs to the street now.', 'good'); rerender(); saveGame(); } };
+    b.onclick = () => { if (doBuyback(bp)) { hooks.sfx('quest'); toast(`The ${nm} belongs to the street now.`, 'good'); rerender(); saveGame(); } };
     box.appendChild(b);
     body.appendChild(box);
   }
@@ -4153,6 +4263,8 @@ function panelMeeting(body) {
   if (proj.owners.brightline) t += `<tr class="sub"><td colspan="2"><i class="dot" style="background:${OWNER_COLORS.brightline}"></i>Brightline Co.</td><td class="num" colspan="3">+${fmtMoney(proj.owners.brightline * net)}/day leaves the neighborhood</td></tr>`;
   t += '</tbody></table>';
   body.appendChild(el('div', { class: 'scroll-x' }, `<h4>What changes on a typical day</h4>${t}`));
+  if (sel.option === 'brightline') body.appendChild(el('p', { class: 'fine' }, `Brightline sets the prices from here on, and the street can only buy it back later, at a price that rises every day.${pid === 'workshop' ? ' Most of the parts the robots make would go to the city.' : ''}`));
+  if (pid === 'compute') body.appendChild(el('p', { class: 'fine' }, `Power for the racks: ${fmtMoney(computePowerCost())}/day, because ${!online('solar') ? 'there is no array yet' : S.projects.solar.option === 'brightline' ? 'Brightline owns the array and sells the power' : 'the street owns the array'}.`));
   // approach
   body.appendChild(el('h4', {}, 'How should it be built?'));
   const ap = el('div', { class: 'options two' });
@@ -4180,6 +4292,13 @@ function meetingQuotes(pid, option) {
   if (option === 'need') q.push(['juno', 'Bigger shares for whoever is still short? That’s... really kind. And smart, honestly.'], ['odile', 'I’d get less. I’m also the one who needs it least. Fine. Write it down before I change my mind.']);
   if (option === 'odile') q.push(['odile', 'Half the parts, half the shares. That’s a fair return on my savings.'], ['juno', 'So Odile gets half of everything it earns, forever? I mean... it is her money.']);
   if (option === 'brightline') q.push(['teo', 'Free is never free. They’ll keep the money and we’ll keep the bills.'], ['mara', 'A quarter off my power bill, today, for nothing? I can’t pretend that’s not tempting.']);
+  if (pid === 'workshop' && option === 'brightline') { q.length = 0; q.push(['teo', 'I teach the robots, and the parts they make go to the city? Most of them, anyway.'], ['mara', 'They’d build it tomorrow, though. And we have no parts.']); }
+  if (pid === 'compute') {
+    q.length = 0;
+    if (option === 'brightline') q.push(['juno', 'So I’d still be labeling for someone else’s machines. In our own depot. On our own sunlight.'], ['odile', 'At least it costs us nothing. Today.']);
+    else if (option === 'odile') q.push(['odile', 'Machines that think, earning while I sleep. I’ll put in half.'], ['juno', 'Then half of what our machines think is Odile’s. Weird sentence.']);
+    else q.push(['juno', 'The company I label for owns racks like these in the city. These would be ours.'], ['teo', 'If it runs on our array, the power is almost free. If Brightline owns the array, it isn’t.']);
+  }
   return q;
 }
 function decideProject(pid, option, approach) {
@@ -4419,10 +4538,20 @@ function epilogueCard() {
   ov.hidden = false; ov.className = 'cutscene epilogue';
   const total0 = RES_IDS.reduce((a, id) => a + (H(id).history[0] ? H(id).history[0].work : 0), 0);
   const inc = RES_IDS.reduce((a, id) => a + incomeOf(id).total, 0);
+  const E = engineShares(), sh = k => E.tot ? (E.by[k] || 0) / E.tot : 0;
+  let title = 'We made room', line = 'We made enough room in our lives to discover what we actually want to do. And now we get to make a beautiful world together.';
+  if (sh('brightline') > 0.1) { title = 'We made room, and we pay rent on it'; line = `Brightline still owns ${Math.round(sh('brightline') * 100)}% of what the street's machines earn, and ${fmtMoney(E.by.brightline)} a day leaves town. The buyback is still pinned to the notice board.`; }
+  else if (sh('odile') > 0.3) { title = 'We made room, on Odile’s savings'; line = `Odile owns ${Math.round(sh('odile') * 100)}% of the street's engine. Nobody needs a job anymore, but everyone knows whose name is on the deeds. She pretends not to mind the thank-you jam.`; }
+  else if (S.projects.compute.status === 'online' && !S.flags.bought_compute && S.projects.compute.option !== 'brightline') { title = 'We own the engine'; line = 'Sunlight, robots, food, and the machines that think. All of it belongs to the people who live here. Juno says the racks hum like the bus used to, only nobody has to get on it.'; }
+  else if (Object.keys(S.flags).some(k => k.startsWith('bought_'))) { title = 'We bought it back'; line = 'It took longer than it had to, and the Commons Fund paid for it. But everything on this street now belongs to the street.'; }
+  const owners = Object.keys(E.by).filter(k => E.by[k] > 0.5).sort((a, b) => E.by[b] - E.by[a]);
+  const bar = `<div style="display:flex;width:100%;max-width:460px;height:14px;border-radius:7px;overflow:hidden;margin:10px 0 4px">${owners.map(k => `<i title="${OWNER_NAMES[k]}" style="flex:${E.by[k]};background:${OWNER_COLORS[k]}"></i>`).join('')}</div><p class="muted" style="font-size:12px">${owners.map(k => `${OWNER_NAMES[k]} ${Math.round(sh(k) * 100)}%`).join(' · ')}</p>`;
+  const hours = `<p class="muted" style="font-size:12px">Paid hours it took to get here: ${RES_IDS.map(id => `${RES[id].short} ${Math.round(H(id).worked || 0)}`).join(', ')}.</p>`;
   ov.innerHTML = `<div class="cs-inner">
     <p class="eyebrow">First neighborhood complete</p>
-    <h1>We made room</h1>
-    <p>We made enough room in our lives to discover what we actually want to do. And now we get to make a beautiful world together.</p>
+    <h1>${title}</h1>
+    <p>${line}</p>
+    <h4 style="margin:14px 0 0">Who owns the street's engine</h4>${bar}${hours}
     <div class="stats"><div><b>${fmtHours(total0)}</b><span>paid work a day the street no longer needs</span></div><div><b>${fmtMoney(inc)}</b><span>ownership income a day, shared among four households</span></div><div><b>${S.day}</b><span>days in town</span></div></div>
     <p class="muted">Keep playing: build the Waterfall Garden and the Music Pavilion, try different styles, or just watch the town live. Riverside, across the bridge, is waiting for a future update.</p>
     <button class="btn primary" id="cs-go">Keep playing</button></div>`;
@@ -4580,6 +4709,7 @@ function interactables() {
 function siteSpot(pid) {
   if (pid === 'solar') return POI.sunfield;
   if (pid === 'workshop') return { x: 1725, y: 1004 };
+  if (pid === 'compute') return { x: 175, y: 1150 };
   return { x: 960, y: 1392 };
 }
 function breakfastHours() { const h = (S.minute % 1440) / 60; return h >= 6 && h < 11.5; }

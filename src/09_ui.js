@@ -476,11 +476,12 @@ function panelWorkbench(body) {
 function panelMeeting(body) {
   const pid = Object.keys(PROJECTS).find(k => S.projects[k].status === 'drafted');
   if (buybackAvailable()) {
-    const price = buybackPrice();
-    const box = el('div', { class: 'pcard' }, `<div class="pc-head"><h3>Buy back the array from Brightline</h3></div><p>Brightline will sell its stake for ${fmtMoney(price)}, about three days of its earnings. The array would then belong to the four households (20% each) and the Commons Fund (20%).</p><p class="muted">Commons Fund: ${fmtMoney(S.fund)}</p>`);
+    const bp = buybackPid(), price = buybackPrice(bp), seller = buybackSeller(bp), nm = PROJECTS[bp].name;
+    const why = seller === 'Brightline' ? `Brightline will sell its stake for ${fmtMoney(price)}. Every day the street waits, the price goes up, and Brightline's share of the earnings leaves town.` : `Odile will sell the stake she kept for ${fmtMoney(price)}, about five days of what it pays her. She says it's a fair price. It is.`;
+    const box = el('div', { class: 'pcard' }, `<div class="pc-head"><h3>Buy the ${nm} from ${seller}</h3></div><p>${why} The ${nm} would then belong to the four households (20% each) and the Commons Fund (20%).</p><p class="muted">Commons Fund: ${fmtMoney(S.fund)}</p>`);
     const b = el('button', { class: 'btn primary' }, S.fund >= price ? `Buy it back · ${fmtMoney(price)}` : `Need ${fmtMoney(price - S.fund)} more`);
     b.disabled = S.fund < price;
-    b.onclick = () => { if (doBuyback()) { hooks.sfx('quest'); toast('The array belongs to the street now.', 'good'); rerender(); saveGame(); } };
+    b.onclick = () => { if (doBuyback(bp)) { hooks.sfx('quest'); toast(`The ${nm} belongs to the street now.`, 'good'); rerender(); saveGame(); } };
     box.appendChild(b);
     body.appendChild(box);
   }
@@ -518,6 +519,8 @@ function panelMeeting(body) {
   if (proj.owners.brightline) t += `<tr class="sub"><td colspan="2"><i class="dot" style="background:${OWNER_COLORS.brightline}"></i>Brightline Co.</td><td class="num" colspan="3">+${fmtMoney(proj.owners.brightline * net)}/day leaves the neighborhood</td></tr>`;
   t += '</tbody></table>';
   body.appendChild(el('div', { class: 'scroll-x' }, `<h4>What changes on a typical day</h4>${t}`));
+  if (sel.option === 'brightline') body.appendChild(el('p', { class: 'fine' }, `Brightline sets the prices from here on, and the street can only buy it back later, at a price that rises every day.${pid === 'workshop' ? ' Most of the parts the robots make would go to the city.' : ''}`));
+  if (pid === 'compute') body.appendChild(el('p', { class: 'fine' }, `Power for the racks: ${fmtMoney(computePowerCost())}/day, because ${!online('solar') ? 'there is no array yet' : S.projects.solar.option === 'brightline' ? 'Brightline owns the array and sells the power' : 'the street owns the array'}.`));
   // approach
   body.appendChild(el('h4', {}, 'How should it be built?'));
   const ap = el('div', { class: 'options two' });
@@ -545,6 +548,13 @@ function meetingQuotes(pid, option) {
   if (option === 'need') q.push(['juno', 'Bigger shares for whoever is still short? That’s... really kind. And smart, honestly.'], ['odile', 'I’d get less. I’m also the one who needs it least. Fine. Write it down before I change my mind.']);
   if (option === 'odile') q.push(['odile', 'Half the parts, half the shares. That’s a fair return on my savings.'], ['juno', 'So Odile gets half of everything it earns, forever? I mean... it is her money.']);
   if (option === 'brightline') q.push(['teo', 'Free is never free. They’ll keep the money and we’ll keep the bills.'], ['mara', 'A quarter off my power bill, today, for nothing? I can’t pretend that’s not tempting.']);
+  if (pid === 'workshop' && option === 'brightline') { q.length = 0; q.push(['teo', 'I teach the robots, and the parts they make go to the city? Most of them, anyway.'], ['mara', 'They’d build it tomorrow, though. And we have no parts.']); }
+  if (pid === 'compute') {
+    q.length = 0;
+    if (option === 'brightline') q.push(['juno', 'So I’d still be labeling for someone else’s machines. In our own depot. On our own sunlight.'], ['odile', 'At least it costs us nothing. Today.']);
+    else if (option === 'odile') q.push(['odile', 'Machines that think, earning while I sleep. I’ll put in half.'], ['juno', 'Then half of what our machines think is Odile’s. Weird sentence.']);
+    else q.push(['juno', 'The company I label for owns racks like these in the city. These would be ours.'], ['teo', 'If it runs on our array, the power is almost free. If Brightline owns the array, it isn’t.']);
+  }
   return q;
 }
 function decideProject(pid, option, approach) {
@@ -784,10 +794,20 @@ function epilogueCard() {
   ov.hidden = false; ov.className = 'cutscene epilogue';
   const total0 = RES_IDS.reduce((a, id) => a + (H(id).history[0] ? H(id).history[0].work : 0), 0);
   const inc = RES_IDS.reduce((a, id) => a + incomeOf(id).total, 0);
+  const E = engineShares(), sh = k => E.tot ? (E.by[k] || 0) / E.tot : 0;
+  let title = 'We made room', line = 'We made enough room in our lives to discover what we actually want to do. And now we get to make a beautiful world together.';
+  if (sh('brightline') > 0.1) { title = 'We made room, and we pay rent on it'; line = `Brightline still owns ${Math.round(sh('brightline') * 100)}% of what the street's machines earn, and ${fmtMoney(E.by.brightline)} a day leaves town. The buyback is still pinned to the notice board.`; }
+  else if (sh('odile') > 0.3) { title = 'We made room, on Odile’s savings'; line = `Odile owns ${Math.round(sh('odile') * 100)}% of the street's engine. Nobody needs a job anymore, but everyone knows whose name is on the deeds. She pretends not to mind the thank-you jam.`; }
+  else if (S.projects.compute.status === 'online' && !S.flags.bought_compute && S.projects.compute.option !== 'brightline') { title = 'We own the engine'; line = 'Sunlight, robots, food, and the machines that think. All of it belongs to the people who live here. Juno says the racks hum like the bus used to, only nobody has to get on it.'; }
+  else if (Object.keys(S.flags).some(k => k.startsWith('bought_'))) { title = 'We bought it back'; line = 'It took longer than it had to, and the Commons Fund paid for it. But everything on this street now belongs to the street.'; }
+  const owners = Object.keys(E.by).filter(k => E.by[k] > 0.5).sort((a, b) => E.by[b] - E.by[a]);
+  const bar = `<div style="display:flex;width:100%;max-width:460px;height:14px;border-radius:7px;overflow:hidden;margin:10px 0 4px">${owners.map(k => `<i title="${OWNER_NAMES[k]}" style="flex:${E.by[k]};background:${OWNER_COLORS[k]}"></i>`).join('')}</div><p class="muted" style="font-size:12px">${owners.map(k => `${OWNER_NAMES[k]} ${Math.round(sh(k) * 100)}%`).join(' · ')}</p>`;
+  const hours = `<p class="muted" style="font-size:12px">Paid hours it took to get here: ${RES_IDS.map(id => `${RES[id].short} ${Math.round(H(id).worked || 0)}`).join(', ')}.</p>`;
   ov.innerHTML = `<div class="cs-inner">
     <p class="eyebrow">First neighborhood complete</p>
-    <h1>We made room</h1>
-    <p>We made enough room in our lives to discover what we actually want to do. And now we get to make a beautiful world together.</p>
+    <h1>${title}</h1>
+    <p>${line}</p>
+    <h4 style="margin:14px 0 0">Who owns the street's engine</h4>${bar}${hours}
     <div class="stats"><div><b>${fmtHours(total0)}</b><span>paid work a day the street no longer needs</span></div><div><b>${fmtMoney(inc)}</b><span>ownership income a day, shared among four households</span></div><div><b>${S.day}</b><span>days in town</span></div></div>
     <p class="muted">Keep playing: build the Waterfall Garden and the Music Pavilion, try different styles, or just watch the town live. Riverside, across the bridge, is waiting for a future update.</p>
     <button class="btn primary" id="cs-go">Keep playing</button></div>`;

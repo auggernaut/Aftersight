@@ -148,6 +148,7 @@ function interactables() {
 function siteSpot(pid) {
   if (pid === 'solar') return POI.sunfield;
   if (pid === 'workshop') return { x: 1725, y: 1004 };
+  if (pid === 'compute') return { x: 175, y: 1150 };
   return { x: 960, y: 1392 };
 }
 function breakfastHours() { const h = (S.minute % 1440) / 60; return h >= 6 && h < 11.5; }

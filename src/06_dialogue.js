@@ -227,6 +227,22 @@ function talkJuno(h) {
       FX(() => { see('juno_gh'); S.flags.junoAqua = true; }),
     ];
   }
+  if (S.projects.compute.status === 'locked' && online('solar') && online('workshop') && seen('juno_ws')) {
+    return [
+      L('juno', 'Can I tell you what the night gig actually is? I label pictures so a company in the city can teach its AI. Their racks do the real work. I just feed them.', 'neutral'),
+      L('juno', 'The old depot yard gets sun all afternoon. What if the street had its own racks? On our own power. Renting compute to the valley instead of renting ourselves to it.', 'neutral'),
+      CH(
+        { t: 'Let’s draft it.', then: [L('juno', 'Okay. Okay. I’ll stop labeling cats the day it turns on.', 'happy')], fx: () => befriend('juno', 6) },
+        { t: 'Who would own the racks?', then: [L('juno', 'That’s the whole question, isn’t it. Same as the panels.', 'neutral')], fx: () => befriend('juno', 4) },
+      ),
+      FX(() => { S.projects.compute.status = 'idea'; logEvent("Juno's idea: Community Compute in the old depot yard.", 'idea'); hooks.changed(); }),
+    ];
+  }
+  if (online('compute') && !seen('juno_compute')) {
+    const o = S.projects.compute.option;
+    const t = o === 'brightline' ? 'Brightline’s racks hum all night in our depot. I still label for them. It’s closer to home, at least.' : 'I logged off the labeling site for the last time. Our racks are training a model for the valley clinic. We own that.';
+    return [L('juno', t, o === 'brightline' ? 'tired' : 'happy'), FX(() => see('juno_compute'))];
+  }
   if (online('workshop') && !seen('juno_ws')) {
     return [L('juno', 'There’s a robot in Teo’s workshop that hums while it solders. I’m going to draw it someday. Someday.', 'neutral'), FX(() => see('juno_ws'))];
   }
@@ -266,7 +282,7 @@ function talkOdile(h) {
       L('odile', 'And Juno still runs for the bus every morning. Mara too. I see them through the window.', 'neutral'),
       CH(
         { t: 'Would you share some of your stake with them?', then: [L('odile', 'Half. Put half of mine in their names, the ones who still need it. And don’t make a speech about it.', 'calm')], fx: () => { doOdileShare(); befriend('odile', 10); hooks.changed(); } },
-        { t: 'It was your money. You earned it.', then: [L('odile', 'I did. And I’m not sure what I earned it for, if not this. Half. Put half in their names.', 'calm')], fx: () => { doOdileShare(); befriend('odile', 6); hooks.changed(); } },
+        { t: 'It was your money. Keep it.', then: [L('odile', 'Good. I worked forty years for that money. If the Commons Fund wants my stake, it can make me an offer like anyone else.', 'neutral')], fx: () => { doOdileKeep(); hooks.changed(); } },
       ),
     ];
   }

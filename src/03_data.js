@@ -51,8 +51,8 @@ const PROJECTS = {
       { id: 'leaf', name: "Juno's leaf canopy", desc: 'Panels shaped like leaves on curved stems. Juno sketched it.', requires: 'junoLeaf' },
     ],
     upgrades: [
-      { id: 'battery', name: 'Battery bank', parts: 30, revenue: 45, idea: 'odile', desc: 'Stores midday sun and sells it at six in the evening, when power is dear.' },
-      { id: 'canopy', name: 'Plaza canopy', parts: 40, revenue: 55, idea: 'juno', desc: 'A solar shade over the plaza: more power, and a cool place to sit.' },
+      { id: 'battery', name: 'Battery bank', parts: 20, revenue: 45, idea: 'odile', desc: 'Stores midday sun and sells it at six in the evening, when power is dear.' },
+      { id: 'canopy', name: 'Plaza canopy', parts: 28, revenue: 55, idea: 'juno', desc: 'A solar shade over the plaza: more power, and a cool place to sit.' },
     ],
     options: ['equal', 'need', 'odile', 'brightline'],
   },
@@ -66,10 +66,10 @@ const PROJECTS = {
       { id: 'glass', name: 'Glass workshop', desc: 'Light and open, so anyone walking by can watch the robots work.' },
     ],
     upgrades: [
-      { id: 'bay', name: 'Second repair bay', parts: 40, revenue: 95, fab: 10, idea: 'teo', desc: 'Twice the repair capacity, and ten more parts a day.' },
-      { id: 'bikes', name: 'Cargo bike fleet', parts: 25, revenue: 0, idea: 'mara', desc: 'Shared electric cargo bikes. Transport costs fall by another 40%.' },
+      { id: 'bay', name: 'Second repair bay', parts: 28, revenue: 95, fab: 10, idea: 'teo', desc: 'Twice the repair capacity, and ten more parts a day.' },
+      { id: 'bikes', name: 'Cargo bike fleet', parts: 18, revenue: 0, idea: 'mara', desc: 'Shared electric cargo bikes. Transport costs fall by another 40%.' },
     ],
-    options: ['equal', 'need', 'odile'],
+    options: ['equal', 'need', 'odile', 'brightline'],
   },
   greenhouse: {
     name: 'Automated Greenhouse', icon: 'sprout', parts: 90, op: 12, revenue: 50, lot: 'greenhouse',
@@ -81,9 +81,23 @@ const PROJECTS = {
       { id: 'dome', name: 'Geodesic dome', desc: 'A bright faceted dome. Juno says it looks like a beehive.' },
     ],
     upgrades: [
-      { id: 'aqua', name: 'Aquaponics tanks', parts: 30, revenue: 30, idea: 'juno', desc: 'Fish and greens grown together. More produce to sell; food bills fall another 20%.' },
+      { id: 'aqua', name: 'Aquaponics tanks', parts: 20, revenue: 30, idea: 'juno', desc: 'Fish and greens grown together. More produce to sell; food bills fall another 20%.' },
     ],
     options: ['equal', 'need'],
+  },
+  compute: {
+    name: 'Community Compute', icon: 'wrench', parts: 60, op: 10, revenue: 120, lot: 'compute', side: true,
+    blurb: "Server racks in a shed beside the old rail depot, running on the street's own sunlight. The valley rents time on them for AI work, and whoever owns the racks owns what they earn.",
+    service: "The town runs its own models. Juno's image-labeling gig for a city AI company is no longer needed. Racks draw power from the array, which is cheap only if the street owns the array.",
+    output: 'Compute time rented to the valley',
+    styles: [
+      { id: 'shed', name: 'Timber server shed', desc: 'Plain boards, louvered vents, a vine climbing toward the warm air.' },
+      { id: 'glass', name: 'Glass server house', desc: 'Glass walls, so anyone walking past can watch the racks blink.' },
+    ],
+    upgrades: [
+      { id: 'heat', name: 'Heat reuse loop', parts: 18, revenue: 30, idea: 'teo', desc: "Pipes the racks' waste heat to the greenhouse. Less cooling, more to sell." },
+    ],
+    options: ['equal', 'need', 'odile', 'brightline'],
   },
 };
 
@@ -91,12 +105,12 @@ const OWNERSHIP = {
   equal: { name: 'Neighborhood co-op', tag: 'Equal shares', desc: 'Every household owns an equal share. 20% goes to the Commons Fund for upkeep and future projects.' },
   need: { name: 'Co-op, weighted by need', tag: 'Need-weighted', desc: 'Households still short of their essentials get bigger shares. 20% goes to the Commons Fund.' },
   odile: { name: "Odile's investment", tag: 'Investor-led', desc: 'Odile pays for half the parts from her savings and takes half the shares. The rest is split among the others and the Commons Fund.' },
-  brightline: { name: 'Brightline Co. builds it', tag: 'Outside company', desc: 'A company from the city pays for everything and keeps the profits. Residents get 25% off their power bill. 5% goes to the Commons Fund.' },
+  brightline: { name: 'Brightline Co. builds it', tag: 'Outside company', desc: 'A company from the city pays for everything, sets the prices and keeps the profits. Residents get an introductory discount. 5% goes to the Commons Fund.' },
 };
 
 const CREATIONS = {
   kitchen: {
-    name: 'Shared Kitchen', lot: 'kitchen', base: 40, who: 'mara',
+    name: 'Shared Kitchen', lot: 'kitchen', base: 25, who: 'mara',
     blurb: 'Turn the empty terrace into a kitchen anyone can use.',
     features: [
       { id: 'oven', name: 'Wood-fired bread oven', who: 'mara', parts: 15 },

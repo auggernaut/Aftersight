@@ -31,6 +31,9 @@ The **Next** card in the bottom-left always says what to do, and an arrow points
 3. **Watch the Ledger.** Ownership income lowers the paid work each household needs. Free hours and energy rise, routines change, and the town gets warmer and more colorful.
 4. **Robot Workshop and Greenhouse.** Teo's broken van and his late wife Rosa's garden lead to the next projects. Upgrades (battery, plaza canopy, extra bay, cargo bikes, aquaponics) come from residents' ideas.
 5. **Cover everyone's essentials.** Ownership choices matter: concentrated ownership leaves some neighbors working longer. Odile can choose to share her stake, and the Commons Fund can buy the array back from the company.
+5b. **Community Compute (optional).** After the workshop, Juno suggests server racks in the old depot yard, running on the array and renting compute to the valley. Its power is nearly free only if the street owns the array.
 6. **Free time.** With work no longer required, neighbors rediscover what they love. Mara proposes a shared kitchen; you plan its style and features and choose whether robots build it or people build it by hand. Then host the first breakfast.
+
+**Ownership has consequences.** Brightline's discount ends two days after its array goes up (power then costs 10% more than before), and its buyback price rises every day. If Brightline builds the workshop, most of the parts it makes go to the city. Odile can keep her stake, and the Commons Fund can buy it from her. The ending changes depending on who owns the street's engine, and it shows each household's total paid hours.
 
 There are no streaks, timers or fail states. Waiting, wandering and talking are always fine.

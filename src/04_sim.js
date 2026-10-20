@@ -34,8 +34,8 @@ function expensesOf(id) {
   const b = RES[id].base;
   const P = S.projects;
   let power = b.power, food = b.food, transport = b.transport;
-  if (online('solar')) power = P.solar.option === 'brightline' ? b.power * 0.75 : 2;
-  if (online('workshop')) transport = b.transport * 0.35 * (P.workshop.upgrades.bikes ? 0.6 : 1);
+  if (online('solar')) power = P.solar.option === 'brightline' ? b.power * (S.flags.blHike ? 1.1 : 0.75) : 2;
+  if (online('workshop')) transport = b.transport * (P.workshop.option === 'brightline' ? 0.6 : 0.35) * (P.workshop.upgrades.bikes ? 0.6 : 1);
   if (online('greenhouse')) food = b.food * 0.5 * (P.greenhouse.upgrades.aqua ? 0.8 : 1);
   const total = b.housing + food + power + transport + b.other;
   const baseTotal = b.housing + b.food + b.power + b.transport + b.other;
@@ -52,10 +52,13 @@ function projectEcon(pid, actual) {
   if (pid === 'solar') revenue *= (actual ? WEATHER[S.weather].solar : 0.9) * (p.damaged ? 0.55 : 1);
   if (pid === 'greenhouse' && actual && S.weather === 'rain') revenue *= 1.1;
   if (pid === 'workshop') { revenue *= p.ramp; fab = Math.round(fab * p.ramp); }
-  const op = d.op + nUp * 4;
+  let op = d.op + nUp * 4;
+  if (pid === 'compute') op += computePowerCost();
   return { revenue, op, net: revenue - op, fab };
 }
 
+// Compute racks run on the array: nearly free if the street owns it, a real bill if Brightline does or there is no array.
+function computePowerCost() { return !online('solar') ? 34 : S.projects.solar.option === 'brightline' ? 26 : 2; }
 function incomeOf(id, actual) {
   const by = {};
   let total = 0;
@@ -177,7 +180,7 @@ function endOfDay() {
       const c = (p.owners.commons || 0) * net;
       S.fund += c; report.fund += c;
     }
-    if (e.fab) { S.parts += e.fab; report.parts += e.fab; }
+    if (e.fab) { const f = Math.round(e.fab * (p.owners && p.owners.brightline ? 0.4 : 1)); S.parts += f; report.parts += f; }
   }
   // 2. construction
   const finished = [];
@@ -197,6 +200,12 @@ function endOfDay() {
   S.day++;
   if (S.flags.stormArmed && !S.flags.stormDone && online('solar')) { S.flags.stormNext = true; S.flags.stormDone = true; }
   S.weather = rollWeather(S.day);
+  // Brightline's introductory discount ends
+  if (online('solar') && S.projects.solar.option === 'brightline' && !S.flags.blHike && S.day - S.projects.solar.builtDay >= 2) {
+    S.flags.blHike = true;
+    report.events.push('A letter from Brightline: the introductory discount has ended. Power on the street now costs 10% more than it did before the array.');
+    logEvent('Brightline ended its discount. Power bills went up.', 'note');
+  }
   if (S.weather === 'storm' && online('solar') && !S.projects.solar.damaged) {
     S.projects.solar.damaged = true;
     report.events.push('A windstorm tore loose a row of panels on Sunfield. The array is running at half strength.');
@@ -206,9 +215,10 @@ function endOfDay() {
   for (const id of RES_IDS) {
     const h = H(id);
     const before = h.work;
+    h.worked = (h.worked || 0) + h.work;
     const req = requiredWork(id);
     let nw;
-    if (req < h.work) nw = Math.max(req, h.work - 3.5);
+    if (req < h.work) nw = Math.max(req, h.work - 4.5);
     else nw = req;
     nw = nw <= 0.05 ? 0 : Math.ceil(nw * 2) / 2;
     h.work = nw;
@@ -222,7 +232,7 @@ function endOfDay() {
     else if (prev === 'overworked' || prev === 'easing') { h.stage = 'rest'; h.stageDays = 0; h.coveredDay = S.day; }
     else if (prev === 'rest') {
       h.stageDays++;
-      const need = { mara: 2, teo: 1, juno: 1, odile: 1 }[id];
+      const need = { mara: 1, teo: 1, juno: 1, odile: 1 }[id];
       if ((h.stageDays >= need && (h.nudged || id === 'odile' || id === 'mara')) || h.stageDays >= need + 2) { h.stage = 'thriving'; h.stageDays = 0; }
     } else if (prev === 'thriving') h.stageDays++;
     if (prev !== h.stage) report.households[id] = { from: prev, to: h.stage };
@@ -380,7 +390,10 @@ function objectives() {
   // side objectives
   if (S.projects.solar.damaged) out.push({ text: 'Repair the storm-damaged array', detail: 'Costs 8 parts. Sunfield meadow, south-east.', target: POI.sunfield, side: true });
   if (odileShareReady()) out.push({ text: 'Odile wants a word', detail: 'Something about her shares.', target: resPos('odile'), side: true });
-  if (buybackAvailable()) out.push({ text: 'Buy back the array from Brightline', detail: `The Commons Fund has ${fmtMoney(S.fund)} of the ${fmtMoney(buybackPrice())} needed. Use the notice board.`, target: POI.notice, side: true });
+  if (buybackAvailable()) { const bp = buybackPid(); out.push({ text: `Buy back the ${PROJECTS[bp].name} from ${buybackSeller(bp)}`, detail: `The Commons Fund has ${fmtMoney(S.fund)} of the ${fmtMoney(buybackPrice(bp))} needed.${S.projects[bp].option === 'brightline' ? ' The price goes up every day.' : ''} Use the notice board.`, target: POI.notice, side: true }); }
+  const cp = S.projects.compute;
+  if (cp.status === 'idea') out.push({ text: "Juno's idea: draft Community Compute", detail: 'At your workbench. Racks in the old depot yard, running on the array.', target: POI.workbench, side: true });
+  if (cp.status === 'drafted' && !Object.keys(PROJECTS).some(k => k !== 'compute' && S.projects[k].status === 'drafted')) out.push({ text: 'Call a town meeting: Community Compute', detail: `Who owns the racks? Parts on hand: ${S.parts} of ${PROJECTS.compute.parts}.`, target: POI.notice, side: true });
   return out;
 }
 function lotCenter(lot) { const L = LOTS[lot]; return { x: L.x + L.w / 2, y: L.y + L.d + 10 }; }
@@ -390,17 +403,46 @@ function odileShareReady() {
   const any = Object.values(S.projects).some(p => p.status === 'online' && p.option === 'odile');
   return any && H('odile').work <= 0 && RES_IDS.some(id => id !== 'odile' && H(id).work > 0);
 }
-function buybackPrice() { return Math.round(Math.max(150, projectEcon('solar').net * 3) / 10) * 10; }
-function buybackAvailable() { return online('solar') && S.projects.solar.option === 'brightline'; }
-function doBuyback() {
-  const price = buybackPrice();
+// Projects the Commons Fund can buy back: anything Brightline owns, or Odile's stake if she chose to keep it.
+function buybackPid() {
+  for (const pid in PROJECTS) { const p = S.projects[pid]; if (p.status === 'online' && (p.option === 'brightline' || (p.option === 'odile' && S.flags.odileKept))) return pid; }
+  return null;
+}
+function buybackSeller(pid) { return S.projects[pid].option === 'brightline' ? 'Brightline' : 'Odile'; }
+function buybackPrice(pid = buybackPid()) {
+  if (!pid) return 0;
+  const p = S.projects[pid], net = Math.max(0, projectEcon(pid).net);
+  if (p.option === 'odile') return Math.round(Math.max(100, p.owners.odile * net * 5) / 10) * 10;
+  const days = clamp(S.day - p.builtDay, 0, 10);
+  return Math.round(Math.max(150, net * 3) * (1 + 0.1 * days) / 10) * 10;
+}
+function buybackAvailable() { return !!buybackPid(); }
+function doBuyback(pid = buybackPid()) {
+  if (!pid) return false;
+  const price = buybackPrice(pid);
   if (S.fund < price) return false;
+  const seller = buybackSeller(pid);
   S.fund -= price;
-  const p = S.projects.solar;
+  const p = S.projects[pid];
   p.option = 'equal'; p.owners = ownersFor('equal');
-  addStory(p, `Day ${S.day}: the street bought the array back from Brightline for ${fmtMoney(price)}.`);
-  logEvent('The street bought the solar array back from Brightline.', 'milestone');
+  S.flags['bought_' + pid] = seller;
+  addStory(p, `Day ${S.day}: the Commons Fund bought the ${PROJECTS[pid].name} from ${seller} for ${fmtMoney(price)}.`);
+  logEvent(`The street bought the ${PROJECTS[pid].name} from ${seller}.`, 'milestone');
   return true;
+}
+function doOdileKeep() {
+  S.flags.odileShared = true; S.flags.odileKept = true;
+  logEvent('Odile kept her stake. The Commons Fund can still buy it from her.', 'note');
+}
+// Who owns the street's engine: each owner's slice of what every running project earns.
+function engineShares() {
+  const out = {}; let tot = 0;
+  for (const pid in PROJECTS) {
+    const p = S.projects[pid]; if (p.status !== 'online' || !p.owners) continue;
+    const net = Math.max(0, projectEcon(pid).net);
+    for (const k in p.owners) { out[k] = (out[k] || 0) + p.owners[k] * net; tot += p.owners[k] * net; }
+  }
+  return { by: out, tot };
 }
 function doOdileShare() {
   S.flags.odileShared = true;

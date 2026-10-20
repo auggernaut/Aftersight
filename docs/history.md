@@ -42,3 +42,11 @@ Augustin's reaction was that it looked about the same. The honest reason: everyt
 - **Breakfast bug:** two of the four story playthroughs fail at the "host the first breakfast" step. The pre-restyle version fails at the same step, so the restyle did not cause it. Not yet fixed.
 - **Need-weighted co-op** has not been played end to end by the automated test.
 - **Performance:** after the restyle, headless frame rate dropped from about 30 to about 24 fps. Full-screen blend effects were too slow in software rendering, so contrast is baked into the color grade instead.
+
+## 2026-10-20: playtest pass
+
+- Fixed a soft-lock at the first breakfast: "Next morning" lands at 6:00, the breakfast window opened at 6:30, and the hint said to press Next morning again. It now opens at 6:00. Also fixed a door-knock race in the playthrough test.
+- Ownership now matters: Brightline's discount ends (power then costs 110% of the original), its buyback price rises daily, and it can also build the workshop (it keeps 60% of the parts the robots make). Odile can choose to keep her stake, and the Commons Fund can buy it. The buyback works for any project.
+- Endings branch on who owns the engine: "We made room, and we pay rent on it" (Brightline), "on Odile's savings", "We own the engine" (community-owned compute), and "We bought it back". The epilogue shows an ownership bar and each household's total paid hours.
+- Added Community Compute: an optional project in the depot yard, suggested by Juno (her night gig is labeling images for a city AI company). Its power cost depends on who owns the array.
+- Tightened the middle: upgrades cost about 30% less, households can cut up to 4.5 h of work a night (was 3.5), Mara settles into free time a day sooner, and the kitchen's base cost dropped from 40 to 25 parts. With all four paths played end to end, co-op paths finish in 13–14 days (was 15–18) and Brightline takes 20.
