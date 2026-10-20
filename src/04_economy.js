@@ -13,6 +13,8 @@ function assetValue(a) { return a.cap * unitCost(a.type); }
 function ownerName(id) {
   if (id === 'helix') return 'Helix Systems (outside)';
   if (id === 'town') return 'Town commons';
+  if (id === 'private') return 'local owner';
+  if (id === 'neighbors') return 'Other valley households';
   const h = S.hh[id];
   return h ? (h.isPlayer ? 'You' : h.name + ' household') : id;
 }
@@ -40,16 +42,26 @@ function localShare(a) { return sum(Object.entries(a.shares), ([k, v]) => k === 
 function placeAsset(type, name, owner, units, opts = {}) {
   let site = opts.site;
   if (!site) {
-    const pref = opts.outside ? S.parcels.filter(p => !p.used && !p.town) : S.parcels.filter(p => !p.used && p.town).concat(S.parcels.filter(p => !p.used && !p.town));
-    const parcel = pref[0];
-    if (!parcel) return null;
-    parcel.used = true;
-    site = makeSite(type, name, parcel, { asset: true });
-    S.sites.push(site);
+    // in town, new builds redevelop the least viable lot; otherwise they go out into the fields
+    const lot = (!opts.outside || rand() < 0.3) ? lotForInvestor(owner) : null;
+    if (lot) {
+      if (owner && lot.owner !== owner) sellLot(lot, owner);
+      site = makeSite(type, name, lot, { asset: true, lot });
+      S.sites.push(site);
+      lot.site = site;
+      setUse(lot, type, `${name} is going up where a ${LOT_USE[lot.use].label.toLowerCase()} used to be.`);
+    } else {
+      const parcel = S.parcels.find(p => !p.used);
+      if (!parcel) return null;
+      parcel.used = true;
+      site = makeSite(type, name, parcel, { asset: true });
+      S.sites.push(site);
+    }
   }
   const a = { id: 'a' + (++S.nextAsset), type, name, cap: 0, shares: {}, site, pending: [], built: S.day, coop: !!opts.coop, out: 0, profit: 0 };
   site.assets = site.assets || [];
   site.assets.push(a);
+  if (site.lot) site.lot.asset = a;
   if (opts.immediate) addShares(a, owner, units);
   else a.pending.push({ owner, units, done: S.day + S.P.buildDays[type], start: S.day, contrib: opts.contrib });
   S.assets.push(a);
@@ -77,7 +89,7 @@ function econDay() {
   // finish construction (volunteers speed it up)
   for (const a of S.assets) {
     a.pending = a.pending.filter(p => {
-      if (day >= p.done) { addShares(a, p.owner, p.units); if (ownerKind(p.owner) !== 'resident' || p.units * unitCost(a.type) > 25000 || a.cap === p.units) log(`${a.name} ${a.cap === p.units ? 'opened' : 'expanded'} (+${num(p.units)} ${UNIT_NAME[a.type]}, ${ownerName(p.owner)})`, 'build'); return false; }
+      if (day >= p.done) { addShares(a, p.owner, p.units); if (ownerKind(p.owner) !== 'resident' || p.units * unitCost(a.type) > 150000 || a.cap === p.units) log(`${a.name} ${a.cap === p.units ? 'opened' : 'expanded'} (+${num(p.units)} ${UNIT_NAME[a.type]}, ${ownerName(p.owner)})`, 'build'); return false; }
       return true;
     });
   }
@@ -93,7 +105,9 @@ function econDay() {
   const deficit = Math.max(0, dE - solarOut);
   const imp = Math.min(deficit, P.gridCap);
   const servedE = dE > 0 ? Math.min(1, (solarOut + imp) / dE) : 1;
-  M.pe = lerp(M.pe, P.peBase * clamp(Math.pow(dE / Math.max(0.01, solarOut), 0.7), 0.35, 6), 0.25);
+  // present day: the national grid covers most of it; it can't grow as fast as appetite does
+  const marginal = deficit > 0 ? P.gridPrice : P.peBase;
+  M.pe = lerp(M.pe, marginal * clamp(Math.pow(dE / Math.max(0.01, solarOut + P.gridCap), 0.8), 0.6, 6), 0.25);
   const soldE = Math.min(solarOut, dE);
 
   // COMPUTE: locally owned racks serve local demand first; Helix sells to whoever pays
@@ -173,7 +187,7 @@ function econDay() {
   M.ubi = ubi;
 
   Object.assign(M, { solarOut, dE, imp, servedE, sC, dCL, dCX, servedC, nRobots, robotEff, robotWork, L, humanNeed, offered, paid, payPerHour,
-    shortE: dE > 0 ? deficit / dE : 0, shortC: 1 - servedC, wagesTotal, divTotal, townIn });
+    shortE: dE > 0 ? Math.max(0, deficit - imp) / dE : 0, localGen: dE > 0 ? Math.min(1, solarOut / dE) : 1, shortC: 1 - servedC, wagesTotal, divTotal, townIn });
 
   investDaily();
   if (day % 30 === 29) econMonth();
@@ -183,9 +197,10 @@ function econDay() {
 function econMonth() {
   const P = S.P, M = S.market;
   M.mE *= 1 + P.gE; M.mC *= 1 + P.gC; M.mX *= 1 + P.gX; M.mL *= 1 + P.gL;
+  landMonth();
   S.helix.monthBudget = P.helixBudget * (1 + S.day / 360);
   // the town council invests its treasury in whatever is shortest, in the commons
-  if (S.town.cash > 150000) {
+  if (S.town.cash > 250000) {
     const type = M.shortC > M.shortE ? 'compute' : 'solar';
     const spend = S.town.cash * 0.7, units = spend / unitCost(type);
     S.town.cash -= spend;

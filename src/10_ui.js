@@ -6,7 +6,7 @@ function bar(v, color, max = 1) { return `<div class="bar"><i style="width:${cla
 function renderStats() {
   const M = S.market, m = metrics();
   const rows = [
-    ['Energy', `${num(M.solarOut)} / ${num(M.dE)} MWh`, bar(1 - M.shortE, '#ffd23f'), `short ${pct(M.shortE)} · $${Math.round(M.pe)}/MWh`],
+    ['Energy', `${num(M.dE)} MWh/day wanted`, bar(1 - M.shortE, '#ffd23f'), `${pct(M.localGen || 0)} local solar · grid ${num(M.imp)} · short ${pct(M.shortE)} · $${Math.round(M.pe)}/MWh`],
     ['Compute', `${num(M.sC)} made · ${num(M.dCL)} local + ${num(M.dCX)} outside want`, bar(1 - M.shortC, '#5dff8f'), `local short ${pct(M.shortC)} · $${Math.round(M.pc)}/unit`],
     ['Robots', `${Math.round(M.nRobots)} (${pct(M.robotWork / Math.max(1, M.L))} of the work)`, bar(M.robotWork / Math.max(1, M.L), '#9fe7ff'), ''],
     ['Paid work', `${m.work.toFixed(1)} h/week per adult`, bar(m.work, '#e8805a', 50), ''],
@@ -34,7 +34,8 @@ function renderYou() {
 // ---------- inspector ----------
 function renderInspect() {
   const el = $('inspect');
-  const p = view.selected, s = view.selSite;
+  const p = view.selected, s = view.selSite, lot = view.selLot;
+  if (!p && !s && lot) { renderLotInspect(el, lot); return; }
   if (!p && !s) { el.hidden = true; $('feed').hidden = false; return; }
   el.hidden = false; $('feed').hidden = true;
   let html = `<button class="close" id="ins-close">×</button>`;
@@ -54,6 +55,7 @@ function renderInspect() {
     else html += `<div class="row sec"><button id="ins-follow">follow</button></div>`;
   } else {
     html += `<h3>${esc(s.name)}</h3>`;
+    if (s.lot) html += lotHistoryHtml(s.lot);
     const assets = (s.assets || []);
     if (s.household) html += `<div class="muted">home of ${esc(s.household.isPlayer ? 'you' : 'the ' + s.household.name + ' household')}: ${s.household.members.map(m => esc(m.first)).join(', ')} · cash ${money(s.household.cash)}</div>`;
     for (const a of assets) {
@@ -67,7 +69,7 @@ function renderInspect() {
     html += `<div class="sec muted">Here now: ${here.length ? here.map(q => esc(q.first) + ' (' + q.activity + ')').join(', ') : 'nobody'}</div>`;
   }
   el.innerHTML = html;
-  $('ins-close').onclick = () => { view.selected = null; view.selSite = null; renderInspect(); };
+  $('ins-close').onclick = () => { view.selected = null; view.selSite = null; view.selLot = null; renderInspect(); };
   el.querySelectorAll('[data-p]').forEach(b => b.onclick = () => doAction('persuade', p.id, b.dataset.p));
   if ($('ins-share')) $('ins-share').onclick = () => doAction('share', p.id);
   if ($('ins-follow')) $('ins-follow').onclick = () => { cam.follow = p; cam.tz = Math.max(cam.tz, 24); };
@@ -163,4 +165,16 @@ function toast(text, ms = 3200) { const t = $('toast'); t.textContent = text; t.
 function tickBanners(dtMs) {
   if (bannerTimer > 0) { bannerTimer -= dtMs; if (bannerTimer <= 0) $('banner').hidden = true; }
   if (toastTimer > 0) { toastTimer -= dtMs; if (toastTimer <= 0) $('toast').hidden = true; }
+}
+
+function lotHistoryHtml(l) {
+  return `<div class="muted">Lot history</div>` + l.history.map(hh => `<div>${dateLabel(hh.day * 24).text.replace('Year ', 'Y')}: ${esc((LOT_USE[hh.use] || { label: hh.use }).label)} <span class="muted">(${esc(ownerName(hh.owner))})</span></div>`).join('');
+}
+function renderLotInspect(el, l) {
+  el.hidden = false; $('feed').hidden = true;
+  const u = LOT_USE[l.use] || LOT_USE.vacant;
+  el.innerHTML = `<button class="close" id="ins-close">×</button><h3>${esc(u.label)}</h3><div class="muted">owned by ${esc(ownerName(l.owner))} · ${l.w}×${l.h} tiles · land value ${money(lotValue(l))}</div>` +
+    (VIABILITY[l.use] ? `<div class="sec"><div class="stat"><span>occupancy</span>${bar(1 - l.vac, '#8fd0e0')}</div><div class="muted">${l.vac > 0.5 ? 'Mostly empty. Its owner is looking at other uses.' : 'Still earning its keep.'}</div></div>` : '') +
+    (l.roof ? '<div class="sec">Rooftop solar installed.</div>' : '') + `<div class="sec">${lotHistoryHtml(l)}</div>`;
+  $('ins-close').onclick = () => { view.selLot = null; renderInspect(); };
 }

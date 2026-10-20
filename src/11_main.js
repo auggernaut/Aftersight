@@ -19,7 +19,7 @@ function advance(hours) {
 function frame(now) {
   const dtMs = Math.min(100, now - (lastFrame || now));
   lastFrame = now;
-  if (speed > 0) advance(SPEEDS[speed] * dtMs / 1000);
+  if (speed > 0) { const hrs = SPEEDS[speed] * dtMs / 1000; advance(hrs); stepCars(Math.min(hrs, 0.1)); }
   draw(now);
   tickBanners(dtMs);
   uiClock -= dtMs;
@@ -29,7 +29,8 @@ function frame(now) {
 function refreshUI() {
   const d = dateLabel(S.t);
   $('date').textContent = d.text; $('clock').textContent = d.clock;
-  renderStats(); renderFeed(); renderYou(); drawChart();
+  renderStats(); renderFeed(); renderYou(); drawChart(); syncCars();
+  $('era').textContent = eraName();
   const st = $('stats'), top = st.offsetTop + st.offsetHeight + 8;
   for (const id of ['feed', 'inspect']) { const el = $(id); el.style.top = top + 'px'; el.style.maxHeight = `calc(100vh - ${top}px - 184px)`; }
   if (!document.activeElement || !$('inspect').contains(document.activeElement)) renderInspect();
@@ -49,7 +50,9 @@ function pickAt(sx, sy) {
   for (const p of S.people) { const d = Math.hypot(p.position.x - wx, p.position.y - wy); if (d < bd) { bd = d; best = p; } }
   if (best) return { agent: best };
   const site = S.sites.slice().reverse().find(s => wx >= s.x && wx <= s.x + s.w && wy >= s.y && wy <= s.y + s.h);
-  return site ? { site } : {};
+  if (site) return { site };
+  const lot = S.lots.find(l => !l.site && wx >= l.x && wx <= l.x + l.w && wy >= l.y && wy <= l.y + l.h);
+  return lot ? { lot } : {};
 }
 
 function setupInput() {
@@ -64,7 +67,7 @@ function setupInput() {
   canvas.addEventListener('pointerup', e => {
     if (drag && !drag.moved) {
       const hit = pickAt(e.clientX, e.clientY);
-      view.selected = hit.agent || null; view.selSite = hit.agent ? null : hit.site || null;
+      view.selected = hit.agent || null; view.selSite = hit.site || null; view.selLot = hit.lot || null;
       renderInspect();
     }
     drag = null;
@@ -83,7 +86,7 @@ function setupInput() {
     if (e.key >= '0' && e.key <= '4') setSpeed(+e.key);
     if (e.key === '+' || e.key === '=') cam.tz = clamp(cam.tz * 1.25, minZoom(), 64);
     if (e.key === '-') cam.tz = clamp(cam.tz / 1.25, minZoom(), 64);
-    if (e.key === 'Escape') { view.selected = null; view.selSite = null; hideMenu(); renderInspect(); $('help').hidden = true; }
+    if (e.key === 'Escape') { view.selected = null; view.selSite = null; view.selLot = null; hideMenu(); renderInspect(); $('help').hidden = true; }
   });
   document.querySelectorAll('#speeds button').forEach(b => b.onclick = () => setSpeed(+b.dataset.s));
   document.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { view.colorBy = b.dataset.c; document.querySelectorAll('[data-c]').forEach(x => x.classList.toggle('on', x === b)); });
@@ -113,7 +116,8 @@ window.__SIM = {
   setSpeed, zoomPreset, discover: id => discover(id),
   zoomTo(x, y, z) { cam.follow = null; cam.tx = cam.x = x; cam.ty = cam.y = y; cam.tz = cam.z = z; },
   follow(id) { const p = S.people.find(q => q.id === id) || S.player; cam.follow = p; cam.x = p.position.x; cam.y = p.position.y; },
-  select(id) { view.selected = S.people.find(q => q.id === id) || null; view.selSite = view.selected ? null : S.sites.find(s => s.id === id || s.name === id) || null; renderInspect(); },
+  selectLot(i) { view.selected = null; view.selSite = null; view.selLot = __SIM.S.lots[i]; renderInspect(); },
+  select(id) { if (id == null) { view.selected = null; view.selSite = null; view.selLot = null; renderInspect(); return; } view.selected = S.people.find(q => q.id === id) || null; view.selSite = view.selected ? null : S.sites.find(s => s.id === id || s.name === id) || null; view.selLot = null; renderInspect(); },
   act: (name, ...args) => ACTIONS[name](...args), refreshUI,
 };
 boot();

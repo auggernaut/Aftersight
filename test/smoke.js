@@ -17,6 +17,12 @@ const OUT = process.env.OUT || path.join(__dirname, '../shots');
 
   await page.goto('file://' + path.resolve(__dirname, '../dist/index.html') + '?test=1');
   await page.waitForTimeout(1500);
+  // "then": the present-day town at noon on day 1, from two fixed views
+  const VIEWS = { town: [102, 71, 9.5], region: [110, 66, 5.2] };
+  const clean = () => ev(() => { document.getElementById('banner').hidden = true; document.getElementById('toast').hidden = true; __SIM.select(null); });
+  await ev(() => { __SIM.setSpeed(0); __SIM.step(0.25, 0.05); });
+  for (const [k, v] of Object.entries(VIEWS)) { await ev(v => __SIM.zoomTo(...v), v); await clean(); await shot(`then_${k}.png`); }
+  await ev(() => __SIM.setSpeed(1));
   await shot('01_town_start.png');
   await page.click('[data-z="region"]'); await page.waitForTimeout(900);
   await shot('02_region_start.png');
@@ -43,7 +49,7 @@ const OUT = process.env.OUT || path.join(__dirname, '../shots');
   await ev(() => { __SIM.setSpeed(1); const p = __SIM.S.people.find(q => !q.isPlayer && q.age === 'adult' && q.moving) || __SIM.S.people[2]; __SIM.select(p.id); __SIM.follow(p.id); __SIM.zoomTo(p.position.x, p.position.y, 34); __SIM.follow(p.id); });
   await page.waitForTimeout(2500);
   await shot('03_zoomed_in_person.png');
-  await ev(() => { const s = __SIM.S.sites.find(x => x.name === 'Valley Compute'); __SIM.select(s.id); __SIM.zoomTo(s.cx, s.cy + 2, 16); });
+  await ev(() => { const s = __SIM.S.sites.find(x => x.name === 'Patel Hosting'); __SIM.select(s.id); __SIM.zoomTo(s.cx, s.cy + 2, 16); });
   await shot('04_inspect_site.png');
 
   // real loop at the fastest speed for a while
@@ -69,7 +75,8 @@ const OUT = process.env.OUT || path.join(__dirname, '../shots');
     () => __SIM.act('council', 'dividend'),
   ];
   let i = 0;
-  while ((await ev(() => __SIM.S.day)) < 3 * 360) {
+  let summaryDay = 0;
+  while ((summaryDay = await ev(() => __SIM.S.day)) < 3 * 360) {
     const f = plan[i % plan.length]; i++;
     await page.evaluate(`(${f.toString()})()`);
     await ev(() => __SIM.step(30));
@@ -77,6 +84,18 @@ const OUT = process.env.OUT || path.join(__dirname, '../shots');
       await ev(() => __SIM.zoomPreset('region')); await page.waitForTimeout(900);
       await shot('05_region_midgame.png');
     }
+  }
+  // "now": same views, same time of day
+  await ev(() => { __SIM.setSpeed(0); const S = __SIM.S; const toNoon = ((36 - S.t % 24) % 24) / 24; __SIM.step(toNoon, 0.05); });
+  for (const [k, v] of Object.entries(VIEWS)) { await ev(v => __SIM.zoomTo(...v), v); await clean(); await shot(`now_${k}.png`); }
+  for (const k of Object.keys(VIEWS)) {
+    const a = fs.readFileSync(path.join(OUT, `then_${k}.png`)).toString('base64'), b = fs.readFileSync(path.join(OUT, `now_${k}.png`)).toString('base64');
+    const cmp = await browser.newPage({ viewport: { width: 2900, height: 960 } });
+    await cmp.setContent(`<body style="margin:0;background:#0b1020;color:#ffe066;font:bold 22px monospace;display:flex;gap:20px;padding:10px">
+      <div><div>THEN · Year 1, day 1</div><img style="width:1440px" src="data:image/png;base64,${a}"></div>
+      <div><div>NOW · Year ${Math.floor(summaryDay / 360) + 1}</div><img style="width:1440px" src="data:image/png;base64,${b}"></div></body>`);
+    await cmp.screenshot({ path: path.join(OUT, `then_vs_now_${k}.png`) }); await cmp.close();
+    console.log('shot', `then_vs_now_${k}.png`);
   }
   // a discovery, as the player sees it
   await ev(() => { __SIM.zoomPreset('town'); __SIM.setSpeed(1); __SIM.discover(); });

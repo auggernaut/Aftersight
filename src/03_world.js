@@ -56,7 +56,6 @@ function buildTerrain() {
 // Parcels where new energy/compute/factory/fleet assets can go: empty town blocks first, then fields.
 function buildParcels() {
   const P = [];
-  [[5, 1], [0, 2], [5, 2], [3, 3], [4, 3], [0, 4], [2, 4], [3, 4], [5, 4], [2, 5], [3, 5]].forEach(([i, j]) => P.push({ ...blockRect(i, j), town: true, used: false }));
   for (let x = 62; x <= 134; x += 12) for (const y of [22, 31]) P.push({ x, y, w: 11, h: 8, used: false });
   for (let x = 152; x <= 188; x += 12) for (let y = 54; y <= 94; y += 10) P.push({ x, y, w: 11, h: 9, used: false });
   for (let y = 76; y <= 94; y += 10) for (const x of [6, 18, 30]) P.push({ x: x + 14, y, w: 11, h: 9, used: false });
@@ -100,13 +99,34 @@ function spotIn(site, margin = 0.8) {
   return { x: site.x + margin + rand() * Math.max(0.1, site.w - margin * 2), y: site.y + margin + rand() * Math.max(0.1, site.h - margin * 2) };
 }
 
-// Job sites: base share of the town's work, and whether they lean high-skill.
-const JOB_SITES = [
-  ['school', 'School', [2, 0], 1.0, 1], ['clinic', 'Clinic', [3, 0], 1.1, 1], ['market', 'Market', [0, 1], 1.0, 0],
-  ['cafe', 'Café', [1, 1], 0.8, 0], ['learn', 'Learning Hub', [2, 1], 0.5, 1], ['hall', 'Town Hall', [3, 2], 0.6, 1],
-  ['warehouse', 'Helix Warehouse', [1, 3], 1.3, 0], ['repair', 'Repair Shop', [1, 4], 0.7, 0], ['diner', 'Diner', [4, 4], 0.8, 0],
+// The present-day town, block by block. Layouts split a block into lots:
+// res6 = six houses, quad = four 5x4 lots, half = two 5x9 lots, whole = one lot.
+// Entries: a plain lot use, ['job', kind, name, jobWeight, hiSkill], ['civic', kind, name] or ['asset', key].
+const LAYOUTS = {
+  res6: [[0, 0, 3, 4], [4, 0, 3, 4], [8, 0, 3, 4], [0, 5, 3, 4], [4, 5, 3, 4], [8, 5, 3, 4]],
+  quad: [[0, 0, 5, 4], [6, 0, 5, 4], [0, 5, 5, 4], [6, 5, 5, 4]],
+  half: [[0, 0, 5, 9], [6, 0, 5, 9]],
+  whole: [[0, 0, 11, 9]],
+};
+const R6 = ['res6'];
+const BLOCK_PLAN = {
+  '0,0': R6, '1,0': R6, '2,0': ['whole', ['job', 'school', 'School', 1.0, 1]], '3,0': ['whole', ['job', 'clinic', 'Clinic', 1.1, 1]], '4,0': R6, '5,0': R6,
+  '0,1': ['half', ['job', 'market', 'Market', 1.0, 0], 'parking'], '1,1': ['quad', ['job', 'cafe', 'Café', 0.8, 0], 'shop', 'restaurant', 'parking'],
+  '2,1': ['whole', ['job', 'learn', 'Library & Learning Hub', 0.5, 1]], '3,1': ['quad', 'office', 'office', 'parking', 'office'],
+  '4,1': ['quad', 'office', ['asset', 'valleycompute'], 'parking', 'office'], '5,1': R6,
+  '0,2': ['quad', 'gas', 'carlot', 'shop', 'motel'], '1,2': ['whole', ['asset', 'okafor']], '2,2': ['whole', ['civic', 'plaza', 'Plaza']],
+  '3,2': ['whole', ['job', 'hall', 'Town Hall', 0.6, 1]], '4,2': ['whole', ['asset', 'depot']], '5,2': ['quad', 'office', 'parking', 'shop', 'church'],
+  '0,3': R6, '1,3': ['half', ['job', 'warehouse', 'Valley Distribution', 1.3, 0], 'parking'], '2,3': ['whole', ['civic', 'park', 'Park']],
+  '3,3': ['quad', 'shop', 'restaurant', 'parking', 'office'], '4,3': ['quad', 'office', 'office', 'parking', 'office'], '5,3': R6,
+  '0,4': R6, '1,4': ['quad', ['job', 'repair', 'Repair Shop', 0.7, 0], 'gas', 'shop', 'parking'], '2,4': R6, '3,4': R6,
+  '4,4': ['quad', ['job', 'diner', 'Diner', 0.8, 0], 'parking', 'shop', 'motel'], '5,4': R6,
+  '0,5': R6, '1,5': R6, '2,5': ['quad', 'church', 'shop', 'parking', 'gas'], '3,5': R6, '4,5': R6, '5,5': R6,
+  '6,0': R6, '6,1': ['quad', 'office', 'shop', 'parking', 'gas'], '6,2': ['half', 'warehouse', 'parking'], '6,3': R6, '6,4': ['quad', 'carlot', 'parking', 'shop', 'office'], '6,5': R6,
+};
+// highway strip outside town
+const STRIP_LOTS = [
+  [146, 63, 6, 5, 'gas'], [153, 62, 10, 6, 'bigbox'], [164, 63, 7, 5, 'parking'], [146, 72, 7, 5, 'motel'], [154, 72, 9, 6, 'warehouse'], [164, 72, 6, 5, 'carlot'],
+  [51, 63, 6, 5, 'gas'], [51, 72, 6, 5, 'restaurant'],
 ];
-const HOME_BLOCKS = [[0, 0], [1, 0], [4, 0], [5, 0], [0, 3], [5, 3], [0, 5], [1, 5], [4, 5], [5, 5]];
-
 const FAMILY_NAMES = ['Okafor', 'Patel', 'Moreno', 'Kowalski', 'Nguyen', 'Haddad', 'Lindqvist', 'Mensah', 'Sato', 'Romero', 'Byrne', 'Achterberg', 'Dubois', 'Castillo', 'Ivanova', 'Park'];
 const FIRST = ['Mara', 'Teo', 'Juno', 'Odile', 'Ravi', 'Ines', 'Kofi', 'Lena', 'Omar', 'Sana', 'Pavel', 'Yuki', 'Bea', 'Tomas', 'Ada', 'Felix', 'Nia', 'Hugo', 'Rosa', 'Idris', 'Mei', 'Arlo', 'Zara', 'Emil', 'Noor', 'Cyrus', 'Lucia', 'Dev', 'Ola', 'Wren', 'Iris', 'Bram', 'Kaito', 'Esme', 'Joaquin', 'Talia', 'Sami', 'Greta', 'Milo', 'Amara', 'Rhys', 'Lark', 'Basil', 'Frida', 'Anouk', 'Tariq', 'Vera', 'Quinn', 'Ezra', 'Pia'];

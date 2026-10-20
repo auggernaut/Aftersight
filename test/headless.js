@@ -26,6 +26,8 @@ for (let d = 0; d < days; d++) {
 }
 console.log('coops', S.coops.map(c => c.name + ' ' + Math.round(c.raised) + '/' + Math.round(c.target) + (c.open ? ' open' : '')).join(' | '));
 console.log('player cash', Math.round(S.player.home.cash), 'avg trust', (S.people.reduce((s,p)=>s+p.trust,0)/S.people.length).toFixed(2), 'avg community', (S.people.reduce((s,p)=>s+p.w.community,0)/S.people.length).toFixed(2));
+const uses = {}; S.lots.forEach(l => uses[l.use] = (uses[l.use] || 0) + 1); console.log('lot uses', JSON.stringify(uses));
+const own = {}; S.lots.forEach(l => { const k = l.owner.startsWith('h') ? 'household' : l.owner; own[k] = (own[k] || 0) + 1; }); console.log('lot owners', JSON.stringify(own));
 console.log('discoveries', S.discoveries.map(d => d.day + ':' + d.id).join(' '));
 console.log('log tail'); S.log.slice(0, 25).forEach(l => console.log('  ', Math.floor(l.t / 24), l.text));
 const kinds = {}; S.people.forEach(p => kinds[p.kind] = (kinds[p.kind] || 0) + 1); console.log('kinds now', kinds);

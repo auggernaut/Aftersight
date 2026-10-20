@@ -59,7 +59,7 @@ h3 { margin: 0 0 4px; font-size: 12px; color: var(--hi); text-transform: upperca
 
 <div id="hud" class="panel">
   <div class="title"><b>AFTERLIGHT · SIM</b><span class="muted">first slice</span></div>
-  <div><span id="date">Year 1 · Jan 1</span> <span id="clock" class="muted">06:00</span></div>
+  <div><span id="date">Year 1 · Jan 1</span> <span id="clock" class="muted">06:00</span> · <span id="era" style="color:var(--nation)">Present day</span></div>
   <div class="row" id="speeds">
     <button data-s="0" title="Pause (space)">❚❚</button>
     <button data-s="1" title="1 hour per 2.5 s (1)">▶</button>
@@ -104,8 +104,9 @@ h3 { margin: 0 0 4px; font-size: 12px; color: var(--hi); text-transform: upperca
 <div id="help" class="panel" hidden>
   <h3>What this is</h3>
   <p>A valley living through the singularity. ~45 residents each decide what to do with Yuka goal evaluators, weighing four loyalties: <span class="sw" style="background:var(--self)"></span>self <span class="sw" style="background:var(--family)"></span>family <span class="sw" style="background:var(--community)"></span>community <span class="sw" style="background:var(--nation)"></span>nation.</p>
+  <p>It starts as an ordinary present-day town: houses, shops, offices, parking lots, gas stations, a warehouse, a factory. As robots and AI spread, lots go empty and their owners redevelop them: parking becomes solar canopies or gardens, offices become compute or apartments, cars give way to robotaxis.</p>
   <p>Solar makes energy, racks turn energy into compute, robots need both and take over work. Appetite for all three grows faster than anyone can build. Every few months a discovery changes the rules.</p>
-  <p>Whoever owns the engine collects its income. Helix Systems (outside capital, <span class="sw" style="background:var(--helix)"></span>) owns most of it at the start. The bar under each building shows who owns it: <span class="sw" style="background:var(--town)"></span>town <span class="sw" style="background:var(--coop)"></span>co-op <span class="sw" style="background:var(--resident)"></span>a household.</p>
+  <p>Whoever owns the engine collects its income. Helix Systems (outside capital, <span class="sw" style="background:var(--helix)"></span>) owns most of it at the start. The bar under each productive building shows who owns it, and the stake color mode tints every lot by owner: <span class="sw" style="background:var(--town)"></span>town <span class="sw" style="background:var(--coop)"></span>co-op <span class="sw" style="background:var(--resident)"></span>a household.</p>
   <p>You are one resident (the white dot). Propose co-ops, invest, build, call council votes, and talk to neighbors. Ideas spread as people spend time together.</p>
   <p class="muted">Scroll to zoom, drag to pan, click anything to inspect. Space pauses, 1–4 set speed.</p>
   <button id="help-close">Got it</button>
@@ -232,8 +233,9 @@ function baseParams() {
     exportCap: 1500,      // robot-hours/day the outside market absorbs at that price
     peBase: 80,           // $ / MWh
     pcBase: 120,          // $ / compute unit
-    gridPrice: 260,       // $ / MWh bought from the national grid
-    gridCap: 4,           // MWh/day the grid line can import
+    gridPrice: 140,       // $ / MWh bought from the national grid
+    gridCap: 16,          // MWh/day the valley's grid connection can carry (present day: most of its power)
+    robotaxi: 0,          // share of trips taken in robotaxis
     essential: 55,        // $ per person per day for housing, food, basics
     essentialIdx: 1,      // discoveries can make basics cheaper
     tax: 0.10,            // town tax on resident income
@@ -258,8 +260,10 @@ const DISCOVERIES = [
     changes: ['Compute per person ×10', 'Outside compute appetite ×3', 'Robots can do +15% of jobs'], fx: P => { P.aiPerCap *= 10; P.extC *= 3; P.autoFrac = Math.min(0.97, P.autoFrac + 0.15); } },
   { id: 'sodium', tier: 1, title: 'Sodium batteries', blurb: 'Cheap salt batteries store sunshine for the night.',
     changes: ['Solar yield ×1.25', 'Grid import price ×0.8'], fx: P => { P.solarYield *= 1.25; P.gridPrice *= 0.8; } },
+  { id: 'robotaxi', tier: 1, title: 'Robotaxis go everywhere', blurb: 'Driverless cars are cheaper than owning one. Parking lots and gas stations start to empty.',
+    changes: ['Robotaxi share of trips +40%', 'Robots can do +5% of jobs (driving)'], fx: P => { P.robotaxi += 0.4; P.autoFrac = Math.min(0.97, P.autoFrac + 0.05); } },
   { id: 'humanoids', tier: 2, title: 'General-purpose humanoids', blurb: 'Robots with hands good enough for kitchens, clinics and building sites.',
-    changes: ['Robots can do +20% of jobs', 'Robot work day 16h → 20h'], fx: P => { P.autoFrac = Math.min(0.97, P.autoFrac + 0.2); P.robotHours = 20; } },
+    changes: ['Robots can do +20% of jobs', 'Robot work day 16h → 20h', 'Robotaxi share +15%'], fx: P => { P.autoFrac = Math.min(0.97, P.autoFrac + 0.2); P.robotHours = 20; P.robotaxi += 0.15; } },
   { id: 'distill', tier: 2, title: 'Distilled robot minds', blurb: 'Small models that run on the robot itself.',
     changes: ['Compute per robot ×0.4'], fx: P => { P.robotC *= 0.4; } },
   { id: 'vfarms', tier: 2, title: 'Robot vertical farms', blurb: 'Food grown in stacked rooms by machines, all year.',
@@ -353,7 +357,6 @@ function buildTerrain() {
 // Parcels where new energy/compute/factory/fleet assets can go: empty town blocks first, then fields.
 function buildParcels() {
   const P = [];
-  [[5, 1], [0, 2], [5, 2], [3, 3], [4, 3], [0, 4], [2, 4], [3, 4], [5, 4], [2, 5], [3, 5]].forEach(([i, j]) => P.push({ ...blockRect(i, j), town: true, used: false }));
   for (let x = 62; x <= 134; x += 12) for (const y of [22, 31]) P.push({ x, y, w: 11, h: 8, used: false });
   for (let x = 152; x <= 188; x += 12) for (let y = 54; y <= 94; y += 10) P.push({ x, y, w: 11, h: 9, used: false });
   for (let y = 76; y <= 94; y += 10) for (const x of [6, 18, 30]) P.push({ x: x + 14, y, w: 11, h: 9, used: false });
@@ -397,14 +400,35 @@ function spotIn(site, margin = 0.8) {
   return { x: site.x + margin + rand() * Math.max(0.1, site.w - margin * 2), y: site.y + margin + rand() * Math.max(0.1, site.h - margin * 2) };
 }
 
-// Job sites: base share of the town's work, and whether they lean high-skill.
-const JOB_SITES = [
-  ['school', 'School', [2, 0], 1.0, 1], ['clinic', 'Clinic', [3, 0], 1.1, 1], ['market', 'Market', [0, 1], 1.0, 0],
-  ['cafe', 'Café', [1, 1], 0.8, 0], ['learn', 'Learning Hub', [2, 1], 0.5, 1], ['hall', 'Town Hall', [3, 2], 0.6, 1],
-  ['warehouse', 'Helix Warehouse', [1, 3], 1.3, 0], ['repair', 'Repair Shop', [1, 4], 0.7, 0], ['diner', 'Diner', [4, 4], 0.8, 0],
+// The present-day town, block by block. Layouts split a block into lots:
+// res6 = six houses, quad = four 5x4 lots, half = two 5x9 lots, whole = one lot.
+// Entries: a plain lot use, ['job', kind, name, jobWeight, hiSkill], ['civic', kind, name] or ['asset', key].
+const LAYOUTS = {
+  res6: [[0, 0, 3, 4], [4, 0, 3, 4], [8, 0, 3, 4], [0, 5, 3, 4], [4, 5, 3, 4], [8, 5, 3, 4]],
+  quad: [[0, 0, 5, 4], [6, 0, 5, 4], [0, 5, 5, 4], [6, 5, 5, 4]],
+  half: [[0, 0, 5, 9], [6, 0, 5, 9]],
+  whole: [[0, 0, 11, 9]],
+};
+const R6 = ['res6'];
+const BLOCK_PLAN = {
+  '0,0': R6, '1,0': R6, '2,0': ['whole', ['job', 'school', 'School', 1.0, 1]], '3,0': ['whole', ['job', 'clinic', 'Clinic', 1.1, 1]], '4,0': R6, '5,0': R6,
+  '0,1': ['half', ['job', 'market', 'Market', 1.0, 0], 'parking'], '1,1': ['quad', ['job', 'cafe', 'Café', 0.8, 0], 'shop', 'restaurant', 'parking'],
+  '2,1': ['whole', ['job', 'learn', 'Library & Learning Hub', 0.5, 1]], '3,1': ['quad', 'office', 'office', 'parking', 'office'],
+  '4,1': ['quad', 'office', ['asset', 'valleycompute'], 'parking', 'office'], '5,1': R6,
+  '0,2': ['quad', 'gas', 'carlot', 'shop', 'motel'], '1,2': ['whole', ['asset', 'okafor']], '2,2': ['whole', ['civic', 'plaza', 'Plaza']],
+  '3,2': ['whole', ['job', 'hall', 'Town Hall', 0.6, 1]], '4,2': ['whole', ['asset', 'depot']], '5,2': ['quad', 'office', 'parking', 'shop', 'church'],
+  '0,3': R6, '1,3': ['half', ['job', 'warehouse', 'Valley Distribution', 1.3, 0], 'parking'], '2,3': ['whole', ['civic', 'park', 'Park']],
+  '3,3': ['quad', 'shop', 'restaurant', 'parking', 'office'], '4,3': ['quad', 'office', 'office', 'parking', 'office'], '5,3': R6,
+  '0,4': R6, '1,4': ['quad', ['job', 'repair', 'Repair Shop', 0.7, 0], 'gas', 'shop', 'parking'], '2,4': R6, '3,4': R6,
+  '4,4': ['quad', ['job', 'diner', 'Diner', 0.8, 0], 'parking', 'shop', 'motel'], '5,4': R6,
+  '0,5': R6, '1,5': R6, '2,5': ['quad', 'church', 'shop', 'parking', 'gas'], '3,5': R6, '4,5': R6, '5,5': R6,
+  '6,0': R6, '6,1': ['quad', 'office', 'shop', 'parking', 'gas'], '6,2': ['half', 'warehouse', 'parking'], '6,3': R6, '6,4': ['quad', 'carlot', 'parking', 'shop', 'office'], '6,5': R6,
+};
+// highway strip outside town
+const STRIP_LOTS = [
+  [146, 63, 6, 5, 'gas'], [153, 62, 10, 6, 'bigbox'], [164, 63, 7, 5, 'parking'], [146, 72, 7, 5, 'motel'], [154, 72, 9, 6, 'warehouse'], [164, 72, 6, 5, 'carlot'],
+  [51, 63, 6, 5, 'gas'], [51, 72, 6, 5, 'restaurant'],
 ];
-const HOME_BLOCKS = [[0, 0], [1, 0], [4, 0], [5, 0], [0, 3], [5, 3], [0, 5], [1, 5], [4, 5], [5, 5]];
-
 const FAMILY_NAMES = ['Okafor', 'Patel', 'Moreno', 'Kowalski', 'Nguyen', 'Haddad', 'Lindqvist', 'Mensah', 'Sato', 'Romero', 'Byrne', 'Achterberg', 'Dubois', 'Castillo', 'Ivanova', 'Park'];
 const FIRST = ['Mara', 'Teo', 'Juno', 'Odile', 'Ravi', 'Ines', 'Kofi', 'Lena', 'Omar', 'Sana', 'Pavel', 'Yuki', 'Bea', 'Tomas', 'Ada', 'Felix', 'Nia', 'Hugo', 'Rosa', 'Idris', 'Mei', 'Arlo', 'Zara', 'Emil', 'Noor', 'Cyrus', 'Lucia', 'Dev', 'Ola', 'Wren', 'Iris', 'Bram', 'Kaito', 'Esme', 'Joaquin', 'Talia', 'Sami', 'Greta', 'Milo', 'Amara', 'Rhys', 'Lark', 'Basil', 'Frida', 'Anouk', 'Tariq', 'Vera', 'Quinn', 'Ezra', 'Pia'];
 
@@ -424,6 +448,8 @@ function assetValue(a) { return a.cap * unitCost(a.type); }
 function ownerName(id) {
   if (id === 'helix') return 'Helix Systems (outside)';
   if (id === 'town') return 'Town commons';
+  if (id === 'private') return 'local owner';
+  if (id === 'neighbors') return 'Other valley households';
   const h = S.hh[id];
   return h ? (h.isPlayer ? 'You' : h.name + ' household') : id;
 }
@@ -451,16 +477,26 @@ function localShare(a) { return sum(Object.entries(a.shares), ([k, v]) => k === 
 function placeAsset(type, name, owner, units, opts = {}) {
   let site = opts.site;
   if (!site) {
-    const pref = opts.outside ? S.parcels.filter(p => !p.used && !p.town) : S.parcels.filter(p => !p.used && p.town).concat(S.parcels.filter(p => !p.used && !p.town));
-    const parcel = pref[0];
-    if (!parcel) return null;
-    parcel.used = true;
-    site = makeSite(type, name, parcel, { asset: true });
-    S.sites.push(site);
+    // in town, new builds redevelop the least viable lot; otherwise they go out into the fields
+    const lot = (!opts.outside || rand() < 0.3) ? lotForInvestor(owner) : null;
+    if (lot) {
+      if (owner && lot.owner !== owner) sellLot(lot, owner);
+      site = makeSite(type, name, lot, { asset: true, lot });
+      S.sites.push(site);
+      lot.site = site;
+      setUse(lot, type, `${name} is going up where a ${LOT_USE[lot.use].label.toLowerCase()} used to be.`);
+    } else {
+      const parcel = S.parcels.find(p => !p.used);
+      if (!parcel) return null;
+      parcel.used = true;
+      site = makeSite(type, name, parcel, { asset: true });
+      S.sites.push(site);
+    }
   }
   const a = { id: 'a' + (++S.nextAsset), type, name, cap: 0, shares: {}, site, pending: [], built: S.day, coop: !!opts.coop, out: 0, profit: 0 };
   site.assets = site.assets || [];
   site.assets.push(a);
+  if (site.lot) site.lot.asset = a;
   if (opts.immediate) addShares(a, owner, units);
   else a.pending.push({ owner, units, done: S.day + S.P.buildDays[type], start: S.day, contrib: opts.contrib });
   S.assets.push(a);
@@ -488,7 +524,7 @@ function econDay() {
   // finish construction (volunteers speed it up)
   for (const a of S.assets) {
     a.pending = a.pending.filter(p => {
-      if (day >= p.done) { addShares(a, p.owner, p.units); if (ownerKind(p.owner) !== 'resident' || p.units * unitCost(a.type) > 25000 || a.cap === p.units) log(`${a.name} ${a.cap === p.units ? 'opened' : 'expanded'} (+${num(p.units)} ${UNIT_NAME[a.type]}, ${ownerName(p.owner)})`, 'build'); return false; }
+      if (day >= p.done) { addShares(a, p.owner, p.units); if (ownerKind(p.owner) !== 'resident' || p.units * unitCost(a.type) > 150000 || a.cap === p.units) log(`${a.name} ${a.cap === p.units ? 'opened' : 'expanded'} (+${num(p.units)} ${UNIT_NAME[a.type]}, ${ownerName(p.owner)})`, 'build'); return false; }
       return true;
     });
   }
@@ -504,7 +540,9 @@ function econDay() {
   const deficit = Math.max(0, dE - solarOut);
   const imp = Math.min(deficit, P.gridCap);
   const servedE = dE > 0 ? Math.min(1, (solarOut + imp) / dE) : 1;
-  M.pe = lerp(M.pe, P.peBase * clamp(Math.pow(dE / Math.max(0.01, solarOut), 0.7), 0.35, 6), 0.25);
+  // present day: the national grid covers most of it; it can't grow as fast as appetite does
+  const marginal = deficit > 0 ? P.gridPrice : P.peBase;
+  M.pe = lerp(M.pe, marginal * clamp(Math.pow(dE / Math.max(0.01, solarOut + P.gridCap), 0.8), 0.6, 6), 0.25);
   const soldE = Math.min(solarOut, dE);
 
   // COMPUTE: locally owned racks serve local demand first; Helix sells to whoever pays
@@ -584,7 +622,7 @@ function econDay() {
   M.ubi = ubi;
 
   Object.assign(M, { solarOut, dE, imp, servedE, sC, dCL, dCX, servedC, nRobots, robotEff, robotWork, L, humanNeed, offered, paid, payPerHour,
-    shortE: dE > 0 ? deficit / dE : 0, shortC: 1 - servedC, wagesTotal, divTotal, townIn });
+    shortE: dE > 0 ? Math.max(0, deficit - imp) / dE : 0, localGen: dE > 0 ? Math.min(1, solarOut / dE) : 1, shortC: 1 - servedC, wagesTotal, divTotal, townIn });
 
   investDaily();
   if (day % 30 === 29) econMonth();
@@ -594,9 +632,10 @@ function econDay() {
 function econMonth() {
   const P = S.P, M = S.market;
   M.mE *= 1 + P.gE; M.mC *= 1 + P.gC; M.mX *= 1 + P.gX; M.mL *= 1 + P.gL;
+  landMonth();
   S.helix.monthBudget = P.helixBudget * (1 + S.day / 360);
   // the town council invests its treasury in whatever is shortest, in the commons
-  if (S.town.cash > 150000) {
+  if (S.town.cash > 250000) {
     const type = M.shortC > M.shortE ? 'compute' : 'solar';
     const spend = S.town.cash * 0.7, units = spend / unitCost(type);
     S.town.cash -= spend;
@@ -774,6 +813,152 @@ function sampleHistory() {
   const m = metrics();
   S.history.push({ day: S.day, outside: m.outside, gini: m.gini, work: m.work, shortE: m.shortE, shortC: m.shortC, robots: S.market.nRobots, wellbeing: sum(S.agents.filter(a => !a.isRobot), a => a.wellbeing) / S.agents.filter(a => !a.isRobot).length });
   if (S.history.length > 400) S.history.shift();
+}
+
+// ===== 04b_land.js =====
+// Land use: every town lot has a use and an owner. Uses go vacant as the economy shifts
+// (cars give way to robotaxis, paid work and retail shrink), and vacant lots get redeveloped
+// by whoever owns them, according to their own interests. Nothing here is scripted by date.
+const LOT_USE = {
+  // present day
+  house: { label: 'House', color: '#b98f5e' }, shop: { label: 'Shop', color: '#d9774b' }, office: { label: 'Office', color: '#8fa3b8' },
+  parking: { label: 'Parking lot', color: '#5b5f66' }, gas: { label: 'Gas station', color: '#cfcfcf' }, restaurant: { label: 'Restaurant', color: '#c0504d' },
+  carlot: { label: 'Car dealership', color: '#9aa0a8' }, motel: { label: 'Motel', color: '#c7a26a' }, church: { label: 'Church', color: '#d8d0c0' },
+  bigbox: { label: 'Big-box store', color: '#7d8fb0' }, warehouse: { label: 'Warehouse', color: '#7a6a5a' },
+  // what comes after
+  garden: { label: 'Community garden', color: '#5aa04a' }, apartments: { label: 'Apartments', color: '#c4876a' }, makerspace: { label: 'Makerspace', color: '#b07cc6' },
+  vfarm: { label: 'Vertical farm', color: '#3fae7a' }, vacant: { label: 'Vacant', color: '#4a4440' },
+  solar: { label: 'Solar canopy', color: '#24345e' }, compute: { label: 'Compute', color: '#2f3644' }, fleet: { label: 'Robot depot', color: '#41525c' }, factory: { label: 'Micro-fab', color: '#8d6e63' },
+};
+const ASSET_USES = new Set(['solar', 'compute', 'fleet', 'factory']);
+
+function landSignals() {
+  const P = S.P, M = S.market;
+  const rt = clamp((P.robotaxi || 0) + Math.max(0, P.autoFrac - 0.45) * 0.7, 0, 0.95); // share of trips in robotaxis
+  const work = clamp(M.humanNeed / Math.max(1, S.base.humanNeed), 0, 1.5);               // paid human work vs. year 1
+  const retail = clamp(1 - 0.45 * rt - Math.max(0, P.autoFrac - 0.35) * 0.5, 0.3, 1);   // delivery robots eat walk-in retail
+  return { rt, car: 1 - rt, work, retail };
+}
+const VIABILITY = {
+  parking: s => s.car, gas: s => Math.pow(s.car, 1.6), carlot: s => Math.pow(s.car, 2), office: s => s.work, shop: s => s.retail, bigbox: s => s.retail * 0.9,
+  restaurant: s => 0.6 + 0.4 * s.retail, church: () => 0.85, motel: s => 0.4 + 0.6 * s.car, warehouse: s => 0.3 + 0.7 * s.work, vacant: () => 0,
+};
+function countUse(u) { return S.lots.filter(l => l.use === u).length; }
+function lotValue(l) { return l.w * l.h * 1800 * (1 + S.day / 720); }
+
+function lotOwnerValues(owner) {
+  if (S.hh[owner]) return householdValues(S.hh[owner]);
+  // the unsimulated local owners lean like the town does on average
+  const w = { self: 0, family: 0, community: 0, nation: 0 }, ad = S.people.filter(p => p.age !== 'kid' && !p.isPlayer);
+  ad.forEach(p => SPHERES.forEach(k => w[k] += p.w[k] / ad.length));
+  return w;
+}
+
+function setUse(l, use, note) {
+  if (l.use === use) return;
+  l.history.push({ day: S.day, use, owner: l.owner });
+  l.use = use; l.vac = use === 'vacant' ? 1 : 0; l.since = S.day;
+  if (note) log(note, ownerKind(l.owner) === 'outside' ? 'helix' : l.owner === 'town' ? 'town' : 'build');
+}
+
+// A lot becomes a productive asset. The owner pays for the build.
+function lotToAsset(l, type, owner, opts = {}) {
+  const units = (l.w * l.h / 20) * ({ solar: 0.12, compute: 8, fleet: 8, factory: 0.12 }[type]);
+  const cost = units * unitCost(type);
+  if (!opts.prepaid) {
+    if (owner === 'helix') { if (S.helix.monthBudget < cost) return null; S.helix.monthBudget -= cost; }
+    else if (owner === 'town') { if (S.town.cash < cost) return null; S.town.cash -= cost; }
+    else if (S.hh[owner]) { if (S.hh[owner].cash < cost) return null; S.hh[owner].cash -= cost; }
+  }
+  const prefix = owner === 'helix' ? 'Helix ' : owner === 'town' ? 'Commons ' : S.hh[owner] ? S.hh[owner].name + ' ' : 'Local ';
+  const name = opts.name || prefix + LOT_USE[type].label + ' ' + (++S.counter);
+  const site = makeSite(type, name, l, { asset: true, lot: l });
+  S.sites.push(site);
+  const a = placeAsset(type, name, owner, opts.units != null ? opts.units : units, { site, immediate: type === 'fleet' && !opts.units, coop: opts.coop });
+  if (type === 'fleet' && opts.units == null) { a.shares = {}; a.cap = 0; orderRobots(owner, units, a); }
+  l.site = site; l.asset = a;
+  const was = LOT_USE[l.use].label.toLowerCase();
+  setUse(l, type, opts.quiet ? null : `${ownerName(owner)} turned a ${was} into ${name}.`);
+  return a;
+}
+
+function sellLot(l, buyer) {
+  const price = lotValue(l);
+  if (buyer === 'helix') S.helix.cash -= price; else if (buyer === 'town') S.town.cash -= price; else if (S.hh[buyer]) S.hh[buyer].cash -= price;
+  if (S.hh[l.owner]) S.hh[l.owner].cash += price; else if (l.owner === 'helix') S.helix.cash += price; else if (l.owner === 'town') S.town.cash += price;
+  log(`${ownerName(l.owner) === 'local owner' ? 'A local owner' : ownerName(l.owner)} sold a ${LOT_USE[l.use].label.toLowerCase()} lot to ${ownerName(buyer)} for ${money(price)}.`, buyer === 'helix' ? 'helix' : 'town');
+  l.owner = buyer;
+}
+
+function redevelop(l) {
+  const sig = landSignals(), P = S.P, M = S.market;
+  const roi = ['solar', 'compute', 'fleet'].map(t => ({ t, r: annualReturn(t) })).sort((a, b) => b.r - a.r)[0];
+  const done = id => S.discoveries.some(d => d.id === id);
+  // outside capital bids for vacant land when it has a use for it
+  if (l.owner !== 'helix' && l.owner !== 'town' && roi.r > P.helixHurdle && S.helix.monthBudget > lotValue(l) * 3) {
+    const w = lotOwnerValues(l.owner);
+    const sells = l.owner === 'private' ? 0.7 : 0.25 + w.self * 0.8;
+    if (rand() < sells) {
+      const town = S.policy.firstRefusal && S.town.cash > lotValue(l) * 2;
+      sellLot(l, town ? 'town' : 'helix');
+    }
+  }
+  const o = l.owner, w = lotOwnerValues(o);
+  if (o === 'helix') {
+    const t = sig.rt > 0.35 && rand() < 0.3 ? 'fleet' : roi.t;
+    if (lotToAsset(l, t, 'helix')) return;
+  }
+  if (o === 'town') {
+    const t = M.shortC > M.shortE ? 'compute' : 'solar';
+    if (S.town.cash > 200000 && lotToAsset(l, t, 'town')) return;
+  }
+  if (S.hh[o]) {
+    const h = S.hh[o];
+    const t = weighted([{ w: w.self, v: roi.t }, { w: w.community, v: 'garden' }, { w: w.family, v: 'apartments' }, { w: w.nation, v: 'makerspace' }]);
+    if (ASSET_USES.has(t)) { if (lotToAsset(l, t, o)) return; }
+    else { setUse(l, t, `The ${h.name} household turned their ${LOT_USE[l.use].label.toLowerCase()} into a ${LOT_USE[t].label.toLowerCase()}.`); return; }
+  }
+  // everyone else repurposes cheaply, shaped by the town's mood and what's been invented
+  const opts = [
+    { w: w.community * 1.4 / (1 + countUse('garden') / 4), v: 'garden' }, { w: w.family * 1.2, v: 'apartments' }, { w: 0.25 + w.nation * 0.4, v: 'makerspace' },
+    { w: done('vfarms') ? 0.9 / (1 + countUse('vfarm') / 3) : 0, v: 'vfarm' }, { w: l.use === 'vacant' ? 0 : 0.5, v: 'vacant' },
+  ];
+  // the old use suggests the new one: parking and gas become solar canopies, warehouses robot depots, offices server rooms
+  const was = l.use;
+  if (was === 'parking' || was === 'gas' || was === 'carlot') opts.push({ w: 1.6 * clamp(annualReturn('solar'), 0, 1.5), v: 'solar' });
+  if (was === 'warehouse' || was === 'bigbox') opts.push({ w: 1.4, v: 'fleet' });
+  if (was === 'office') opts.push({ w: 0.8 * clamp(annualReturn('compute'), 0, 1.5), v: 'compute' });
+  if (was === 'gas' && sig.rt > 0.3) opts.push({ w: 0.8, v: 'fleet' }); // robotaxi charging depot
+  const t = weighted(opts);
+  if (ASSET_USES.has(t)) { if (lotToAsset(l, t, o, { prepaid: true })) return; }
+  setUse(l, t, t === 'vacant' ? null : `A ${LOT_USE[l.use].label.toLowerCase()} became a ${LOT_USE[t].label.toLowerCase()}.`);
+}
+
+// Investors who need land for a new asset take the most redevelopable lot in town, else a field.
+function lotForInvestor(owner) {
+  const cands = S.lots.filter(l => !l.site && l.use !== 'house' && !l.locked && (l.owner === owner || l.owner === 'private' || (S.hh[l.owner] && owner !== 'helix')) && (l.vac > 0.3 || l.use === 'vacant' || l.use === 'parking' && landSignals().car < 0.8));
+  cands.sort((a, b) => b.vac - a.vac);
+  return cands[0] || null;
+}
+
+function landMonth() {
+  const sig = landSignals();
+  for (const l of S.lots) {
+    if (l.site || l.locked) continue;
+    const v = VIABILITY[l.use];
+    if (v) l.vac = lerp(l.vac, clamp(1 - v(sig), 0, 1), 0.35);
+    if (l.use === 'house') {
+      // rooftop solar spreads when it pays
+      if (!l.roof && rand() < clamp((annualReturn('solar') - 0.12) * 0.25, 0, 0.12)) { l.roof = true; addShares(S.neighborRoofs, 'neighbors', 0.008); }
+      continue;
+    }
+    if ((l.vac > 0.5 || l.use === 'vacant') && rand() < 0.22) redevelop(l);
+  }
+}
+
+function eraName() {
+  const n = S.discoveries.length;
+  return n === 0 ? 'Present day' : n <= 3 ? 'Early AI' : n <= 7 ? 'Automation' : n <= 11 ? 'Abundance' : 'Singularity';
 }
 
 // ===== 05_agents.js =====
@@ -1122,39 +1307,24 @@ function newWorld(seed = 7) {
     orders: [], coops: [], log: [], history: [], discoveries: [], council: null, policy: { firstRefusal: false }, counter: 0, nextAsset: 0, volHours: 0,
     helix: { cash: 5e7, monthBudget: 0, depot: null }, town: { cash: 40000 }, nation: { research: 0 },
     market: { mE: 1, mC: 1, mX: 1, mL: 1, dE: 1, dCL: 1, dCX: 1, sC: 1, pe: 80, pc: 120, jobOpen: 1, offeredAvg: 200, outflow: 0, robotCarry: 0, shortE: 0, shortC: 0, ubi: 0, solarOut: 1, L: 350, robotWork: 0 },
-    nextDiscoveryDay: 75, actions: [],
+    nextDiscoveryDay: 75, actions: [], base: { humanNeed: 230 }, lots: [],
   };
-  // civic and job sites
   const add = (kind, name, r, extra) => { const s = makeSite(kind, name, r, extra); S.sites.push(s); return s; };
-  add('plaza', 'Plaza', blockRect(2, 2)); add('park', 'Park', blockRect(2, 3));
-  for (const [kind, name, [i, j], weight, hi] of JOB_SITES) add(kind, name, blockRect(i, j), { jobWeight: weight, hiSkill: hi });
-  add('farm', 'Moreno Farm', { x: 66, y: 110, w: 26, h: 18 }, { jobWeight: 1.0, hiSkill: 0, door: { x: 96, y: 108, ry: 100 } });
-  add('station', 'Federal Works / Rail', { x: 104, y: 102, w: 12, h: 5 }, { door: { x: 108, y: 104, ry: 100 } });
-  const campus = { x: 152, y: 14, w: 38, h: 30 };
-  // assets
   const asset = (type, name, rect, shares, cap, extra = {}) => {
     const site = add(type, name, rect, { asset: true, ...extra });
     const a = placeAsset(type, name, null, 0, { site, immediate: true });
     a.shares = { ...shares }; a.cap = cap;
     return a;
   };
-  asset('solar', 'Town Solar', blockRect(3, 1), { town: 1 }, 0.6);
-  const hs = asset('solar', 'Helix Solar Farm', { x: campus.x, y: campus.y, w: 22, h: campus.h }, { helix: 1 }, 3.0, { door: { x: 150, y: 44, ry: 50 } });
-  asset('compute', 'Helix Datacenter', { x: campus.x + 24, y: campus.y + 4, w: 14, h: 22 }, { helix: 1 }, 20, { jobWeight: 0.8, hiSkill: 1, door: { x: 150, y: 44, ry: 50 } });
-  // households
-  const homeSlots = [];
-  for (let k = 0; k < 4; k++) for (const [i, j] of HOME_BLOCKS) { const b = blockRect(i, j); homeSlots.push({ x: b.x + (k % 2) * 6, y: b.y + Math.floor(k / 2) * 5, w: 4, h: 3.6 }); }
+  // households first (their stakes are referenced below)
   const usedFirst = new Set();
   const firstName = () => { let n; do n = pick(FIRST); while (usedFirst.has(n) && usedFirst.size < FIRST.length); usedFirst.add(n); return n; };
   const mkWeights = (bias) => { const w = { self: rr(0.15, 0.5), family: rr(0.15, 0.5), community: rr(0.05, 0.35), nation: rr(0.05, 0.3) }; if (bias) w[bias] += 0.25; return normalize(w); };
   const nH = 16;
   for (let i = 0; i <= nH; i++) {
     const isPlayer = i === nH;
-    const slot = homeSlots[i];
     const name = isPlayer ? 'You' : FAMILY_NAMES[i];
-    const site = add('home', isPlayer ? 'Your place' : name + ' home', slot, { small: true });
-    const h = { id: 'h' + i, name, site, members: [], cash: isPlayer ? 9000 : rr(2000, 22000), isPlayer, trust: 0.3 };
-    site.household = h;
+    const h = { id: 'h' + i, name, site: null, members: [], cash: isPlayer ? 9000 : rr(2000, 22000), isPlayer, trust: 0.3 };
     S.households.push(h); S.hh[h.id] = h;
     if (isPlayer) continue;
     const bias = pick([null, 'self', 'family', 'community', 'nation', null]);
@@ -1168,14 +1338,57 @@ function newWorld(seed = 7) {
       h.members.push(m);
     }
   }
-  // famous starting stakes
   const okafor = S.hh.h0, patel = S.hh.h1;
   okafor.cash += 30000; patel.cash += 20000;
-  asset('factory', 'Okafor Fabrication', blockRect(1, 2), { [okafor.id]: 1 }, 0.25, { jobWeight: 1.0, hiSkill: 1 });
-  asset('compute', 'Valley Compute', blockRect(4, 1), { helix: 0.7, [patel.id]: 0.3 }, 4, { jobWeight: 0.5, hiSkill: 1 });
-  const depot = asset('fleet', 'Helix Robot Depot', blockRect(4, 2), { helix: 1 }, 12, { jobWeight: 0.4, hiSkill: 0 });
-  S.helix.depot = depot.id;
+  // the present-day town, lot by lot
+  S.lots = [];
+  const mkLot = (r, use, owner) => { const l = { x: r.x, y: r.y, w: r.w, h: r.h, use, owner, vac: 0, since: 0, history: [{ day: 0, use, owner }], site: null }; S.lots.push(l); return l; };
+  const ASSETS = {
+    valleycompute: r => asset('compute', 'Patel Hosting', r, { helix: 0.7, [patel.id]: 0.3 }, 4, { jobWeight: 0.5, hiSkill: 1 }),
+    okafor: r => asset('factory', 'Okafor Manufacturing', r, { [okafor.id]: 1 }, 0.25, { jobWeight: 1.0, hiSkill: 1 }),
+    depot: r => { const a = asset('fleet', 'Helix Fulfillment Center', r, { helix: 1 }, 12, { jobWeight: 0.6, hiSkill: 0 }); S.helix.depot = a.id; return a; },
+  };
+  const houseLots = [];
+  for (let j = 0; j < 6; j++) for (let i = 0; i < 7; i++) {
+    const plan = BLOCK_PLAN[i + ',' + j], b = blockRect(i, j);
+    const layout = LAYOUTS[plan[0]];
+    layout.forEach(([dx, dy, w, hgt], k) => {
+      const r = { x: b.x + dx, y: b.y + dy, w, h: hgt };
+      const e = plan[0] === 'res6' ? 'house' : plan[k + 1];
+      if (typeof e === 'string') {
+        const owner = e === 'house' ? 'neighbors' : e === 'parking' && rand() < 0.4 ? 'town' : e === 'office' && rand() < 0.3 ? 'helix' : 'private';
+        const l = mkLot(r, e, owner);
+        if (e === 'house') houseLots.push(l);
+      } else {
+        const l = mkLot(r, e[0] === 'asset' ? 'asset' : 'civic', e[0] === 'civic' ? 'town' : 'private');
+        l.locked = true;
+        if (e[0] === 'job') l.site = add(e[1], e[2], r, { jobWeight: e[3], hiSkill: e[4], lot: l });
+        else if (e[0] === 'civic') l.site = add(e[1], e[2], r, { lot: l });
+        else { const a = ASSETS[e[1]](r); l.site = a.site; a.site.lot = l; l.asset = a; l.use = a.type; l.history[0].use = a.type; }
+      }
+    });
+  }
+  for (const [x, y, w, hgt, use] of STRIP_LOTS) mkLot({ x, y, w, h: hgt }, use, use === 'warehouse' || use === 'bigbox' ? 'helix' : 'private');
+  // a few households own a small business lot
+  S.lots.filter(l => ['shop', 'restaurant', 'office', 'motel'].includes(l.use) && l.owner === 'private').slice(0, 6).forEach((l, k) => { if (k % 2 === 0) { l.owner = 'h' + (2 + k); l.history[0].owner = l.owner; } });
+  add('farm', 'Moreno Farm', { x: 66, y: 110, w: 26, h: 18 }, { jobWeight: 1.0, hiSkill: 0, door: { x: 96, y: 108, ry: 100 } });
+  add('station', 'Federal Works / Rail', { x: 104, y: 102, w: 12, h: 5 }, { door: { x: 108, y: 104, ry: 100 } });
+  // Helix's one data center out by the highway spur, and a small town solar field on the old landfill
+  asset('compute', 'Helix Datacenter', { x: 168, y: 26, w: 14, h: 16 }, { helix: 1 }, 20, { jobWeight: 0.8, hiSkill: 1, door: { x: 150, y: 44, ry: 50 } });
+  S.parcels.forEach(p => { if (p.x < 182 && p.x + p.w > 168 && p.y < 42 && p.y + p.h > 26) p.used = true; });
+  asset('solar', 'Landfill Solar (town)', { x: 120, y: 112, w: 10, h: 7 }, { town: 1 }, 0.3, { door: { x: 108, y: 106, ry: 100 } });
+  // homes for the simulated households, spread over the residential blocks
+  const step = Math.floor(houseLots.length / (nH + 1));
+  S.households.forEach((h, i) => {
+    const l = houseLots[(i * step + 2) % houseLots.length];
+    l.owner = h.id; l.history[0].owner = h.id; l.locked = true;
+    h.site = add('home', h.isPlayer ? 'Your place' : h.name + ' home', l, { small: true, lot: l, household: h });
+    l.site = h.site;
+  });
   [S.hh.h2, S.hh.h5, S.hh.h9].forEach(h => { const a = placeAsset('solar', h.name + ' rooftop', null, 0, { site: h.site, immediate: true }); a.shares = { [h.id]: 1 }; a.cap = 0.03; a.rooftop = true; });
+  // other households' rooftops, as one pooled asset
+  S.neighborRoofs = placeAsset('solar', 'Neighborhood rooftops', null, 0, { site: add('roofs', 'Neighborhood rooftops', { x: -50, y: -50, w: 1, h: 1 }), immediate: true });
+  houseLots.filter(l => l.owner === 'neighbors').slice(0, 4).forEach(l => { l.roof = true; addShares(S.neighborRoofs, 'neighbors', 0.008); });
   // jobs
   S.jobSites = S.sites.filter(s => s.jobWeight);
   for (const h of S.households) for (const m of h.members) {
@@ -1195,6 +1408,7 @@ function newWorld(seed = 7) {
   you.job = siteOf('repair');
   ph.members.push(you); S.agents.push(you); S.people.push(you); S.player = you;
   econDay(); // fill in the market numbers for day 0
+  S.base = { humanNeed: S.market.humanNeed };
   syncRobots();
   log('Year 1. The valley runs on Helix\'s solar farm and datacenter. Most of the engine is owned from outside.', 'info');
   sampleHistory();
@@ -1408,7 +1622,7 @@ function bakeTerrain() {
 
 const cam = { x: 102, y: 70, z: 6, tx: 102, ty: 70, tz: 6, follow: null };
 let canvas, ctx, W = 0, H = 0, DPR = 1;
-const view = { colorBy: 'loyalty', selected: null, selSite: null, hover: null };
+const view = { colorBy: 'loyalty', selected: null, selSite: null, selLot: null, hover: null };
 
 function w2s(x, y) { return [(x - cam.x) * cam.z + W / 2, (y - cam.y) * cam.z + H / 2]; }
 function s2w(sx, sy) { return [(sx - W / 2) / cam.z + cam.x, (sy - H / 2) / cam.z + cam.y]; }
@@ -1452,8 +1666,10 @@ function draw(now) {
   const [vx0, vy0] = s2w(0, 0), [vx1, vy1] = s2w(W, H);
   const visible = (x, y, w, h) => x + w > vx0 && x < vx1 && y + h > vy0 && y < vy1;
 
-  // sites
+  // lots (ordinary town fabric), then sites (workplaces, civic, assets, the simulated homes)
+  for (const l of S.lots) { if (!l.site && visible(l.x, l.y, l.w, l.h)) drawLot(l, now); }
   for (const s of S.sites) { if (visible(s.x, s.y, s.w, s.h)) drawSite(s, now); }
+  drawCars();
   // region labels
   if (z < 5) {
     regionLabel('ASHFORD', 19, 105); regionLabel('KESTREL', 178, 114); regionLabel('HELIX CAMPUS', 171, 11); regionLabel('VALLEY TOWN', 102, 37);
@@ -1568,9 +1784,131 @@ function drawSite(s, now) {
   }
   if (s === view.selSite) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(sx - 2, sy - 2, w + 4, h + 4); }
   // labels
-  if (z >= 7 && !s.small) label(s.name, sx + w / 2, sy - 6);
+  if (!s.small && (z >= 14 || (z >= 7 && (!s.lot || s.w * s.h >= 45)))) label(s.name, sx + w / 2, sy - 6);
   else if (z >= 3 && z < 7 && !s.small && (asset || s.kind === 'hall' || s.kind === 'plaza') && w > 30) label(s.name.replace('Helix ', 'H. '), sx + w / 2, sy + h / 2, '#ffffff', 'rgba(8,12,28,0.55)');
   if (z >= 14 && s.small && s.household) label(s.household.isPlayer ? 'your place' : s.household.name, sx + w / 2, sy - 5, '#e6ecff');
+}
+
+// ---------- lots: the ordinary town, and whatever replaces it ----------
+function hash2(x, y) { return ((x * 73856093) ^ (y * 19349663)) >>> 0; }
+const CAR_COLORS = ['#c0392b', '#2e86c1', '#f4f6f7', '#1c2833', '#7d8c8e', '#d4ac0d', '#6c3483', '#239b56'];
+function drawLot(l, now) {
+  const z = cam.z;
+  const [sx, sy] = w2s(l.x, l.y), w = l.w * z, h = l.h * z;
+  const u = LOT_USE[l.use] || LOT_USE.vacant;
+  const hs = hash2(l.x, l.y);
+  const R = (fx, fy, fw, fh, c) => { ctx.fillStyle = c; ctx.fillRect(sx + fx * z, sy + fy * z, Math.max(1, fw * z), Math.max(1, fh * z)); };
+  const detail = z > 3;
+  switch (l.use) {
+    case 'house': {
+      const walls = ['#b98f5e', '#c9b28a', '#a7b4a0', '#c99a7a', '#d6cbb4'][hs % 5], roof = ['#8a4b3a', '#5d4a3c', '#6e3b3b', '#4f5a62'][hs % 4];
+      R(0.2, 1.4, l.w - 0.4, l.h - 1.6, walls); R(0, 0.3, l.w, 1.4, roof);
+      if (l.roof) R(0.3, 0.45, l.w - 0.6, 1.0, '#4f7fd1');
+      if (detail && z > 8) R(l.w / 2 - 0.3, l.h - 1.2, 0.6, 1.0, '#3a2a1e');
+      break;
+    }
+    case 'parking': case 'bigbox': case 'carlot': {
+      R(0, 0, l.w, l.h, '#54585e');
+      const lotx = l.use === 'bigbox' ? 0 : 0, big = l.use === 'bigbox';
+      if (big) { R(0.3, 0.3, l.w - 0.6, l.h * 0.45, '#7d8fb0'); R(l.w * 0.4, l.h * 0.45 - 0.5, l.w * 0.2, 0.5, '#e8d44d'); }
+      if (detail) {
+        const y0 = big ? l.h * 0.55 : 0.4, fill = l.use === 'carlot' ? 0.9 : (1 - l.vac) * 0.85;
+        for (let yy = y0; yy < l.h - 0.9; yy += 1.6) for (let xx = 0.3 + lotx; xx < l.w - 0.6; xx += 1.0) {
+          R(xx - 0.05, yy, 0.06, 1.2, '#9aa0a6');
+          if (((hash2(xx * 10 | 0, yy * 10 | 0) % 100) / 100) < fill) R(xx + 0.15, yy + 0.15, 0.65, 0.95, CAR_COLORS[hash2(xx * 7 | 0, yy * 3 | 0) % CAR_COLORS.length]);
+        }
+      }
+      break;
+    }
+    case 'gas':
+      R(0, 0, l.w, l.h, '#6a6e74'); R(0.5, 0.5, l.w - 1, l.h * 0.5, '#e8e8e8'); R(0.5, 0.5, l.w - 1, 0.4, '#c0392b');
+      if (detail) for (let i = 0; i < 3; i++) R(1 + i * (l.w - 2) / 3, l.h * 0.65, 0.5, 0.7, '#2e86c1');
+      break;
+    case 'office': {
+      R(0.2, 0.2, l.w - 0.4, l.h - 0.4, l.vac > 0.6 ? '#5f6b78' : '#8fa3b8');
+      if (detail) for (let yy = 0.7; yy < l.h - 0.6; yy += 0.9) for (let xx = 0.6; xx < l.w - 0.6; xx += 0.8) R(xx, yy, 0.45, 0.5, ((hash2(xx * 9 | 0, yy * 9 | 0) % 100) / 100) < (1 - l.vac) * 0.9 ? '#ffe9a8' : '#2b3440');
+      break;
+    }
+    case 'shop': case 'restaurant': {
+      R(0.2, 0.6, l.w - 0.4, l.h - 0.8, u.color);
+      if (detail) for (let xx = 0.2; xx < l.w - 0.4; xx += 0.6) R(xx, 0.4, 0.3, 0.5, Math.round(xx / 0.6) % 2 ? '#ffffff' : (l.use === 'restaurant' ? '#2e7d32' : '#c0392b'));
+      if (l.vac > 0.6) R(0.4, 1.2, l.w - 0.8, l.h - 2, 'rgba(20,20,20,0.55)');
+      break;
+    }
+    case 'motel': R(0, 0, l.w, l.h, '#6a6e74'); R(0.3, 0.3, l.w - 0.6, 1.4, u.color); R(0.3, 0.3, 1.4, l.h - 0.6, u.color); if (detail) R(l.w - 1.4, 0.4, 0.9, 0.9, '#e74c3c'); break;
+    case 'church': R(0.5, 1, l.w - 1, l.h - 1.4, u.color); R(l.w / 2 - 0.5, 0.1, 1, 1.4, '#bfb6a4'); if (detail) { R(l.w / 2 - 0.1, 0, 0.2, 0.9, '#5d4a3c'); } break;
+    case 'warehouse': R(0.2, 0.2, l.w - 0.4, l.h - 0.4, u.color); if (detail) for (let xx = 0.8; xx < l.w - 1; xx += 1.6) R(xx, l.h - 1.4, 1.0, 1.0, '#4e4238'); break;
+    case 'garden':
+      R(0, 0, l.w, l.h, '#6b4f2e');
+      if (detail) for (let yy = 0.4; yy < l.h - 0.3; yy += 0.8) R(0.3, yy, l.w - 0.6, 0.45, ['#5aa04a', '#7fc65a', '#c9b44a'][Math.round(yy / 0.8) % 3]);
+      break;
+    case 'apartments':
+      R(0.2, 0.2, l.w - 0.4, l.h - 0.4, u.color);
+      if (detail) for (let yy = 0.6; yy < l.h - 0.5; yy += 0.8) for (let xx = 0.6; xx < l.w - 0.5; xx += 0.8) R(xx, yy, 0.4, 0.4, '#ffe9a8');
+      if (detail) R(0.4, 0.3, l.w - 0.8, 0.4, '#4f7fd1');
+      break;
+    case 'makerspace': R(0.2, 0.2, l.w - 0.4, l.h - 0.4, u.color); if (detail) { R(l.w / 2 - 0.8, l.h / 2 - 0.8, 1.6, 1.6, '#e8d44d'); R(l.w / 2 - 0.3, l.h / 2 - 0.3, 0.6, 0.6, u.color); } break;
+    case 'vfarm':
+      R(0.2, 0.2, l.w - 0.4, l.h - 0.4, '#1f3b33');
+      if (detail) for (let yy = 0.5; yy < l.h - 0.4; yy += 0.7) R(0.5, yy, l.w - 1, 0.35, (Math.floor(now / 700) + Math.round(yy * 3)) % 4 ? '#3fae7a' : '#c86bd6');
+      break;
+    default:
+      R(0, 0, l.w, l.h, '#4a4440');
+      if (detail) { ctx.strokeStyle = '#2b2622'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + w, sy + h); ctx.moveTo(sx + w, sy); ctx.lineTo(sx, sy + h); ctx.stroke(); }
+  }
+  if (view.colorBy === 'stake') {
+    const k = l.owner === 'helix' ? 'outside' : l.owner === 'town' ? 'town' : S.hh[l.owner] ? 'resident' : null;
+    if (k) { ctx.fillStyle = OWNER_COLOR[k] + '88'; ctx.fillRect(sx, sy, w, h); }
+  }
+  if (l === view.selLot) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(sx - 2, sy - 2, w + 4, h + 4); }
+  if (z >= 16 && l.use !== 'house') label(u.label + (l.vac > 0.6 && !ASSET_USES.has(l.use) && l.use !== 'vacant' ? ' (empty)' : ''), sx + w / 2, sy + h / 2, '#e6ecff', 'rgba(8,12,28,0.6)');
+}
+
+// ---------- traffic: cars now, robotaxis later. Visual only, but the mix follows the economy ----------
+const CARS = [];
+function syncCars() {
+  const sig = landSignals();
+  const want = Math.round(26 + 20 * Math.min(1, S.people.length / 40));
+  const taxis = Math.round(want * sig.rt);
+  while (CARS.length < want) CARS.push(newCar());
+  CARS.length = want;
+  CARS.forEach((c, i) => { c.taxi = i < taxis; });
+}
+function newCar() {
+  const horiz = rand() < 0.5;
+  const c = { horiz, dir: rand() < 0.5 ? 1 : -1, color: pick(CAR_COLORS), speed: rr(30, 45) };
+  if (horiz) { c.y = pick(ROAD_Y); c.x = rr(TOWN.x0, TOWN.x1); } else { c.x = pick(ROAD_X); c.y = rr(TOWN.y0, TOWN.y1); }
+  return c;
+}
+function stepCars(hours) {
+  const d = Math.min(2.5, hours * 38);
+  for (const c of CARS) {
+    const move = d * c.speed / 38;
+    if (c.horiz) {
+      const nx = c.x + c.dir * move;
+      const lo = c.y === 70 ? 0 : TOWN.x0, hi = c.y === 70 ? MAP_W : TOWN.x1;
+      const cross = ROAD_X.find(x => (c.x - x) * (nx - x) <= 0 && x !== c.x);
+      if (cross !== undefined && c.y !== 70 && rand() < 0.35) { c.x = cross; c.horiz = false; c.dir = rand() < 0.5 ? 1 : -1; continue; }
+      c.x = nx; if (c.x < lo || c.x > hi) { c.dir *= -1; c.x = clamp(c.x, lo, hi); }
+    } else {
+      const ny = c.y + c.dir * move;
+      const cross = ROAD_Y.find(y => (c.y - y) * (ny - y) <= 0 && y !== c.y);
+      if (cross !== undefined && rand() < 0.35) { c.y = cross; c.horiz = true; c.dir = rand() < 0.5 ? 1 : -1; continue; }
+      c.y = ny; if (c.y < TOWN.y0 || c.y > TOWN.y1) { c.dir *= -1; c.y = clamp(c.y, TOWN.y0, TOWN.y1); }
+    }
+  }
+}
+function drawCars() {
+  const z = cam.z; if (z < 2.2) return;
+  for (const c of CARS) {
+    const off = 0.28 * c.dir;
+    const x = c.horiz ? c.x : c.x + off, y = c.horiz ? c.y + off : c.y;
+    const [sx, sy] = w2s(x, y);
+    const L = Math.max(2, z * 0.9), Wd = Math.max(1.5, z * 0.45);
+    const w = c.horiz ? L : Wd, h = c.horiz ? Wd : L;
+    ctx.fillStyle = c.taxi ? '#f4f6f7' : c.color; ctx.fillRect(sx - w / 2, sy - h / 2, w, h);
+    if (c.taxi) { ctx.fillStyle = '#ffd23f'; ctx.fillRect(sx - Math.max(1, z * 0.12), sy - Math.max(1, z * 0.12), Math.max(1.5, z * 0.24), Math.max(1.5, z * 0.24)); }
+  }
 }
 
 // ===== 10_ui.js =====
@@ -1582,7 +1920,7 @@ function bar(v, color, max = 1) { return `<div class="bar"><i style="width:${cla
 function renderStats() {
   const M = S.market, m = metrics();
   const rows = [
-    ['Energy', `${num(M.solarOut)} / ${num(M.dE)} MWh`, bar(1 - M.shortE, '#ffd23f'), `short ${pct(M.shortE)} · $${Math.round(M.pe)}/MWh`],
+    ['Energy', `${num(M.dE)} MWh/day wanted`, bar(1 - M.shortE, '#ffd23f'), `${pct(M.localGen || 0)} local solar · grid ${num(M.imp)} · short ${pct(M.shortE)} · $${Math.round(M.pe)}/MWh`],
     ['Compute', `${num(M.sC)} made · ${num(M.dCL)} local + ${num(M.dCX)} outside want`, bar(1 - M.shortC, '#5dff8f'), `local short ${pct(M.shortC)} · $${Math.round(M.pc)}/unit`],
     ['Robots', `${Math.round(M.nRobots)} (${pct(M.robotWork / Math.max(1, M.L))} of the work)`, bar(M.robotWork / Math.max(1, M.L), '#9fe7ff'), ''],
     ['Paid work', `${m.work.toFixed(1)} h/week per adult`, bar(m.work, '#e8805a', 50), ''],
@@ -1610,7 +1948,8 @@ function renderYou() {
 // ---------- inspector ----------
 function renderInspect() {
   const el = $('inspect');
-  const p = view.selected, s = view.selSite;
+  const p = view.selected, s = view.selSite, lot = view.selLot;
+  if (!p && !s && lot) { renderLotInspect(el, lot); return; }
   if (!p && !s) { el.hidden = true; $('feed').hidden = false; return; }
   el.hidden = false; $('feed').hidden = true;
   let html = `<button class="close" id="ins-close">×</button>`;
@@ -1630,6 +1969,7 @@ function renderInspect() {
     else html += `<div class="row sec"><button id="ins-follow">follow</button></div>`;
   } else {
     html += `<h3>${esc(s.name)}</h3>`;
+    if (s.lot) html += lotHistoryHtml(s.lot);
     const assets = (s.assets || []);
     if (s.household) html += `<div class="muted">home of ${esc(s.household.isPlayer ? 'you' : 'the ' + s.household.name + ' household')}: ${s.household.members.map(m => esc(m.first)).join(', ')} · cash ${money(s.household.cash)}</div>`;
     for (const a of assets) {
@@ -1643,7 +1983,7 @@ function renderInspect() {
     html += `<div class="sec muted">Here now: ${here.length ? here.map(q => esc(q.first) + ' (' + q.activity + ')').join(', ') : 'nobody'}</div>`;
   }
   el.innerHTML = html;
-  $('ins-close').onclick = () => { view.selected = null; view.selSite = null; renderInspect(); };
+  $('ins-close').onclick = () => { view.selected = null; view.selSite = null; view.selLot = null; renderInspect(); };
   el.querySelectorAll('[data-p]').forEach(b => b.onclick = () => doAction('persuade', p.id, b.dataset.p));
   if ($('ins-share')) $('ins-share').onclick = () => doAction('share', p.id);
   if ($('ins-follow')) $('ins-follow').onclick = () => { cam.follow = p; cam.tz = Math.max(cam.tz, 24); };
@@ -1741,6 +2081,18 @@ function tickBanners(dtMs) {
   if (toastTimer > 0) { toastTimer -= dtMs; if (toastTimer <= 0) $('toast').hidden = true; }
 }
 
+function lotHistoryHtml(l) {
+  return `<div class="muted">Lot history</div>` + l.history.map(hh => `<div>${dateLabel(hh.day * 24).text.replace('Year ', 'Y')}: ${esc((LOT_USE[hh.use] || { label: hh.use }).label)} <span class="muted">(${esc(ownerName(hh.owner))})</span></div>`).join('');
+}
+function renderLotInspect(el, l) {
+  el.hidden = false; $('feed').hidden = true;
+  const u = LOT_USE[l.use] || LOT_USE.vacant;
+  el.innerHTML = `<button class="close" id="ins-close">×</button><h3>${esc(u.label)}</h3><div class="muted">owned by ${esc(ownerName(l.owner))} · ${l.w}×${l.h} tiles · land value ${money(lotValue(l))}</div>` +
+    (VIABILITY[l.use] ? `<div class="sec"><div class="stat"><span>occupancy</span>${bar(1 - l.vac, '#8fd0e0')}</div><div class="muted">${l.vac > 0.5 ? 'Mostly empty. Its owner is looking at other uses.' : 'Still earning its keep.'}</div></div>` : '') +
+    (l.roof ? '<div class="sec">Rooftop solar installed.</div>' : '') + `<div class="sec">${lotHistoryHtml(l)}</div>`;
+  $('ins-close').onclick = () => { view.selLot = null; renderInspect(); };
+}
+
 // ===== 11_main.js =====
 // Main loop, input, and test hooks.
 // Speeds: sim-hours advanced per real second. 1x = one hour every 2.5 s.
@@ -1763,7 +2115,7 @@ function advance(hours) {
 function frame(now) {
   const dtMs = Math.min(100, now - (lastFrame || now));
   lastFrame = now;
-  if (speed > 0) advance(SPEEDS[speed] * dtMs / 1000);
+  if (speed > 0) { const hrs = SPEEDS[speed] * dtMs / 1000; advance(hrs); stepCars(Math.min(hrs, 0.1)); }
   draw(now);
   tickBanners(dtMs);
   uiClock -= dtMs;
@@ -1773,7 +2125,8 @@ function frame(now) {
 function refreshUI() {
   const d = dateLabel(S.t);
   $('date').textContent = d.text; $('clock').textContent = d.clock;
-  renderStats(); renderFeed(); renderYou(); drawChart();
+  renderStats(); renderFeed(); renderYou(); drawChart(); syncCars();
+  $('era').textContent = eraName();
   const st = $('stats'), top = st.offsetTop + st.offsetHeight + 8;
   for (const id of ['feed', 'inspect']) { const el = $(id); el.style.top = top + 'px'; el.style.maxHeight = `calc(100vh - ${top}px - 184px)`; }
   if (!document.activeElement || !$('inspect').contains(document.activeElement)) renderInspect();
@@ -1793,7 +2146,9 @@ function pickAt(sx, sy) {
   for (const p of S.people) { const d = Math.hypot(p.position.x - wx, p.position.y - wy); if (d < bd) { bd = d; best = p; } }
   if (best) return { agent: best };
   const site = S.sites.slice().reverse().find(s => wx >= s.x && wx <= s.x + s.w && wy >= s.y && wy <= s.y + s.h);
-  return site ? { site } : {};
+  if (site) return { site };
+  const lot = S.lots.find(l => !l.site && wx >= l.x && wx <= l.x + l.w && wy >= l.y && wy <= l.y + l.h);
+  return lot ? { lot } : {};
 }
 
 function setupInput() {
@@ -1808,7 +2163,7 @@ function setupInput() {
   canvas.addEventListener('pointerup', e => {
     if (drag && !drag.moved) {
       const hit = pickAt(e.clientX, e.clientY);
-      view.selected = hit.agent || null; view.selSite = hit.agent ? null : hit.site || null;
+      view.selected = hit.agent || null; view.selSite = hit.site || null; view.selLot = hit.lot || null;
       renderInspect();
     }
     drag = null;
@@ -1827,7 +2182,7 @@ function setupInput() {
     if (e.key >= '0' && e.key <= '4') setSpeed(+e.key);
     if (e.key === '+' || e.key === '=') cam.tz = clamp(cam.tz * 1.25, minZoom(), 64);
     if (e.key === '-') cam.tz = clamp(cam.tz / 1.25, minZoom(), 64);
-    if (e.key === 'Escape') { view.selected = null; view.selSite = null; hideMenu(); renderInspect(); $('help').hidden = true; }
+    if (e.key === 'Escape') { view.selected = null; view.selSite = null; view.selLot = null; hideMenu(); renderInspect(); $('help').hidden = true; }
   });
   document.querySelectorAll('#speeds button').forEach(b => b.onclick = () => setSpeed(+b.dataset.s));
   document.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { view.colorBy = b.dataset.c; document.querySelectorAll('[data-c]').forEach(x => x.classList.toggle('on', x === b)); });
@@ -1857,7 +2212,8 @@ window.__SIM = {
   setSpeed, zoomPreset, discover: id => discover(id),
   zoomTo(x, y, z) { cam.follow = null; cam.tx = cam.x = x; cam.ty = cam.y = y; cam.tz = cam.z = z; },
   follow(id) { const p = S.people.find(q => q.id === id) || S.player; cam.follow = p; cam.x = p.position.x; cam.y = p.position.y; },
-  select(id) { view.selected = S.people.find(q => q.id === id) || null; view.selSite = view.selected ? null : S.sites.find(s => s.id === id || s.name === id) || null; renderInspect(); },
+  selectLot(i) { view.selected = null; view.selSite = null; view.selLot = __SIM.S.lots[i]; renderInspect(); },
+  select(id) { if (id == null) { view.selected = null; view.selSite = null; view.selLot = null; renderInspect(); return; } view.selected = S.people.find(q => q.id === id) || null; view.selSite = view.selected ? null : S.sites.find(s => s.id === id || s.name === id) || null; view.selLot = null; renderInspect(); },
   act: (name, ...args) => ACTIONS[name](...args), refreshUI,
 };
 boot();

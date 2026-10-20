@@ -56,7 +56,7 @@ h3 { margin: 0 0 4px; font-size: 12px; color: var(--hi); text-transform: upperca
 
 <div id="hud" class="panel">
   <div class="title"><b>AFTERLIGHT · SIM</b><span class="muted">first slice</span></div>
-  <div><span id="date">Year 1 · Jan 1</span> <span id="clock" class="muted">06:00</span></div>
+  <div><span id="date">Year 1 · Jan 1</span> <span id="clock" class="muted">06:00</span> · <span id="era" style="color:var(--nation)">Present day</span></div>
   <div class="row" id="speeds">
     <button data-s="0" title="Pause (space)">❚❚</button>
     <button data-s="1" title="1 hour per 2.5 s (1)">▶</button>
@@ -101,8 +101,9 @@ h3 { margin: 0 0 4px; font-size: 12px; color: var(--hi); text-transform: upperca
 <div id="help" class="panel" hidden>
   <h3>What this is</h3>
   <p>A valley living through the singularity. ~45 residents each decide what to do with Yuka goal evaluators, weighing four loyalties: <span class="sw" style="background:var(--self)"></span>self <span class="sw" style="background:var(--family)"></span>family <span class="sw" style="background:var(--community)"></span>community <span class="sw" style="background:var(--nation)"></span>nation.</p>
+  <p>It starts as an ordinary present-day town: houses, shops, offices, parking lots, gas stations, a warehouse, a factory. As robots and AI spread, lots go empty and their owners redevelop them: parking becomes solar canopies or gardens, offices become compute or apartments, cars give way to robotaxis.</p>
   <p>Solar makes energy, racks turn energy into compute, robots need both and take over work. Appetite for all three grows faster than anyone can build. Every few months a discovery changes the rules.</p>
-  <p>Whoever owns the engine collects its income. Helix Systems (outside capital, <span class="sw" style="background:var(--helix)"></span>) owns most of it at the start. The bar under each building shows who owns it: <span class="sw" style="background:var(--town)"></span>town <span class="sw" style="background:var(--coop)"></span>co-op <span class="sw" style="background:var(--resident)"></span>a household.</p>
+  <p>Whoever owns the engine collects its income. Helix Systems (outside capital, <span class="sw" style="background:var(--helix)"></span>) owns most of it at the start. The bar under each productive building shows who owns it, and the stake color mode tints every lot by owner: <span class="sw" style="background:var(--town)"></span>town <span class="sw" style="background:var(--coop)"></span>co-op <span class="sw" style="background:var(--resident)"></span>a household.</p>
   <p>You are one resident (the white dot). Propose co-ops, invest, build, call council votes, and talk to neighbors. Ideas spread as people spend time together.</p>
   <p class="muted">Scroll to zoom, drag to pan, click anything to inspect. Space pauses, 1–4 set speed.</p>
   <button id="help-close">Got it</button>

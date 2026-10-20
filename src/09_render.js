@@ -28,7 +28,7 @@ function bakeTerrain() {
 
 const cam = { x: 102, y: 70, z: 6, tx: 102, ty: 70, tz: 6, follow: null };
 let canvas, ctx, W = 0, H = 0, DPR = 1;
-const view = { colorBy: 'loyalty', selected: null, selSite: null, hover: null };
+const view = { colorBy: 'loyalty', selected: null, selSite: null, selLot: null, hover: null };
 
 function w2s(x, y) { return [(x - cam.x) * cam.z + W / 2, (y - cam.y) * cam.z + H / 2]; }
 function s2w(sx, sy) { return [(sx - W / 2) / cam.z + cam.x, (sy - H / 2) / cam.z + cam.y]; }
@@ -72,8 +72,10 @@ function draw(now) {
   const [vx0, vy0] = s2w(0, 0), [vx1, vy1] = s2w(W, H);
   const visible = (x, y, w, h) => x + w > vx0 && x < vx1 && y + h > vy0 && y < vy1;
 
-  // sites
+  // lots (ordinary town fabric), then sites (workplaces, civic, assets, the simulated homes)
+  for (const l of S.lots) { if (!l.site && visible(l.x, l.y, l.w, l.h)) drawLot(l, now); }
   for (const s of S.sites) { if (visible(s.x, s.y, s.w, s.h)) drawSite(s, now); }
+  drawCars();
   // region labels
   if (z < 5) {
     regionLabel('ASHFORD', 19, 105); regionLabel('KESTREL', 178, 114); regionLabel('HELIX CAMPUS', 171, 11); regionLabel('VALLEY TOWN', 102, 37);
@@ -188,7 +190,129 @@ function drawSite(s, now) {
   }
   if (s === view.selSite) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(sx - 2, sy - 2, w + 4, h + 4); }
   // labels
-  if (z >= 7 && !s.small) label(s.name, sx + w / 2, sy - 6);
+  if (!s.small && (z >= 14 || (z >= 7 && (!s.lot || s.w * s.h >= 45)))) label(s.name, sx + w / 2, sy - 6);
   else if (z >= 3 && z < 7 && !s.small && (asset || s.kind === 'hall' || s.kind === 'plaza') && w > 30) label(s.name.replace('Helix ', 'H. '), sx + w / 2, sy + h / 2, '#ffffff', 'rgba(8,12,28,0.55)');
   if (z >= 14 && s.small && s.household) label(s.household.isPlayer ? 'your place' : s.household.name, sx + w / 2, sy - 5, '#e6ecff');
+}
+
+// ---------- lots: the ordinary town, and whatever replaces it ----------
+function hash2(x, y) { return ((x * 73856093) ^ (y * 19349663)) >>> 0; }
+const CAR_COLORS = ['#c0392b', '#2e86c1', '#f4f6f7', '#1c2833', '#7d8c8e', '#d4ac0d', '#6c3483', '#239b56'];
+function drawLot(l, now) {
+  const z = cam.z;
+  const [sx, sy] = w2s(l.x, l.y), w = l.w * z, h = l.h * z;
+  const u = LOT_USE[l.use] || LOT_USE.vacant;
+  const hs = hash2(l.x, l.y);
+  const R = (fx, fy, fw, fh, c) => { ctx.fillStyle = c; ctx.fillRect(sx + fx * z, sy + fy * z, Math.max(1, fw * z), Math.max(1, fh * z)); };
+  const detail = z > 3;
+  switch (l.use) {
+    case 'house': {
+      const walls = ['#b98f5e', '#c9b28a', '#a7b4a0', '#c99a7a', '#d6cbb4'][hs % 5], roof = ['#8a4b3a', '#5d4a3c', '#6e3b3b', '#4f5a62'][hs % 4];
+      R(0.2, 1.4, l.w - 0.4, l.h - 1.6, walls); R(0, 0.3, l.w, 1.4, roof);
+      if (l.roof) R(0.3, 0.45, l.w - 0.6, 1.0, '#4f7fd1');
+      if (detail && z > 8) R(l.w / 2 - 0.3, l.h - 1.2, 0.6, 1.0, '#3a2a1e');
+      break;
+    }
+    case 'parking': case 'bigbox': case 'carlot': {
+      R(0, 0, l.w, l.h, '#54585e');
+      const lotx = l.use === 'bigbox' ? 0 : 0, big = l.use === 'bigbox';
+      if (big) { R(0.3, 0.3, l.w - 0.6, l.h * 0.45, '#7d8fb0'); R(l.w * 0.4, l.h * 0.45 - 0.5, l.w * 0.2, 0.5, '#e8d44d'); }
+      if (detail) {
+        const y0 = big ? l.h * 0.55 : 0.4, fill = l.use === 'carlot' ? 0.9 : (1 - l.vac) * 0.85;
+        for (let yy = y0; yy < l.h - 0.9; yy += 1.6) for (let xx = 0.3 + lotx; xx < l.w - 0.6; xx += 1.0) {
+          R(xx - 0.05, yy, 0.06, 1.2, '#9aa0a6');
+          if (((hash2(xx * 10 | 0, yy * 10 | 0) % 100) / 100) < fill) R(xx + 0.15, yy + 0.15, 0.65, 0.95, CAR_COLORS[hash2(xx * 7 | 0, yy * 3 | 0) % CAR_COLORS.length]);
+        }
+      }
+      break;
+    }
+    case 'gas':
+      R(0, 0, l.w, l.h, '#6a6e74'); R(0.5, 0.5, l.w - 1, l.h * 0.5, '#e8e8e8'); R(0.5, 0.5, l.w - 1, 0.4, '#c0392b');
+      if (detail) for (let i = 0; i < 3; i++) R(1 + i * (l.w - 2) / 3, l.h * 0.65, 0.5, 0.7, '#2e86c1');
+      break;
+    case 'office': {
+      R(0.2, 0.2, l.w - 0.4, l.h - 0.4, l.vac > 0.6 ? '#5f6b78' : '#8fa3b8');
+      if (detail) for (let yy = 0.7; yy < l.h - 0.6; yy += 0.9) for (let xx = 0.6; xx < l.w - 0.6; xx += 0.8) R(xx, yy, 0.45, 0.5, ((hash2(xx * 9 | 0, yy * 9 | 0) % 100) / 100) < (1 - l.vac) * 0.9 ? '#ffe9a8' : '#2b3440');
+      break;
+    }
+    case 'shop': case 'restaurant': {
+      R(0.2, 0.6, l.w - 0.4, l.h - 0.8, u.color);
+      if (detail) for (let xx = 0.2; xx < l.w - 0.4; xx += 0.6) R(xx, 0.4, 0.3, 0.5, Math.round(xx / 0.6) % 2 ? '#ffffff' : (l.use === 'restaurant' ? '#2e7d32' : '#c0392b'));
+      if (l.vac > 0.6) R(0.4, 1.2, l.w - 0.8, l.h - 2, 'rgba(20,20,20,0.55)');
+      break;
+    }
+    case 'motel': R(0, 0, l.w, l.h, '#6a6e74'); R(0.3, 0.3, l.w - 0.6, 1.4, u.color); R(0.3, 0.3, 1.4, l.h - 0.6, u.color); if (detail) R(l.w - 1.4, 0.4, 0.9, 0.9, '#e74c3c'); break;
+    case 'church': R(0.5, 1, l.w - 1, l.h - 1.4, u.color); R(l.w / 2 - 0.5, 0.1, 1, 1.4, '#bfb6a4'); if (detail) { R(l.w / 2 - 0.1, 0, 0.2, 0.9, '#5d4a3c'); } break;
+    case 'warehouse': R(0.2, 0.2, l.w - 0.4, l.h - 0.4, u.color); if (detail) for (let xx = 0.8; xx < l.w - 1; xx += 1.6) R(xx, l.h - 1.4, 1.0, 1.0, '#4e4238'); break;
+    case 'garden':
+      R(0, 0, l.w, l.h, '#6b4f2e');
+      if (detail) for (let yy = 0.4; yy < l.h - 0.3; yy += 0.8) R(0.3, yy, l.w - 0.6, 0.45, ['#5aa04a', '#7fc65a', '#c9b44a'][Math.round(yy / 0.8) % 3]);
+      break;
+    case 'apartments':
+      R(0.2, 0.2, l.w - 0.4, l.h - 0.4, u.color);
+      if (detail) for (let yy = 0.6; yy < l.h - 0.5; yy += 0.8) for (let xx = 0.6; xx < l.w - 0.5; xx += 0.8) R(xx, yy, 0.4, 0.4, '#ffe9a8');
+      if (detail) R(0.4, 0.3, l.w - 0.8, 0.4, '#4f7fd1');
+      break;
+    case 'makerspace': R(0.2, 0.2, l.w - 0.4, l.h - 0.4, u.color); if (detail) { R(l.w / 2 - 0.8, l.h / 2 - 0.8, 1.6, 1.6, '#e8d44d'); R(l.w / 2 - 0.3, l.h / 2 - 0.3, 0.6, 0.6, u.color); } break;
+    case 'vfarm':
+      R(0.2, 0.2, l.w - 0.4, l.h - 0.4, '#1f3b33');
+      if (detail) for (let yy = 0.5; yy < l.h - 0.4; yy += 0.7) R(0.5, yy, l.w - 1, 0.35, (Math.floor(now / 700) + Math.round(yy * 3)) % 4 ? '#3fae7a' : '#c86bd6');
+      break;
+    default:
+      R(0, 0, l.w, l.h, '#4a4440');
+      if (detail) { ctx.strokeStyle = '#2b2622'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + w, sy + h); ctx.moveTo(sx + w, sy); ctx.lineTo(sx, sy + h); ctx.stroke(); }
+  }
+  if (view.colorBy === 'stake') {
+    const k = l.owner === 'helix' ? 'outside' : l.owner === 'town' ? 'town' : S.hh[l.owner] ? 'resident' : null;
+    if (k) { ctx.fillStyle = OWNER_COLOR[k] + '88'; ctx.fillRect(sx, sy, w, h); }
+  }
+  if (l === view.selLot) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(sx - 2, sy - 2, w + 4, h + 4); }
+  if (z >= 16 && l.use !== 'house') label(u.label + (l.vac > 0.6 && !ASSET_USES.has(l.use) && l.use !== 'vacant' ? ' (empty)' : ''), sx + w / 2, sy + h / 2, '#e6ecff', 'rgba(8,12,28,0.6)');
+}
+
+// ---------- traffic: cars now, robotaxis later. Visual only, but the mix follows the economy ----------
+const CARS = [];
+function syncCars() {
+  const sig = landSignals();
+  const want = Math.round(26 + 20 * Math.min(1, S.people.length / 40));
+  const taxis = Math.round(want * sig.rt);
+  while (CARS.length < want) CARS.push(newCar());
+  CARS.length = want;
+  CARS.forEach((c, i) => { c.taxi = i < taxis; });
+}
+function newCar() {
+  const horiz = rand() < 0.5;
+  const c = { horiz, dir: rand() < 0.5 ? 1 : -1, color: pick(CAR_COLORS), speed: rr(30, 45) };
+  if (horiz) { c.y = pick(ROAD_Y); c.x = rr(TOWN.x0, TOWN.x1); } else { c.x = pick(ROAD_X); c.y = rr(TOWN.y0, TOWN.y1); }
+  return c;
+}
+function stepCars(hours) {
+  const d = Math.min(2.5, hours * 38);
+  for (const c of CARS) {
+    const move = d * c.speed / 38;
+    if (c.horiz) {
+      const nx = c.x + c.dir * move;
+      const lo = c.y === 70 ? 0 : TOWN.x0, hi = c.y === 70 ? MAP_W : TOWN.x1;
+      const cross = ROAD_X.find(x => (c.x - x) * (nx - x) <= 0 && x !== c.x);
+      if (cross !== undefined && c.y !== 70 && rand() < 0.35) { c.x = cross; c.horiz = false; c.dir = rand() < 0.5 ? 1 : -1; continue; }
+      c.x = nx; if (c.x < lo || c.x > hi) { c.dir *= -1; c.x = clamp(c.x, lo, hi); }
+    } else {
+      const ny = c.y + c.dir * move;
+      const cross = ROAD_Y.find(y => (c.y - y) * (ny - y) <= 0 && y !== c.y);
+      if (cross !== undefined && rand() < 0.35) { c.y = cross; c.horiz = true; c.dir = rand() < 0.5 ? 1 : -1; continue; }
+      c.y = ny; if (c.y < TOWN.y0 || c.y > TOWN.y1) { c.dir *= -1; c.y = clamp(c.y, TOWN.y0, TOWN.y1); }
+    }
+  }
+}
+function drawCars() {
+  const z = cam.z; if (z < 2.2) return;
+  for (const c of CARS) {
+    const off = 0.28 * c.dir;
+    const x = c.horiz ? c.x : c.x + off, y = c.horiz ? c.y + off : c.y;
+    const [sx, sy] = w2s(x, y);
+    const L = Math.max(2, z * 0.9), Wd = Math.max(1.5, z * 0.45);
+    const w = c.horiz ? L : Wd, h = c.horiz ? Wd : L;
+    ctx.fillStyle = c.taxi ? '#f4f6f7' : c.color; ctx.fillRect(sx - w / 2, sy - h / 2, w, h);
+    if (c.taxi) { ctx.fillStyle = '#ffd23f'; ctx.fillRect(sx - Math.max(1, z * 0.12), sy - Math.max(1, z * 0.12), Math.max(1.5, z * 0.24), Math.max(1.5, z * 0.24)); }
+  }
 }

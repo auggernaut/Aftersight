@@ -24,8 +24,9 @@ function baseParams() {
     exportCap: 1500,      // robot-hours/day the outside market absorbs at that price
     peBase: 80,           // $ / MWh
     pcBase: 120,          // $ / compute unit
-    gridPrice: 260,       // $ / MWh bought from the national grid
-    gridCap: 4,           // MWh/day the grid line can import
+    gridPrice: 140,       // $ / MWh bought from the national grid
+    gridCap: 16,          // MWh/day the valley's grid connection can carry (present day: most of its power)
+    robotaxi: 0,          // share of trips taken in robotaxis
     essential: 55,        // $ per person per day for housing, food, basics
     essentialIdx: 1,      // discoveries can make basics cheaper
     tax: 0.10,            // town tax on resident income
@@ -50,8 +51,10 @@ const DISCOVERIES = [
     changes: ['Compute per person ×10', 'Outside compute appetite ×3', 'Robots can do +15% of jobs'], fx: P => { P.aiPerCap *= 10; P.extC *= 3; P.autoFrac = Math.min(0.97, P.autoFrac + 0.15); } },
   { id: 'sodium', tier: 1, title: 'Sodium batteries', blurb: 'Cheap salt batteries store sunshine for the night.',
     changes: ['Solar yield ×1.25', 'Grid import price ×0.8'], fx: P => { P.solarYield *= 1.25; P.gridPrice *= 0.8; } },
+  { id: 'robotaxi', tier: 1, title: 'Robotaxis go everywhere', blurb: 'Driverless cars are cheaper than owning one. Parking lots and gas stations start to empty.',
+    changes: ['Robotaxi share of trips +40%', 'Robots can do +5% of jobs (driving)'], fx: P => { P.robotaxi += 0.4; P.autoFrac = Math.min(0.97, P.autoFrac + 0.05); } },
   { id: 'humanoids', tier: 2, title: 'General-purpose humanoids', blurb: 'Robots with hands good enough for kitchens, clinics and building sites.',
-    changes: ['Robots can do +20% of jobs', 'Robot work day 16h → 20h'], fx: P => { P.autoFrac = Math.min(0.97, P.autoFrac + 0.2); P.robotHours = 20; } },
+    changes: ['Robots can do +20% of jobs', 'Robot work day 16h → 20h', 'Robotaxi share +15%'], fx: P => { P.autoFrac = Math.min(0.97, P.autoFrac + 0.2); P.robotHours = 20; P.robotaxi += 0.15; } },
   { id: 'distill', tier: 2, title: 'Distilled robot minds', blurb: 'Small models that run on the robot itself.',
     changes: ['Compute per robot ×0.4'], fx: P => { P.robotC *= 0.4; } },
   { id: 'vfarms', tier: 2, title: 'Robot vertical farms', blurb: 'Food grown in stacked rooms by machines, all year.',
