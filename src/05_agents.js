@@ -27,11 +27,11 @@ function stopMoving(ent) { ent.moving = false; ent.follow.active = false; ent.ve
 function stepMover(ent, dt) {
   if (!ent.moving) return;
   const last = ent.wp[ent.wp.length - 1];
-  if (dt <= 0.05) {
+  if (ent.maxSpeed * dt <= 1.5) {
     ent.update(dt); // Yuka steering: FollowPath (seek through waypoints, arrive at the end)
     while (ent.wpi < ent.wp.length - 1 && Math.hypot(ent.wp[ent.wpi].x - ent.position.x, ent.wp[ent.wpi].y - ent.position.y) < 0.8) ent.wpi++;
   } else {
-    // at high time compression, walk the same path kinematically (steering would overshoot)
+    // at high time compression, walk the same path kinematically (steering would overshoot corners)
     let budget = ent.maxSpeed * dt;
     while (budget > 0 && ent.wpi < ent.wp.length) {
       const w = ent.wp[ent.wpi], dx = w.x - ent.position.x, dy = w.y - ent.position.y, d = Math.hypot(dx, dy);
@@ -102,8 +102,13 @@ class Eval extends GoalEvaluator {
 function cashDays(h) { return h.cash / Math.max(1, h.members.length * S.P.essential * S.P.essentialIdx); }
 function financialNeed(h) { return clamp(1 - cashDays(h) / 60, 0, 1); }
 function siteOf(kind) { return S.sites.find(s => s.kind === kind); }
+function nearSite(kind, o) { // the closest site of a kind to someone's home
+  const h = o.home.site; let best = null, bd = Infinity;
+  for (const s of S.sites) if (s.kind === kind) { const d = Math.hypot(s.cx - h.cx, s.cy - h.cy); if (d < bd) { bd = d; best = s; } }
+  return best;
+}
 function pendingSiteInTown() {
-  const a = S.assets.find(x => x.pending.length && x.site.x > TOWN.x0 - 2 && x.site.x < TOWN.x1 && x.site.y > TOWN.y0 - 2 && x.site.y < TOWN.y1);
+  const a = S.assets.find(x => x.pending.length && !x.site.rooftop && inTown(x.site.cx, x.site.cy));
   return a ? a.site : null;
 }
 
@@ -125,7 +130,7 @@ const EVALS = {
     o => o.home.members.some(m => m.wellbeing < 0.4) ? 'Someone at home is struggling. Heading back.' : 'Time with the family.'),
   social: new Eval('social', w => 0.35 + 0.6 * w.self + 0.6 * w.community,
     o => between(hourOf(), 7, 22) ? (1 - o.social) * 0.8 : 0,
-    o => ({ site: pick([siteOf('plaza'), siteOf('cafe'), siteOf('park'), siteOf('diner')]), hours: 1.5 }),
+    o => ({ site: pick([siteOf('plaza'), siteOf('cafe'), nearSite('park', o), siteOf('diner'), siteOf('market')]), hours: 1.5 }),
     o => 'Feeling cooped up. Out to see people.'),
   volunteer: new Eval('volunteer', w => 0.12 + 1.7 * w.community,
     o => o.age === 'kid' || !between(hourOf(), 8, 20) ? 0 : 0.32 + (pendingSiteInTown() ? 0.15 : 0) + (1 - o.purpose) * 0.2,
@@ -157,11 +162,11 @@ const EVALS = {
     o => 'If we don\'t build it together, Helix will. Going to start a co-op drive.'),
   school: new Eval('school', () => 1,
     o => o.age === 'kid' && isWeekday() && between(hourOf(), 8, 15) ? 0.95 : 0,
-    o => ({ site: siteOf('school'), hours: Math.max(1, 15 - hourOf()) }),
+    o => ({ site: nearSite('school', o), hours: Math.max(1, 15 - hourOf()) }),
     o => 'School.'),
   play: new Eval('play', () => 1,
     o => o.age === 'kid' && between(hourOf(), 8, 20) ? 0.3 + (1 - o.social) * 0.5 : 0,
-    o => ({ site: pick([siteOf('park'), siteOf('plaza')]), hours: 1.5 }),
+    o => ({ site: pick([nearSite('park', o), nearSite('sport', o) || siteOf('plaza')]), hours: 1.5 }),
     o => 'Playing in the park.'),
 };
 const EVAL_ORDER = ['sleep', 'work', 'family', 'social', 'volunteer', 'civic', 'learn', 'pledge', 'council', 'propose', 'school', 'play'];
@@ -226,6 +231,11 @@ class Agent extends Vehicle {
     const o = pick(others);
     const k = 0.03;
     SPHERES.forEach(s => { const m = (this.w[s] + o.w[s]) / 2; this.w[s] = lerp(this.w[s], m, k); o.w[s] = lerp(o.w[s], m, k); });
+    // someone you talked round keeps making the case: persuasion spreads person to person
+    for (const [a, b] of [[this, o], [o, this]]) if ((a.advocate || 0) > S.day && b.w.community < a.w.community) {
+      b.w.community += 0.025; normalize(b.w); b.trust = clamp(b.trust + 0.015, 0, 1);
+      if (b.w.community > 0.35 && !(b.advocate > S.day) && rand() < 0.25) b.advocate = S.day + 20;
+    }
     const tm = (this.trust + o.trust) / 2; this.trust = lerp(this.trust, tm, k); o.trust = lerp(o.trust, tm, k);
   }
   daily() {

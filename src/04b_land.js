@@ -13,6 +13,9 @@ const LOT_USE = {
   solar: { label: 'Solar canopy', color: '#24345e' }, compute: { label: 'Compute', color: '#2f3644' }, fleet: { label: 'Robot depot', color: '#41525c' }, factory: { label: 'Micro-fab', color: '#8d6e63' },
 };
 const ASSET_USES = new Set(['solar', 'compute', 'fleet', 'factory']);
+// Capacity a lot can hold, per 5 m tile (25 m²): solar canopy ~0.6 MW/ha, racks and robot bays by floor area.
+const CAP_PER_TILE = { solar: 0.0015, compute: 0.12, fleet: 0.1, factory: 0.0012 };
+const ROOF_MW = 0.0006; // one house's rooftop array, in the economy's MW units
 
 function landSignals() {
   const P = S.P, M = S.market;
@@ -26,7 +29,7 @@ const VIABILITY = {
   restaurant: s => 0.6 + 0.4 * s.retail, church: () => 0.85, motel: s => 0.4 + 0.6 * s.car, warehouse: s => 0.3 + 0.7 * s.work, vacant: () => 0,
 };
 function countUse(u) { return S.lots.filter(l => l.use === u).length; }
-function lotValue(l) { return l.w * l.h * 1800 * (1 + S.day / 720); }
+function lotValue(l) { return l.w * l.h * 150 * (1 + S.day / 720); } // $ per 5 m tile, rising as land gets scarce
 
 function lotOwnerValues(owner) {
   if (S.hh[owner]) return householdValues(S.hh[owner]);
@@ -45,7 +48,11 @@ function setUse(l, use, note) {
 
 // A lot becomes a productive asset. The owner pays for the build.
 function lotToAsset(l, type, owner, opts = {}) {
-  const units = (l.w * l.h / 20) * ({ solar: 0.12, compute: 8, fleet: 8, factory: 0.12 }[type]);
+  // the full build-out the lot can hold; owners build the first phase they can afford and expand later
+  const full = l.w * l.h * CAP_PER_TILE[type];
+  const budget = opts.prepaid ? Infinity : owner === 'helix' ? S.helix.monthBudget : owner === 'town' ? S.town.cash : S.hh[owner] ? S.hh[owner].cash : Infinity;
+  const units = Math.min(full, opts.prepaid ? Math.max(full * 0.35, Math.min(full, 600000 / unitCost(type))) : budget * 0.9 / unitCost(type));
+  if (units < full * 0.15) return null;
   const cost = units * unitCost(type);
   if (!opts.prepaid) {
     if (owner === 'helix') { if (S.helix.monthBudget < cost) return null; S.helix.monthBudget -= cost; }
@@ -64,10 +71,11 @@ function lotToAsset(l, type, owner, opts = {}) {
   return a;
 }
 
+function payLotSeller(l, price) { if (S.hh[l.owner]) S.hh[l.owner].cash += price; else if (l.owner === 'helix') S.helix.cash += price; else if (l.owner === 'town') S.town.cash += price; }
 function sellLot(l, buyer) {
   const price = lotValue(l);
   if (buyer === 'helix') S.helix.cash -= price; else if (buyer === 'town') S.town.cash -= price; else if (S.hh[buyer]) S.hh[buyer].cash -= price;
-  if (S.hh[l.owner]) S.hh[l.owner].cash += price; else if (l.owner === 'helix') S.helix.cash += price; else if (l.owner === 'town') S.town.cash += price;
+  payLotSeller(l, price);
   log(`${ownerName(l.owner) === 'local owner' ? 'A local owner' : ownerName(l.owner)} sold a ${LOT_USE[l.use].label.toLowerCase()} lot to ${ownerName(buyer)} for ${money(price)}.`, buyer === 'helix' ? 'helix' : 'town');
   l.owner = buyer;
 }
@@ -77,22 +85,25 @@ function redevelop(l) {
   const roi = ['solar', 'compute', 'fleet'].map(t => ({ t, r: annualReturn(t) })).sort((a, b) => b.r - a.r)[0];
   const done = id => S.discoveries.some(d => d.id === id);
   // outside capital bids for vacant land when it has a use for it
-  if (l.owner !== 'helix' && l.owner !== 'town' && roi.r > P.helixHurdle && S.helix.monthBudget > lotValue(l) * 3) {
+  // (under community-first zoning, vacant lots are offered to co-ops and the town first; Helix can't buy in town)
+  if (l.owner !== 'helix' && l.owner !== 'town' && l.owner !== 'coop' && roi.r > P.helixHurdle && S.helix.monthBudget > lotValue(l) * 3) {
     const w = lotOwnerValues(l.owner);
     const sells = l.owner === 'private' ? 0.7 : 0.25 + w.self * 0.8;
     if (rand() < sells) {
-      const town = S.policy.firstRefusal && S.town.cash > lotValue(l) * 2;
-      sellLot(l, town ? 'town' : 'helix');
+      const town = (S.policy.firstRefusal || S.policy.zoning) && S.town.cash > lotValue(l) * 1.2;
+      if (town) sellLot(l, 'town');
+      else if (!S.policy.zoning) sellLot(l, 'helix');
     }
   }
   const o = l.owner, w = lotOwnerValues(o);
+  if (o === 'coop') return;
   if (o === 'helix') {
     const t = sig.rt > 0.35 && rand() < 0.3 ? 'fleet' : roi.t;
     if (lotToAsset(l, t, 'helix')) return;
   }
   if (o === 'town') {
     const t = M.shortC > M.shortE ? 'compute' : 'solar';
-    if (S.town.cash > 200000 && lotToAsset(l, t, 'town')) return;
+    if (S.town.cash > 60000 && lotToAsset(l, t, 'town')) return;
   }
   if (S.hh[o]) {
     const h = S.hh[o];
@@ -118,20 +129,26 @@ function redevelop(l) {
 
 // Investors who need land for a new asset take the most redevelopable lot in town, else a field.
 function lotForInvestor(owner) {
-  const cands = S.lots.filter(l => !l.site && l.use !== 'house' && !l.locked && (l.owner === owner || l.owner === 'private' || (S.hh[l.owner] && owner !== 'helix')) && (l.vac > 0.3 || l.use === 'vacant' || l.use === 'parking' && landSignals().car < 0.8));
+  const outside = owner === 'helix';
+  if (outside && S.policy.zoning) return S.lots.find(l => !l.site && !l.locked && l.owner === 'helix' && (l.vac > 0.3 || l.use === 'vacant')) || null;
+  const cands = S.lots.filter(l => !l.site && l.use !== 'house' && !l.locked && (l.owner === owner || l.owner === 'private' || (S.hh[l.owner] && !outside) || (l.owner === 'town' && owner === 'coop')) && (l.vac > 0.3 || l.use === 'vacant' || l.use === 'parking' && landSignals().car < 0.8));
   cands.sort((a, b) => b.vac - a.vac);
   return cands[0] || null;
 }
 
 function landMonth() {
   const sig = landSignals();
+  // rooftop solar spreads house to house when it pays (the neighbors' arrays are one pooled asset)
+  const pRoof = clamp((annualReturn('solar') - 0.12) * 0.25, 0, 0.12);
+  let roofs = 0;
+  for (const hs of S.houses) if (!hs.roof && !hs.owner && rand() < pRoof) { hs.roof = true; roofs++; }
+  if (roofs) { addShares(S.neighborRoofs, 'neighbors', roofs * ROOF_MW); S.bakeVersion++; }
   for (const l of S.lots) {
     if (l.site || l.locked) continue;
     const v = VIABILITY[l.use];
     if (v) l.vac = lerp(l.vac, clamp(1 - v(sig), 0, 1), 0.35);
     if (l.use === 'house') {
       // rooftop solar spreads when it pays
-      if (!l.roof && rand() < clamp((annualReturn('solar') - 0.12) * 0.25, 0, 0.12)) { l.roof = true; addShares(S.neighborRoofs, 'neighbors', 0.008); }
       continue;
     }
     if ((l.vac > 0.5 || l.use === 'vacant') && rand() < 0.22) redevelop(l);

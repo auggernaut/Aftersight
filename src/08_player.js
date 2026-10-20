@@ -30,6 +30,7 @@ const ACTIONS = {
       const moved = 0.04 + 0.14 * t.trust * (t.w[topic] < 0.5 ? 1 : 0.4);
       t.w[topic] += moved; normalize(t.w);
       t.trust = clamp(t.trust + 0.07, 0, 1);
+      if (topic === 'community') t.advocate = S.day + 45; // they'll carry the argument to the people they meet
       const gained = t.w[topic] - before;
       const line = Mind.say(t, 'persuade', { topic, moved: gained });
       t.remember(`You talked to me about ${topic}. ${line}`);
@@ -83,12 +84,13 @@ const ACTIONS = {
         let a = S.assets.find(x => x.site === h.site && x.type === 'solar');
         if (!a) { a = placeAsset('solar', 'Your rooftop', h.id, 0.04, { site: h.site, immediate: true }); a.rooftop = true; }
         else addShares(a, h.id, 0.04);
+        if (h.house && !h.house.roof) { h.house.roof = true; S.bakeVersion++; }
         markAction(`Built ${money(cost)} of rooftop solar`);
       });
     } else if (kind === 'robot') {
       const cost = S.P.robotCost;
       if (h.cash < cost) return `A robot costs ${money(cost)}.`;
-      order('Ordering a robot at Okafor Fabrication.', S.sites.find(s => s.name === 'Okafor Fabrication'), 1, () => {
+      order('Ordering a robot at Okafor Fabrication.', S.sites.find(s => s.name === 'Okafor Manufacturing'), 1, () => {
         h.cash -= cost;
         let fleet = S.assets.find(x => x.type === 'fleet' && x.yours);
         if (!fleet) { fleet = placeAsset('fleet', 'Your Robot Bay', h.id, 0, { immediate: true }); if (fleet) fleet.yours = true; }
@@ -100,7 +102,7 @@ const ACTIONS = {
   },
   council(motion) {
     if (S.council) return 'A council meeting is already scheduled.';
-    const titles = { buyback: 'Town buys out Helix\'s in-town stakes', refusal: 'Local right of first refusal on share sales', dividend: 'Raise the commons dividend tax' };
+    const titles = { buyback: 'Town buys out Helix\'s in-town stakes', refusal: 'Local right of first refusal on share and land sales', dividend: 'Raise the commons dividend tax', zoning: 'Community-first zoning: vacant lots go to co-ops and the town first' };
     order('Filing a motion at the Town Hall.', siteOf('hall'), 0.5, () => {
       S.council = { day: S.day + 2, motion, title: titles[motion] };
       markAction(`Filed a council motion: ${titles[motion]} (vote in 2 days, 18:00)`);
@@ -114,7 +116,7 @@ function resolveCouncil() {
   const voters = S.people.filter(p => p.age !== 'kid' && !p.isPlayer);
   let yes = 0, no = 0;
   for (const v of voters) {
-    let s = 0.2 + 0.7 * v.w.community + 0.35 * v.trust - 0.45 * v.w.self + (c.motion === 'dividend' ? 0.3 * financialNeed(v.home) : 0) + (c.motion === 'buyback' ? 0.2 * v.w.nation : 0);
+    let s = 0.2 + 0.7 * v.w.community + 0.35 * v.trust - 0.45 * v.w.self + (c.motion === 'dividend' ? 0.3 * financialNeed(v.home) : 0) + (c.motion === 'buyback' ? 0.2 * v.w.nation : 0) + (c.motion === 'zoning' ? 0.15 * v.w.family - 0.1 : 0);
     const attended = v.kind === 'council';
     if (rand() < clamp(s, 0.02, 0.98)) yes += attended ? 1.5 : 1; else no += attended ? 1.5 : 1;
   }
@@ -123,12 +125,13 @@ function resolveCouncil() {
   S.actions.push({ day: S.day, text: `Vote ${pass ? 'passed' : 'failed'}: ${c.title}` });
   if (!pass) { voters.forEach(v => { v.trust = clamp(v.trust - 0.02, 0, 1); }); return; }
   if (c.motion === 'buyback') {
-    const targets = S.assets.filter(a => (a.shares.helix || 0) > 0 && a.cap > 0 && a.site.x >= TOWN.x0 && a.site.x <= TOWN.x1 && a.site.y >= TOWN.y0 && a.site.y <= TOWN.y1);
+    const targets = S.assets.filter(a => (a.shares.helix || 0) > 0 && a.cap > 0 && inTown(a.site.cx, a.site.cy));
     let spent = 0;
     for (const a of targets) { const v = assetValue(a) * a.shares.helix * 1.1; transferShare(a, 'helix', 'town', a.shares.helix); spent += v; }
     S.town.cash -= spent; S.helix.cash += spent;
     log(`The town bought out Helix's in-town stakes for ${money(spent)}, financed with a commons bond.`, 'town');
   } else if (c.motion === 'refusal') { S.policy.firstRefusal = true; S.town.cash += 0; }
+  else if (c.motion === 'zoning') { S.policy.zoning = true; log('Community-first zoning is law: outside capital can no longer buy vacant lots in town.', 'town'); }
   else if (c.motion === 'dividend') { S.P.tax = Math.min(0.25, S.P.tax + 0.06); S.P.propTax = Math.min(0.3, S.P.propTax + 0.1); }
   voters.forEach(v => { v.trust = clamp(v.trust + 0.03, 0, 1); });
 }

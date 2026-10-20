@@ -39,7 +39,8 @@ function baseParams() {
     discoveryEvery: 110,  // days between discoveries at baseline research
     researchBoost: 1,     // multiplier from AI scientists etc.
     buildDays: { solar: 20, compute: 30, factory: 45, fleet: 0 },
-    walkSpeed: 22,        // tiles per hour
+    coopRetain: 0.3,      // share of co-op profit kept and reinvested
+    walkSpeed: 700,       // tiles per hour (3.5 km/h at 5 m per tile)
   };
 }
 

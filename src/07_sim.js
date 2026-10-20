@@ -1,17 +1,20 @@
 // Creating the world and stepping it.
 function newWorld(seed = 7) {
   rand = makeRng(seed);
-  SITE_ID = 0; AGENT_ID = 0;
+  SITE_ID = 0; AGENT_ID = 0; ROUTE_CACHE = new Map();
+  const WD = buildWorld();
   S = {
-    seed, t: 6, day: 0, P: baseParams(), terrain: buildTerrain(), parcels: buildParcels(), sites: [], assets: [], households: [], hh: {}, agents: [], people: [], robots: [],
-    orders: [], coops: [], log: [], history: [], discoveries: [], council: null, policy: { firstRefusal: false }, counter: 0, nextAsset: 0, volHours: 0,
+    seed, t: 6, day: 0, P: baseParams(), terrain: WD.terrain, parcels: WD.parcels, roads: WD.roads, rail: WD.rail, power: WD.power, houses: WD.houses,
+    road: buildRoadGraph(WD.roads), sites: [], assets: [], households: [], hh: {}, agents: [], people: [], robots: [],
+    orders: [], coops: [], log: [], history: [], discoveries: [], council: null, policy: { firstRefusal: false, zoning: false }, counter: 0, nextAsset: 0, volHours: 0,
     helix: { cash: 5e7, monthBudget: 0, depot: null }, town: { cash: 40000 }, nation: { research: 0 },
     market: { mE: 1, mC: 1, mX: 1, mL: 1, dE: 1, dCL: 1, dCX: 1, sC: 1, pe: 80, pc: 120, jobOpen: 1, offeredAvg: 200, outflow: 0, robotCarry: 0, shortE: 0, shortC: 0, ubi: 0, solarOut: 1, L: 350, robotWork: 0 },
-    nextDiscoveryDay: 75, actions: [], base: { humanNeed: 230 }, lots: [],
+    nextDiscoveryDay: 75, actions: [], base: { humanNeed: 230 }, lots: [], bakeVersion: 0,
   };
   const add = (kind, name, r, extra) => { const s = makeSite(kind, name, r, extra); S.sites.push(s); return s; };
   const asset = (type, name, rect, shares, cap, extra = {}) => {
-    const site = add(type, name, rect, { asset: true, ...extra });
+    const site = rect.kind ? rect : add(type, name, rect, { asset: true, ...extra });
+    if (rect.kind) Object.assign(site, { asset: true, ...extra });
     const a = placeAsset(type, name, null, 0, { site, immediate: true });
     a.shares = { ...shares }; a.cap = cap;
     return a;
@@ -40,55 +43,40 @@ function newWorld(seed = 7) {
   }
   const okafor = S.hh.h0, patel = S.hh.h1;
   okafor.cash += 30000; patel.cash += 20000;
-  // the present-day town, lot by lot
+  // the present-day town: lots (shops, offices, parking, big boxes...) and named sites, from the world builder
   S.lots = [];
-  const mkLot = (r, use, owner) => { const l = { x: r.x, y: r.y, w: r.w, h: r.h, use, owner, vac: 0, since: 0, history: [{ day: 0, use, owner }], site: null }; S.lots.push(l); return l; };
-  const ASSETS = {
-    valleycompute: r => asset('compute', 'Patel Hosting', r, { helix: 0.7, [patel.id]: 0.3 }, 4, { jobWeight: 0.5, hiSkill: 1 }),
-    okafor: r => asset('factory', 'Okafor Manufacturing', r, { [okafor.id]: 1 }, 0.25, { jobWeight: 1.0, hiSkill: 1 }),
-    depot: r => { const a = asset('fleet', 'Helix Fulfillment Center', r, { helix: 1 }, 12, { jobWeight: 0.6, hiSkill: 0 }); S.helix.depot = a.id; return a; },
+  const mkLot = (r, use, owner, extra = {}) => { const l = { x: r.x, y: r.y, w: r.w, h: r.h, use, owner, vac: 0, since: 0, history: [{ day: 0, use, owner }], site: null, ...extra }; S.lots.push(l); return l; };
+  for (const l of WD.lots) mkLot(l, l.use, l.owner, { name: l.name, downtown: l.downtown });
+  const SPECIAL = {
+    okafor: s => asset('factory', 'Okafor Manufacturing', s, { [okafor.id]: 1 }, 0.25, { jobWeight: 1.0, hiSkill: 1 }),
+    depot: s => { const a = asset('fleet', 'Helix Fulfillment Center', s, { helix: 1 }, 12, { jobWeight: 0.6, hiSkill: 0 }); S.helix.depot = a.id; return a; },
+    dc: s => asset('compute', 'Helix Datacenter', s, { helix: 1 }, 20, { jobWeight: 0.8, hiSkill: 1 }),
+    landfill: s => asset('solar', 'Landfill Solar (town)', s, { town: 1 }, 0.3),
   };
-  const houseLots = [];
-  for (let j = 0; j < 6; j++) for (let i = 0; i < 7; i++) {
-    const plan = BLOCK_PLAN[i + ',' + j], b = blockRect(i, j);
-    const layout = LAYOUTS[plan[0]];
-    layout.forEach(([dx, dy, w, hgt], k) => {
-      const r = { x: b.x + dx, y: b.y + dy, w, h: hgt };
-      const e = plan[0] === 'res6' ? 'house' : plan[k + 1];
-      if (typeof e === 'string') {
-        const owner = e === 'house' ? 'neighbors' : e === 'parking' && rand() < 0.4 ? 'town' : e === 'office' && rand() < 0.3 ? 'helix' : 'private';
-        const l = mkLot(r, e, owner);
-        if (e === 'house') houseLots.push(l);
-      } else {
-        const l = mkLot(r, e[0] === 'asset' ? 'asset' : 'civic', e[0] === 'civic' ? 'town' : 'private');
-        l.locked = true;
-        if (e[0] === 'job') l.site = add(e[1], e[2], r, { jobWeight: e[3], hiSkill: e[4], lot: l });
-        else if (e[0] === 'civic') l.site = add(e[1], e[2], r, { lot: l });
-        else { const a = ASSETS[e[1]](r); l.site = a.site; a.site.lot = l; l.asset = a; l.use = a.type; l.history[0].use = a.type; }
-      }
-    });
+  for (const w of WD.sites) {
+    const st = add(w.kind, w.name, w, w.job ? { jobWeight: w.job[0], hiSkill: w.job[1] } : {});
+    st.big = st.w * st.h >= 200;
+    if (w.asset) { st.kind = { okafor: 'factory', depot: 'fleet', dc: 'compute', landfill: 'solar' }[w.asset]; SPECIAL[w.asset](st); }
   }
-  for (const [x, y, w, hgt, use] of STRIP_LOTS) mkLot({ x, y, w, h: hgt }, use, use === 'warehouse' || use === 'bigbox' ? 'helix' : 'private');
-  // a few households own a small business lot
-  S.lots.filter(l => ['shop', 'restaurant', 'office', 'motel'].includes(l.use) && l.owner === 'private').slice(0, 6).forEach((l, k) => { if (k % 2 === 0) { l.owner = 'h' + (2 + k); l.history[0].owner = l.owner; } });
-  add('farm', 'Moreno Farm', { x: 66, y: 110, w: 26, h: 18 }, { jobWeight: 1.0, hiSkill: 0, door: { x: 96, y: 108, ry: 100 } });
-  add('station', 'Federal Works / Rail', { x: 104, y: 102, w: 12, h: 5 }, { door: { x: 108, y: 104, ry: 100 } });
-  // Helix's one data center out by the highway spur, and a small town solar field on the old landfill
-  asset('compute', 'Helix Datacenter', { x: 168, y: 26, w: 14, h: 16 }, { helix: 1 }, 20, { jobWeight: 0.8, hiSkill: 1, door: { x: 150, y: 44, ry: 50 } });
-  S.parcels.forEach(p => { if (p.x < 182 && p.x + p.w > 168 && p.y < 42 && p.y + p.h > 26) p.used = true; });
-  asset('solar', 'Landfill Solar (town)', { x: 120, y: 112, w: 10, h: 7 }, { town: 1 }, 0.3, { door: { x: 108, y: 106, ry: 100 } });
-  // homes for the simulated households, spread over the residential blocks
-  const step = Math.floor(houseLots.length / (nH + 1));
+  // Patel Hosting: a server room in an old downtown office
+  const pl = S.lots.filter(l => l.downtown && l.use === 'office').sort((a, b) => b.w * b.h - a.w * a.h)[0];
+  if (pl) { pl.locked = true; const a = asset('compute', 'Patel Hosting', pl, { helix: 0.7, [patel.id]: 0.3 }, 4, { jobWeight: 0.5, hiSkill: 1, lot: pl }); pl.site = a.site; pl.asset = a; pl.use = 'compute'; pl.history[0].use = 'compute'; }
+  // a few households own a small business lot downtown
+  S.lots.filter(l => ['shop', 'restaurant', 'office', 'motel'].includes(l.use) && l.owner === 'private' && l.downtown).slice(0, 12).forEach((l, k) => { if (k % 2 === 0) { l.owner = 'h' + (2 + k / 2); l.history[0].owner = l.owner; } });
+  // homes for the simulated households, spread across the neighborhoods (the other ~1,700 houses are the unsimulated neighbors)
+  const inner = S.houses.filter(hs => inTown(hs.x, hs.y));
+  inner.sort((a, b) => (a.y * 0.3 + a.x) - (b.y * 0.3 + b.x));
+  const step = Math.floor(inner.length / (nH + 1));
   S.households.forEach((h, i) => {
-    const l = houseLots[(i * step + 2) % houseLots.length];
-    l.owner = h.id; l.history[0].owner = h.id; l.locked = true;
-    h.site = add('home', h.isPlayer ? 'Your place' : h.name + ' home', l, { small: true, lot: l, household: h });
-    l.site = h.site;
+    const hs = inner[(i * step + Math.floor(step / 2)) % inner.length];
+    hs.owner = h.id;
+    h.house = hs;
+    h.site = add('home', h.isPlayer ? 'Your place' : h.name + ' home', { x: hs.x - 1.6, y: hs.y - 1.6, w: 3.2, h: 3.2 }, { small: true, household: h, house: hs });
   });
-  [S.hh.h2, S.hh.h5, S.hh.h9].forEach(h => { const a = placeAsset('solar', h.name + ' rooftop', null, 0, { site: h.site, immediate: true }); a.shares = { [h.id]: 1 }; a.cap = 0.03; a.rooftop = true; });
+  [S.hh.h2, S.hh.h5, S.hh.h9].forEach(h => { const a = placeAsset('solar', h.name + ' rooftop', null, 0, { site: h.site, immediate: true }); a.shares = { [h.id]: 1 }; a.cap = 0.03; a.rooftop = true; h.house.roof = true; });
   // other households' rooftops, as one pooled asset
   S.neighborRoofs = placeAsset('solar', 'Neighborhood rooftops', null, 0, { site: add('roofs', 'Neighborhood rooftops', { x: -50, y: -50, w: 1, h: 1 }), immediate: true });
-  houseLots.filter(l => l.owner === 'neighbors').slice(0, 4).forEach(l => { l.roof = true; addShares(S.neighborRoofs, 'neighbors', 0.008); });
+  S.houses.filter(hs => !hs.owner).forEach((hs, i) => { if (i % 60 === 7) { hs.roof = true; addShares(S.neighborRoofs, 'neighbors', ROOF_MW); } });
   // jobs
   S.jobSites = S.sites.filter(s => s.jobWeight);
   for (const h of S.households) for (const m of h.members) {

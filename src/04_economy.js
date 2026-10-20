@@ -14,6 +14,7 @@ function ownerName(id) {
   if (id === 'helix') return 'Helix Systems (outside)';
   if (id === 'town') return 'Town commons';
   if (id === 'private') return 'local owner';
+  if (id === 'coop') return 'Valley co-ops';
   if (id === 'neighbors') return 'Other valley households';
   const h = S.hh[id];
   return h ? (h.isPlayer ? 'You' : h.name + ' household') : id;
@@ -39,6 +40,19 @@ function transferShare(a, from, to, frac) {
 function isCoop(a) { return Object.keys(a.shares).filter(k => ownerKind(k) === 'resident').length >= 3; }
 function localShare(a) { return sum(Object.entries(a.shares), ([k, v]) => k === 'helix' ? 0 : v); }
 
+// Big new builds go where they would in a real valley: data halls on the campus by the substation,
+// depots and fabs in the logistics park, solar farms out on the farmland.
+const PARCEL_PREF = { compute: ['campus', 'industrial', 'farm'], fleet: ['industrial', 'campus', 'farm'], factory: ['industrial', 'campus', 'farm'], solar: ['farm', 'industrial'] };
+function pickParcel(type) {
+  for (const k of PARCEL_PREF[type] || ['farm']) {
+    const free = S.parcels.filter(p => !p.used && p.kind === k);
+    if (!free.length) continue;
+    const anchor = k === 'campus' ? [860, 130] : k === 'industrial' ? [660, 190] : [640, 450];
+    free.sort((a, b) => Math.hypot(a.x - anchor[0], a.y - anchor[1]) - Math.hypot(b.x - anchor[0], b.y - anchor[1]));
+    return free[0];
+  }
+  return null;
+}
 function placeAsset(type, name, owner, units, opts = {}) {
   let site = opts.site;
   if (!site) {
@@ -51,7 +65,7 @@ function placeAsset(type, name, owner, units, opts = {}) {
       lot.site = site;
       setUse(lot, type, `${name} is going up where a ${LOT_USE[lot.use].label.toLowerCase()} used to be.`);
     } else {
-      const parcel = S.parcels.find(p => !p.used);
+      const parcel = pickParcel(type);
       if (!parcel) return null;
       parcel.used = true;
       site = makeSite(type, name, parcel, { asset: true });
@@ -148,12 +162,14 @@ function econDay() {
 
   // ---------- income by owner ----------
   const income = {}; // owner -> $
-  const pay = (shares, amt) => { for (const k in shares) income[k] = (income[k] || 0) + shares[k] * amt; };
-  for (const a of solar) { const share = a.cap * P.solarYield * season / Math.max(0.001, solarOut); a.out = soldE * share; a.profit = a.out * M.pe - a.cap * P.solarCost * 0.01 / 30; pay(a.shares, a.profit); }
-  for (const a of racks) { a.out = a.cap * rackOut; a.profit = a.out * M.pc - a.cap * P.rackE * servedE * M.pe; pay(a.shares, a.profit); }
+  const pay0 = (shares, amt) => { for (const k in shares) income[k] = (income[k] || 0) + shares[k] * amt; };
+  // co-ops keep part of their profit as a reserve and reinvest it (see coopMonth); everyone else pays it all out
+  let pay = (shares, amt, a) => { if (a && a.coop && amt > 0) { a.reserve = (a.reserve || 0) + amt * P.coopRetain; amt *= 1 - P.coopRetain; } pay0(shares, amt); };
+  for (const a of solar) { const share = a.cap * P.solarYield * season / Math.max(0.001, solarOut); a.out = soldE * share; a.profit = a.out * M.pe - a.cap * P.solarCost * 0.01 / 30; pay(a.shares, a.profit, a); }
+  for (const a of racks) { a.out = a.cap * rackOut; a.profit = a.out * M.pc - a.cap * P.rackE * servedE * M.pe; pay(a.shares, a.profit, a); }
   const robotRev = robotWork * P.robotRate * P.wage + robotExport * exportRate * P.wage - nRobots * (P.robotE * M.pe + P.robotC * M.pc * Math.min(1, servedC));
-  for (const a of fleets) { a.out = robotEff * a.cap / Math.max(1, nRobots); a.profit = robotRev * a.cap / Math.max(1, nRobots); pay(a.shares, a.profit); }
-  for (const a of facs) { a.out = robotsBuilt; a.profit = robotsBuilt * P.robotCost * 0.25 - dFac * M.pe; pay(a.shares, a.profit); }
+  for (const a of fleets) { a.out = robotEff * a.cap / Math.max(1, nRobots); a.profit = robotRev * a.cap / Math.max(1, nRobots); pay(a.shares, a.profit, a); }
+  for (const a of facs) { a.out = robotsBuilt; a.profit = robotsBuilt * P.robotCost * 0.25 - dFac * M.pe; pay(a.shares, a.profit, a); }
 
   // town: tax + its own assets + property tax on Helix's valley profits
   const helixProfit = Math.max(0, income.helix || 0);
@@ -198,6 +214,7 @@ function econMonth() {
   const P = S.P, M = S.market;
   M.mE *= 1 + P.gE; M.mC *= 1 + P.gC; M.mX *= 1 + P.gX; M.mL *= 1 + P.gL;
   landMonth();
+  coopMonth();
   S.helix.monthBudget = P.helixBudget * (1 + S.day / 360);
   // the town council invests its treasury in whatever is shortest, in the commons
   if (S.town.cash > 250000) {
@@ -208,6 +225,37 @@ function econMonth() {
     if (existing && rand() < 0.6) expandAsset(existing, 'town', units);
     else placeAsset(type, type === 'solar' ? 'Commons Solar ' + (++S.counter) : 'Commons Compute ' + (++S.counter), 'town', units);
     log(`Town council invested ${money(spend)} in commons ${type}.`, 'town');
+  }
+}
+
+// Co-ops reinvest their reserves: bid on a vacant lot in town for a new co-op build, or grow what they have.
+// New capacity is split among the members in proportion to their stakes, so ownership stays local.
+function coopMonth() {
+  for (const a of S.assets.filter(x => x.coop && (x.reserve || 0) > 30000 && x.cap > 0)) {
+    const holders = Object.entries(a.shares).filter(([k]) => S.hh[k]);
+    const held = sum(holders, m => m[1]);
+    if (!held) continue;
+    // open membership: half the new capacity follows existing stakes, half is issued equally to every valley household
+    const w = {}; holders.forEach(([k, v]) => w[k] = 0.5 * v / held);
+    S.households.forEach(h => w[h.id] = (w[h.id] || 0) + 0.5 / S.households.length);
+    const members = Object.entries(w), tot = 1;
+    let budget = a.reserve; a.reserve = 0;
+    const type = ['solar', 'compute', 'fleet'].map(t => ({ t, r: annualReturn(t) })).sort((x, y) => y.r - x.r)[0].t;
+    const lot = budget > 60000 ? lotForInvestor('coop') : null;
+    if (lot && budget > lotValue(lot) * 1.5) {
+      const price = lotValue(lot);
+      budget -= price; payLotSeller(lot, price);
+      log(`The ${a.name} outbid outside capital for a ${LOT_USE[lot.use].label.toLowerCase()} lot (${money(price)}).`, 'coop');
+      lot.owner = 'coop';
+      const units = Math.min(lot.w * lot.h * CAP_PER_TILE[type], budget / unitCost(type));
+      const name = 'Valley ' + ASSET_LABEL[type] + ' Co-op ' + (++S.counter);
+      const site = makeSite(type, name, lot, { asset: true, lot }); S.sites.push(site); lot.site = site;
+      setUse(lot, type, `${name} is going up where a ${LOT_USE[lot.use].label.toLowerCase()} used to be.`);
+      const b = placeAsset(type, name, null, 0, { site, coop: true }); b.pending = [];
+      members.forEach(([k, v]) => { if (type === 'fleet') orderRobots(k, units * v / tot, b); else b.pending.push({ owner: k, units: units * v / tot, done: S.day + S.P.buildDays[type], start: S.day }); });
+      budget -= units * unitCost(type);
+    }
+    if (budget > 1000) { const t = a.type === 'factory' ? 'factory' : a.type; members.forEach(([k, v]) => { if (t === 'fleet') orderRobots(k, budget / unitCost(t) * v / tot, a); else expandAsset(a, k, budget / unitCost(t) * v / tot); }); }
   }
 }
 

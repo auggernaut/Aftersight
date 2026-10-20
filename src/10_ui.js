@@ -98,6 +98,7 @@ function menuItems(a) {
   if (a === 'council') return [
     { t: 'Town buys out Helix in town', d: 'commons bond buys every Helix stake inside the town grid', f: () => doAction('council', 'buyback') },
     { t: 'Local right of first refusal', d: 'when a family must sell a stake, the town buys it, not Helix', f: () => doAction('council', 'refusal') },
+    { t: 'Community-first zoning', d: 'vacant lots go to co-ops and the town before outside capital', f: () => doAction('council', 'zoning') },
     { t: 'Raise the commons dividend', d: 'higher tax on income and outside profits, paid out per person', f: () => doAction('council', 'dividend') },
   ].map(i => ({ ...i, dis: !!S.council }));
   return [];

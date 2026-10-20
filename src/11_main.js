@@ -1,7 +1,7 @@
 // Main loop, input, and test hooks.
-// Speeds: sim-hours advanced per real second. 1x = one hour every 2.5 s.
-const SPEEDS = [0, 0.4, 12, 120, 600];
-const SPEED_LABEL = ['paused', '1 h / 2.5 s', '1 day / 2 s', '1 month / 6 s', '1 year / 15 s'];
+// Speeds: sim-hours advanced per real second. 1x = one hour every 10 s, slow enough to watch people walk.
+const SPEEDS = [0, 0.1, 12, 120, 600];
+const SPEED_LABEL = ['paused', '1 h / 10 s', '1 day / 2 s', '1 month / 6 s', '1 year / 15 s'];
 let speed = 1, lastFrame = 0, uiClock = 0;
 
 function setSpeed(i) {
@@ -11,9 +11,9 @@ function setSpeed(i) {
 }
 function advance(hours) {
   // fine steps at low speed keep Yuka's steering smooth; coarser steps at high speed keep it fast
-  const step = speed <= 2 ? 0.05 : speed === 3 ? 0.25 : 0.5;
+  const step = speed <= 1 ? 0.002 : speed === 2 ? 0.05 : speed === 3 ? 0.25 : 0.5;
   let left = hours, n = 0;
-  while (left > 1e-9 && n < 48) { const dt = Math.min(step, left); simStep(dt); left -= dt; n++; }
+  while (left > 1e-9 && n < 60) { const dt = Math.min(step, left); simStep(dt); left -= dt; n++; }
 }
 
 function frame(now) {
@@ -39,17 +39,17 @@ function refreshUI() {
 function zoomPreset(which) {
   cam.follow = null;
   if (which === 'region') { cam.tx = MAP_W / 2; cam.ty = MAP_H / 2; cam.tz = minZoom(); }
-  if (which === 'town') { cam.tx = (TOWN.x0 + TOWN.x1) / 2; cam.ty = (TOWN.y0 + TOWN.y1) / 2 + 4; cam.tz = Math.min(W / 100, H / 80); }
-  if (which === 'you') { cam.follow = S.player; cam.tz = 28; }
+  if (which === 'town') { cam.tx = 560; cam.ty = 360; cam.tz = Math.max(minZoom(), Math.min(W / 520, H / 380)); }
+  if (which === 'you') { cam.follow = S.player; cam.tz = 30; }
 }
 
 function pickAt(sx, sy) {
   const [wx, wy] = s2w(sx, sy);
-  const r = Math.max(0.8, 7 / cam.z);
+  const r = Math.max(0.6, 7 / cam.z);
   let best = null, bd = r;
   for (const p of S.people) { const d = Math.hypot(p.position.x - wx, p.position.y - wy); if (d < bd) { bd = d; best = p; } }
   if (best) return { agent: best };
-  const site = S.sites.slice().reverse().find(s => wx >= s.x && wx <= s.x + s.w && wy >= s.y && wy <= s.y + s.h);
+  const site = S.sites.slice().reverse().find(s => s.kind !== 'roofs' && wx >= s.x && wx <= s.x + s.w && wy >= s.y && wy <= s.y + s.h);
   if (site) return { site };
   const lot = S.lots.find(l => !l.site && wx >= l.x && wx <= l.x + l.w && wy >= l.y && wy <= l.y + l.h);
   return lot ? { lot } : {};
@@ -75,7 +75,7 @@ function setupInput() {
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
     const [wx, wy] = s2w(e.clientX, e.clientY);
-    const nz = clamp(cam.tz * Math.pow(1.0018, -e.deltaY), minZoom(), 64);
+    const nz = clamp(cam.tz * Math.pow(1.0018, -e.deltaY), minZoom(), 80);
     // keep the point under the cursor fixed
     cam.follow = null;
     cam.tx = wx - (e.clientX - W / 2) / nz; cam.ty = wy - (e.clientY - H / 2) / nz; cam.tz = nz;
@@ -84,8 +84,8 @@ function setupInput() {
     if (e.target.tagName === 'INPUT') return;
     if (e.key === ' ') { e.preventDefault(); setSpeed(speed === 0 ? 1 : 0); }
     if (e.key >= '0' && e.key <= '4') setSpeed(+e.key);
-    if (e.key === '+' || e.key === '=') cam.tz = clamp(cam.tz * 1.25, minZoom(), 64);
-    if (e.key === '-') cam.tz = clamp(cam.tz / 1.25, minZoom(), 64);
+    if (e.key === '+' || e.key === '=') cam.tz = clamp(cam.tz * 1.25, minZoom(), 80);
+    if (e.key === '-') cam.tz = clamp(cam.tz / 1.25, minZoom(), 80);
     if (e.key === 'Escape') { view.selected = null; view.selSite = null; view.selLot = null; hideMenu(); renderInspect(); $('help').hidden = true; }
   });
   document.querySelectorAll('#speeds button').forEach(b => b.onclick = () => setSpeed(+b.dataset.s));

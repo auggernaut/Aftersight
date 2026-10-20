@@ -9,6 +9,7 @@ const years = +(process.argv[2] || 3), seed = +(process.argv[3] || 7);
 const S = api.newWorld(seed);
 const t0 = Date.now();
 const days = years * 360;
+const MOTIONS = ['refusal', 'zoning', 'dividend', 'buyback'].filter(m => m !== 'zoning' || /zoning/.test(api.ACTIONS.council.toString() + (typeof S.policy.zoning)));
 for (let d = 0; d < days; d++) {
   for (let i = 0; i < 48; i++) api.simStep(0.5);
   if (process.env.STRAT === 'coop' && d % 4 === 1) {
@@ -17,7 +18,7 @@ for (let d = 0; d < days; d++) {
     if (r === 1) api.ACTIONS.persuade(ppl[(d / 4) % ppl.length | 0].id, 'community');
     else if (r === 5) api.ACTIONS.propose(['solar', 'compute', 'fleet'][(d / 16 | 0) % 3]);
     else if (r === 9) api.ACTIONS.invest(S.coops.some(c => c.open) ? 'coop' : 'commons', S.player.home.cash * 0.5);
-    else if (r === 13 && d % 90 === 13) api.ACTIONS.council(['refusal', 'buyback', 'dividend'][(d / 90 | 0) % 3]);
+    else if (r === 13 && S.day % 90 < 16 && !S.council) api.ACTIONS.council(MOTIONS[(S.day / 90 | 0) % MOTIONS.length]); // about one vote a quarter
   }
   if (d % 60 === 59) {
     const m = api.metrics(), M = S.market;
@@ -27,7 +28,7 @@ for (let d = 0; d < days; d++) {
 console.log('coops', S.coops.map(c => c.name + ' ' + Math.round(c.raised) + '/' + Math.round(c.target) + (c.open ? ' open' : '')).join(' | '));
 console.log('player cash', Math.round(S.player.home.cash), 'avg trust', (S.people.reduce((s,p)=>s+p.trust,0)/S.people.length).toFixed(2), 'avg community', (S.people.reduce((s,p)=>s+p.w.community,0)/S.people.length).toFixed(2));
 const uses = {}; S.lots.forEach(l => uses[l.use] = (uses[l.use] || 0) + 1); console.log('lot uses', JSON.stringify(uses));
-const own = {}; S.lots.forEach(l => { const k = l.owner.startsWith('h') ? 'household' : l.owner; own[k] = (own[k] || 0) + 1; }); console.log('lot owners', JSON.stringify(own));
+const own = {}; S.lots.forEach(l => { const k = /^h\d+$/.test(l.owner) ? 'household' : l.owner; own[k] = (own[k] || 0) + 1; }); console.log('lot owners', JSON.stringify(own));
 console.log('discoveries', S.discoveries.map(d => d.day + ':' + d.id).join(' '));
 console.log('log tail'); S.log.slice(0, 25).forEach(l => console.log('  ', Math.floor(l.t / 24), l.text));
 const kinds = {}; S.people.forEach(p => kinds[p.kind] = (kinds[p.kind] || 0) + 1); console.log('kinds now', kinds);

@@ -248,7 +248,8 @@ function baseParams() {
     discoveryEvery: 110,  // days between discoveries at baseline research
     researchBoost: 1,     // multiplier from AI scientists etc.
     buildDays: { solar: 20, compute: 30, factory: 45, fleet: 0 },
-    walkSpeed: 22,        // tiles per hour
+    coopRetain: 0.3,      // share of co-op profit kept and reinvested
+    walkSpeed: 700,       // tiles per hour (3.5 km/h at 5 m per tile)
   };
 }
 
@@ -299,89 +300,438 @@ function nextGenDiscovery(n) {
 }
 
 // ===== 03_world.js =====
-// The valley: a tile grid (1 unit = 1 tile), the town's street grid, sites and parcels.
-const MAP_W = 200, MAP_H = 140;
-const TOWN = { x0: 60, y0: 40, x1: 144, y1: 100, bx: 12, by: 10 };
-const ROAD_X = [], ROAD_Y = [];
-for (let x = TOWN.x0; x <= TOWN.x1; x += TOWN.bx) ROAD_X.push(x);
-for (let y = TOWN.y0; y <= TOWN.y1; y += TOWN.by) ROAD_Y.push(y);
-const T = { GRASS: 0, GRASS2: 1, ROAD: 2, HWY: 3, WATER: 4, FIELD: 5, FOREST: 6, PAVE: 7, BANK: 8, TOWNB: 9, FIELD2: 10 };
+// The valley at true relative scale. 1 tile = 5 m. The map is 1200 × 900 tiles (6 km × 4.5 km).
+// Real footprints: house ~12×10 m on a ~25×40 m lot, big box ~120×100 m, fulfillment center
+// ~300×150 m, hyperscale data hall ~200×100 m, solar farm parcels ~300×250 m (7.5 ha).
+const TILE_M = 5;
+const MAP_W = 1200, MAP_H = 900;
+const TOWN = { x0: 140, y0: 90, x1: 960, y1: 720 };
+const T = { PAVE: 2, GRASS: 0, GRASS2: 1, WATER: 4, FIELD: 5, FOREST: 6, BANK: 8, METRO: 9, FIELD2: 10, FIELD3: 11, LAWN: 13, SPORT: 14 };
+const RW = { interstate: 7, ramp: 2.2, arterial: 4.2, collector: 3, local: 2.2, downtown: 2.6, main: 3.4, service: 1.8 };
 
-function blockRect(i, j) { return { x: TOWN.x0 + i * TOWN.bx + 1, y: TOWN.y0 + j * TOWN.by + 1, w: TOWN.bx - 1, h: TOWN.by - 1 }; }
+// ---------- geometry helpers ----------
+function polyAt(pts, x) {
+  for (let i = 0; i < pts.length - 1; i++) { const [ax, ay] = pts[i], [bx, by] = pts[i + 1]; if (x >= ax && x <= bx) return ay + (by - ay) * (x - ax) / (bx - ax); }
+  return x < pts[0][0] ? pts[0][1] : pts[pts.length - 1][1];
+}
+const RIVER = [[0, 330], [180, 352], [360, 412], [480, 440], [620, 470], [760, 500], [900, 548], [1050, 590], [1200, 622]];
+const I80 = [[0, 232], [200, 240], [420, 262], [640, 272], [820, 250], [1000, 226], [1200, 214]];
+const RIVER_RD = [[0, 300], [180, 322], [330, 370], [420, 392], [520, 408], [650, 428], [760, 466], [900, 512], [1050, 556], [1200, 588]];
+const SOUTH_RD = [[250, 440], [420, 468], [520, 482], [660, 506], [780, 538], [900, 584], [1050, 626]];
+const RAIL = [[0, 422], [200, 448], [400, 482], [560, 502], [700, 532], [900, 604], [1200, 694]];
+const I = x => [x, polyAt(I80, x)];
+const RR = x => [x, polyAt(RIVER_RD, x)];
+const SR = x => [x, polyAt(SOUTH_RD, x)];
 
-function buildTerrain() {
-  const g = new Uint8Array(MAP_W * MAP_H);
-  const set = (x, y, t) => { if (x >= 0 && y >= 0 && x < MAP_W && y < MAP_H) g[y * MAP_W + x] = t; };
-  const get = (x, y) => g[y * MAP_W + x];
-  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) set(x, y, ((x * 7 + y * 13) ^ (x * y)) % 5 === 0 ? T.GRASS2 : T.GRASS);
-  // forests: blobs
-  const tr = makeRng(42);
-  for (let k = 0; k < 26; k++) {
-    const cx = tr() * MAP_W, cy = tr() * MAP_H, r = 3 + tr() * 7;
-    if (cx > TOWN.x0 - 8 && cx < TOWN.x1 + 8 && cy > TOWN.y0 - 8 && cy < TOWN.y1 + 8) continue;
-    for (let y = Math.floor(cy - r); y <= cy + r; y++) for (let x = Math.floor(cx - r); x <= cx + r; x++)
-      if ((x - cx) ** 2 + (y - cy) ** 2 < r * r * (0.6 + tr() * 0.5)) set(x, y, T.FOREST);
+// ---------- the world builder ----------
+function buildWorld() {
+  const wr = makeRng(1234);
+  const W = MAP_W, H = MAP_H;
+  const terrain = new Uint8Array(W * H), occ = new Uint8Array(W * H); // occ: 0 free, 1 road/rail, 2 built, 3 water, 4 reserved
+  const inMap = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
+  const idx = (x, y) => (y | 0) * W + (x | 0);
+  const occAt = (x, y) => inMap(x, y) ? occ[idx(x, y)] : 9;
+  const roads = [], rail = [], power = [], houses = [], lots = [], sites = [], parcels = [], fields = [];
+
+  // value noise for wobbly edges
+  const hashN = (x, y) => { let h = (x * 374761393 + y * 668265263) ^ 0x5bd1e995; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  const noise = (x, y, s) => { const gx = Math.floor(x / s), gy = Math.floor(y / s), fx = x / s - gx, fy = y / s - gy; const sm = t => t * t * (3 - 2 * t); const a = hashN(gx, gy), b = hashN(gx + 1, gy), c = hashN(gx, gy + 1), d = hashN(gx + 1, gy + 1); return lerp(lerp(a, b, sm(fx)), lerp(c, d, sm(fx)), sm(fy)); };
+
+  // terrain: grass, wooded valley walls north and south
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const n = noise(x, y, 60) * 0.7 + noise(x, y, 17) * 0.3;
+    let t = ((x * 7 + y * 13) ^ (x * y)) % 5 === 0 ? T.GRASS2 : T.GRASS;
+    if (y < 70 + n * 70 || y > 790 + n * 80) t = T.FOREST;
+    terrain[idx(x, y)] = t;
   }
-  // farmland south and north of town
-  const field = (x0, y0, w, h) => { for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) set(x, y, (Math.floor(y / 2) % 2) ? T.FIELD : T.FIELD2); };
-  field(64, 108, 30, 22); field(112, 110, 28, 20); field(60, 6, 34, 12); field(98, 4, 40, 10);
   // river
-  const pts = [[0, 30], [30, 34], [48, 60], [44, 90], [55, 125], [70, 140]];
-  for (let s = 0; s < pts.length - 1; s++) {
-    const [ax, ay] = pts[s], [bx, by] = pts[s + 1], n = Math.hypot(bx - ax, by - ay) * 2;
-    for (let i = 0; i <= n; i++) {
-      const x = lerp(ax, bx, i / n), y = lerp(ay, by, i / n);
-      for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
-        const d = Math.hypot(dx, dy);
-        if (d <= 1.8) set(Math.round(x + dx), Math.round(y + dy), T.WATER);
-        else if (d <= 2.9 && get(clamp(Math.round(x + dx), 0, MAP_W - 1), clamp(Math.round(y + dy), 0, MAP_H - 1)) !== T.WATER) set(Math.round(x + dx), Math.round(y + dy), T.BANK);
+  const stroke = (pts, wdt, fn) => {
+    for (let s = 0; s < pts.length - 1; s++) {
+      const [ax, ay] = pts[s], [bx, by] = pts[s + 1], n = Math.ceil(Math.hypot(bx - ax, by - ay) * 2);
+      for (let i = 0; i <= n; i++) {
+        const x = lerp(ax, bx, i / n), y = lerp(ay, by, i / n), r = wdt / 2;
+        for (let dy = -Math.ceil(r); dy <= Math.ceil(r); dy++) for (let dx = -Math.ceil(r); dx <= Math.ceil(r); dx++) {
+          const d = Math.hypot(dx, dy); if (d <= r && inMap(x + dx, y + dy)) fn(Math.floor(x + dx), Math.floor(y + dy), d / r);
+        }
+      }
+    }
+  };
+  stroke(RIVER, 18, (x, y, d) => { const i = idx(x, y); if (d < 0.7) { terrain[i] = T.WATER; occ[i] = 3; } else if (terrain[i] !== T.WATER) { terrain[i] = T.BANK; if (!occ[i]) occ[i] = 4; } });
+
+  // roads: every road is a polyline with a class; we rasterize it into occ so nothing gets built on it
+  const addRoad = (cls, pts, name, res = false) => {
+    const r = { cls, pts: pts.map(p => [p[0], p[1]]), name, res };
+    roads.push(r);
+    stroke(r.pts, RW[cls] + 0.6, (x, y) => { const i = idx(x, y); if (occ[i] !== 3) occ[i] = 1; });
+    return r;
+  };
+  const nearestOnRoads = (x, y, skip) => { // closest point on any surface road
+    let best = null, bd = Infinity;
+    for (const r of roads) {
+      if (r === skip || r.cls === 'interstate' || r.cls === 'ramp') continue;
+      for (let i = 0; i < r.pts.length - 1; i++) {
+        const [ax, ay] = r.pts[i], [bx, by] = r.pts[i + 1], dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1;
+        const t = clamp(((x - ax) * dx + (y - ay) * dy) / L2, 0, 1), px = ax + dx * t, py = ay + dy * t, d = Math.hypot(px - x, py - y);
+        if (d < bd) { bd = d; best = [px, py]; }
+      }
+    }
+    return [best, bd];
+  };
+  const snapStart = pts => { const [p, d] = nearestOnRoads(pts[0][0], pts[0][1]); if (p && d > 0.05 && d < 14) pts.unshift(p); return pts; };
+  const curve = (pts, step = 6) => { // Catmull-Rom smoothing of control points
+    const out = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
+      const n = Math.max(1, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / step));
+      for (let k = 0; k < n; k++) {
+        const t = k / n, t2 = t * t, t3 = t2 * t;
+        out.push([0, 1].map(j => 0.5 * ((2 * p1[j]) + (-p0[j] + p2[j]) * t + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * t2 + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * t3)));
+      }
+    }
+    out.push(pts[pts.length - 1].slice());
+    return out;
+  };
+
+  // interstate with a diamond interchange at Valley Parkway (x = 640)
+  addRoad('interstate', I80, 'Interstate 17');
+  addRoad('ramp', [I(588), [618, 254], [640, 245]], 'ramp');
+  addRoad('ramp', [I(692), [662, 252], [640, 245]], 'ramp');
+  addRoad('ramp', [I(588), [616, 290], [640, 300]], 'ramp');
+  addRoad('ramp', [I(692), [664, 290], [640, 300]], 'ramp');
+  // arterials following the terrain
+  addRoad('arterial', [[640, 70], [640, 182], [640, 245], [640, 300], [642, 348], [646, 400], RR(650), [656, 470], [664, 520], [676, 580], [688, 680], [700, 900]].map((p, i, a) => p), 'Valley Parkway');
+  addRoad('arterial', RIVER_RD, 'River Road');
+  addRoad('collector', SOUTH_RD, 'South River Road');
+  // Main Street runs north from River Road through downtown and becomes the old county road
+  addRoad('main', [RR(456), [456, 348], [456, 300], [470, 270], [500, 220], [530, 160], [560, 60]], 'Main Street / Old County Rd');
+  addRoad('collector', [RR(508), [510, 430], [514, 470], SR(518), [524, 560], [534, 660], [548, 780]], 'Bridge Street');
+  addRoad('arterial', [[546, 348], [600, 348], [642, 348]], 'Commerce Blvd');
+  addRoad('collector', [[646, 348], [700, 344], [780, 352], [860, 362], [960, 380]], 'Commerce Blvd East');
+  addRoad('collector', [[560, 186], [640, 182], [720, 178], [800, 175], [900, 170], [980, 166]], 'Industrial Parkway');
+  addRoad('service', [[800, 175], [800, 116], [930, 112]], 'Campus Drive');
+  addRoad('service', [[566, 140], [640, 140], [720, 140], [796, 140]], 'Logistics Way');
+  addRoad('collector', [SR(300), [300, 520], [310, 600], [330, 700]], 'Mill Road');
+  addRoad('collector', snapStart([[692, 600], [760, 610], [840, 640], [900, 700]]), 'Orchard Lane');
+  addRoad('collector', [RR(900), [905, 450], [915, 380], [930, 300], [940, 240]].reverse().concat([]).reverse(), 'Ridge Road');
+  // rail line south of the river, and the transmission corridor feeding the substation
+  rail.push(RAIL.map(p => p.slice()));
+  stroke(RAIL, 2.2, (x, y) => { const i = idx(x, y); if (occ[i] !== 3) occ[i] = 1; });
+  power.push([[1200, 140], [1040, 136], [900, 140], [872, 136]], [[872, 136], [760, 150], [650, 230], [600, 330], [560, 420], [520, 520]]);
+
+  // downtown: a tight, irregular grid of older streets
+  const DT_V = [[404, 300], [421, 316], [438, 300], [474, 300], [491, 316], [527, 316], [546, 300]];
+  for (const [x, y0] of DT_V) addRoad('downtown', [[x, y0], RR(x)], 'downtown');
+  const DT_H = [[300, 400, 550], [316, 404, 509], [332, 398, 546], [364, 404, 546]];
+  for (const [y, x0, x1] of DT_H) addRoad('downtown', [[x0, y], [x1, y]], 'downtown');
+  addRoad('downtown', [[421, 348], [546, 348]], 'downtown');
+
+  for (let y = 300; y < 412; y++) for (let x = 398; x < 560; x++) if (!occ[idx(x, y)] && y < polyAt(RIVER_RD, x) - 2) terrain[idx(x, y)] = T.PAVE;
+  // ---------- placing buildings ----------
+  const rectFree = (r, allow4 = false) => {
+    for (let y = Math.floor(r.y); y < Math.ceil(r.y + r.h); y++) for (let x = Math.floor(r.x); x < Math.ceil(r.x + r.w); x++) { const o = occAt(x, y); if (o && !(allow4 && o === 4)) return false; }
+    return true;
+  };
+  const mark = (r, v = 2) => { for (let y = Math.floor(r.y); y < Math.ceil(r.y + r.h); y++) for (let x = Math.floor(r.x); x < Math.ceil(r.x + r.w); x++) if (inMap(x, y)) occ[idx(x, y)] = v; };
+  const place = (r, search = 12) => { // nudge a planned footprint until it fits
+    for (let d = 0; d <= search; d++) for (let dy = -d; dy <= d; dy++) for (let dx = -d; dx <= d; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== d) continue;
+      const q = { ...r, x: r.x + dx, y: r.y + dy };
+      if (rectFree(q)) { mark(q); return q; }
+    }
+    return null;
+  };
+  const lot = (r, use, owner, extra) => { const q = place(r); if (!q) return null; const l = { x: q.x, y: q.y, w: q.w, h: q.h, use, owner, ...extra }; lots.push(l); return l; };
+  const site = (spec, r) => { const q = place(r, 20); if (!q) return null; const s = { ...spec, x: q.x, y: q.y, w: q.w, h: q.h }; sites.push(s); return s; };
+
+  // downtown civic blocks, then fill the rest of downtown with small lots
+  // a downtown block's buildable interior, between the curbs of the streets around it
+  const blk = (xa, xb, ya, yb, m = 2.6) => ({ x: xa + m, y: ya + m, w: xb - xa - 2 * m, h: yb - ya - 2 * m });
+  site({ kind: 'hall', name: 'Town Hall', job: [0.6, 1] }, blk(456, 474, 332, 348, 2.8));
+  site({ kind: 'plaza', name: 'Plaza' }, blk(474, 491, 332, 348));
+  site({ kind: 'learn', name: 'Library & Learning Hub', job: [0.5, 1] }, blk(438, 456, 348, 364, 2.8));
+  const dc0 = blk(491, 509, 364, 382); site({ kind: 'clinic', name: 'Downtown Clinic', job: [0.7, 1] }, { ...dc0, w: 8 });
+  site({ kind: 'cafe', name: 'Main St Café', job: [0.7, 0] }, { ...blk(456, 474, 316, 332, 2.8), w: 6 });
+  site({ kind: 'repair', name: 'Repair Shop', job: [0.7, 0] }, { ...blk(527, 546, 364, 382), w: 8 });
+  const DTX = [398, 404, 421, 438, 456, 474, 491, 509, 527, 546, 560], DTY = [300, 316, 332, 348, 364, 382, 412];
+  const dtUses = () => weighted([{ w: 0.34, v: 'shop' }, { w: 0.2, v: 'office' }, { w: 0.13, v: 'restaurant' }, { w: 0.2, v: 'parking' }, { w: 0.08, v: 'apartments' }, { w: 0.03, v: 'church' }]);
+  for (let yi = 0; yi < DTY.length - 1; yi++) for (let xi = 0; xi < DTX.length - 1; xi++) {
+    const x0 = DTX[xi] + 2.2, x1 = DTX[xi + 1] - 2.2, y0 = DTY[yi] + 2.2, y1 = DTY[yi + 1] - 2.2;
+    if (x1 - x0 < 3 || y1 - y0 < 3) continue;
+    const rows = y1 - y0 >= 11 ? [[y0, (y1 - y0) / 2 - 0.2], [y0 + (y1 - y0) / 2 + 0.2, (y1 - y0) / 2 - 0.2]] : [[y0, y1 - y0]];
+    for (const [ry, rh] of rows) {
+      let x = x0;
+      while (x < x1 - 2) {
+        const w = Math.min(x1 - x, 3 + Math.floor(wr() * 4));
+        const r = { x, y: ry, w: w - 0.3, h: rh };
+        if (rectFree(r)) { mark(r); lots.push({ x: r.x, y: r.y, w: r.w, h: r.h, use: dtUses(), owner: 'private', downtown: true }); }
+        x += w;
       }
     }
   }
-  // town ground and streets
-  for (let y = TOWN.y0; y <= TOWN.y1; y++) for (let x = TOWN.x0; x <= TOWN.x1; x++) set(x, y, T.PAVE);
-  for (const x of ROAD_X) for (let y = TOWN.y0; y <= TOWN.y1; y++) set(x, y, T.ROAD);
-  for (const y of ROAD_Y) for (let x = TOWN.x0; x <= TOWN.x1; x++) set(x, y, T.ROAD);
-  // highway east-west through the middle, spur to the Helix campus, lanes to farm and station
-  for (let x = 0; x < MAP_W; x++) set(x, 70, T.HWY);
-  for (let x = TOWN.x1; x <= 150; x++) set(x, 50, T.ROAD);
-  for (let y = 44; y <= 50; y++) set(150, y, T.ROAD);
-  for (let y = TOWN.y1; y <= 110; y++) set(96, y, T.ROAD);
-  for (let y = TOWN.y1; y <= 106; y++) set(108, y, T.ROAD);
-  // neighbouring towns
-  const town = (x0, y0, w, h) => { for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) set(x, y, (x % 4 === 0 || y % 4 === 0) ? T.ROAD : T.TOWNB); };
-  town(8, 96, 22, 18); town(166, 104, 24, 20);
-  return g;
-}
-
-// Parcels where new energy/compute/factory/fleet assets can go: empty town blocks first, then fields.
-function buildParcels() {
-  const P = [];
-  for (let x = 62; x <= 134; x += 12) for (const y of [22, 31]) P.push({ x, y, w: 11, h: 8, used: false });
-  for (let x = 152; x <= 188; x += 12) for (let y = 54; y <= 94; y += 10) P.push({ x, y, w: 11, h: 9, used: false });
-  for (let y = 76; y <= 94; y += 10) for (const x of [6, 18, 30]) P.push({ x: x + 14, y, w: 11, h: 9, used: false });
-  return P;
-}
-
-// Route along the street grid: up/down to a street, across, then to the destination door.
-function nearest(arr, v) { return arr.reduce((b, a) => Math.abs(a - v) < Math.abs(b - v) ? a : b, arr[0]); }
-function route(from, site, target) {
-  const pts = [];
-  const door = site.door;
-  const inTown = p => p.x >= TOWN.x0 - 1 && p.x <= TOWN.x1 + 1 && p.y >= TOWN.y0 - 1 && p.y <= TOWN.y1 + 1;
-  if (inTown(from)) {
-    const ry0 = nearest(ROAD_Y, from.y);
-    pts.push({ x: from.x, y: ry0 });
-    const rx = nearest(ROAD_X, door.x);
-    pts.push({ x: rx, y: ry0 });
-    pts.push({ x: rx, y: door.ry });
-  } else {
-    pts.push({ x: from.x, y: from.y });
+  // big footprints: strip and big-box corridor along the parkway near the interchange
+  const BIG = [];
+  const bigbox = (name, x, y, owner) => { const st = lot({ x, y, w: 24, h: 20 }, 'bigbox', owner, { name }); const pk = st && lot({ x, y: st.y + 21, w: 24, h: 21 }, 'parking', owner); return st; };
+  bigbox('MegaMart', 604, 303, 'helix'); bigbox('HomeStore', 660, 305, 'private');
+  site({ kind: 'market', name: 'Valley Market', job: [1.0, 0] }, { x: 688, y: 305, w: 20, h: 14 }); lot({ x: 688, y: 320, w: 20, h: 14 }, 'parking', 'private');
+  lot({ x: 572, y: 352, w: 30, h: 7 }, 'shop', 'private', { name: 'Riverside Plaza strip' }); lot({ x: 572, y: 360, w: 30, h: 11 }, 'parking', 'private');
+  lot({ x: 660, y: 352, w: 30, h: 7 }, 'shop', 'private', { name: 'Parkway Center strip' }); lot({ x: 660, y: 360, w: 30, h: 11 }, 'parking', 'private');
+  lot({ x: 612, y: 352, w: 8, h: 8 }, 'gas', 'private'); lot({ x: 694, y: 338, w: 8, h: 8 }, 'gas', 'private'); lot({ x: 612, y: 362, w: 7, h: 6 }, 'restaurant', 'private', { name: 'Burger stand' });
+  site({ kind: 'diner', name: 'Parkway Diner', job: [0.8, 0] }, { x: 696, y: 352, w: 8, h: 7 });
+  lot({ x: 600, y: 380, w: 14, h: 8 }, 'carlot', 'private', { name: 'Valley Motors' }); lot({ x: 600, y: 389, w: 18, h: 12 }, 'carlot', 'private');
+  lot({ x: 660, y: 374, w: 16, h: 8 }, 'motel', 'private');
+  lot({ x: 700, y: 372, w: 18, h: 12 }, 'office', 'helix', { name: 'Helix regional office' }); lot({ x: 700, y: 386, w: 18, h: 12 }, 'office', 'private'); lot({ x: 720, y: 372, w: 12, h: 26 }, 'parking', 'private');
+  site({ kind: 'clinic', name: 'Valley General Hospital', job: [1.6, 1] }, { x: 726, y: 404, w: 30, h: 22 }); lot({ x: 758, y: 404, w: 14, h: 22 }, 'parking', 'town');
+  // industrial / logistics park and the data-center campus near the highway
+  const fc = site({ kind: 'fleet', name: 'Helix Fulfillment Center', asset: 'depot', job: [0.7, 0] }, { x: 652, y: 192, w: 60, h: 30 });
+  lot({ x: 652, y: 223, w: 60, h: 12 }, 'parking', 'helix', { name: 'truck yard' });
+  site({ kind: 'warehouse', name: 'Valley Distribution', job: [1.3, 0] }, { x: 720, y: 190, w: 30, h: 16 });
+  site({ kind: 'factory', name: 'Okafor Manufacturing', asset: 'okafor', job: [1.0, 1] }, { x: 578, y: 192, w: 24, h: 14 });
+  for (const [x, y, w, h] of [[578, 150, 26, 14], [608, 150, 26, 14], [756, 190, 26, 16], [578, 210, 26, 12], [610, 205, 24, 14], [700, 150, 36, 18], [740, 150, 26, 14], [660, 110, 30, 16], [700, 112, 34, 16], [610, 112, 24, 14]]) lot({ x, y, w, h }, 'warehouse', wr() < 0.4 ? 'helix' : 'private');
+  site({ kind: 'compute', name: 'Helix Datacenter', asset: 'dc', job: [0.8, 1] }, { x: 812, y: 124, w: 40, h: 20 });
+  lot({ x: 812, y: 146, w: 18, h: 9 }, 'parking', 'helix');
+  site({ kind: 'substation', name: 'Valley Substation' }, { x: 862, y: 126, w: 12, h: 10 });
+  site({ kind: 'solar', name: 'Landfill Solar (town)', asset: 'landfill' }, { x: 930, y: 262, w: 30, h: 24 });
+  site({ kind: 'station', name: 'Rail Station / Federal Works' }, { x: 494, y: 488, w: 12, h: 6 });
+  // schools, parks, apartments
+  site({ kind: 'school', name: 'Valley High School', job: [1.0, 1] }, { x: 556, y: 552, w: 36, h: 20 });
+  site({ kind: 'sport', name: 'School fields' }, { x: 556, y: 574, w: 40, h: 24 });
+  site({ kind: 'school', name: 'Elm Elementary', job: [0.5, 1] }, { x: 790, y: 420, w: 16, h: 10 });
+  site({ kind: 'park', name: 'Riverside Park' }, { x: 560, y: 412, w: 60, h: 9 });
+  site({ kind: 'park', name: 'Mill Pond Park' }, { x: 420, y: 600, w: 30, h: 22 });
+  for (const [x, y, n] of [[360, 304, 'Westgate Apartments'], [700, 520, 'River Bend Apartments'], [860, 420, 'Ridge Commons Apartments']]) {
+    for (let k = 0; k < 4; k++) lot({ x: x + (k % 2) * 14, y: y + Math.floor(k / 2) * 8, w: 12, h: 5 }, 'apartments', 'private', { name: n });
+    lot({ x: x + 28, y, w: 8, h: 13 }, 'parking', 'private');
   }
-  pts.push({ x: door.x, y: door.ry });
-  pts.push({ x: door.x, y: door.y });
+  site({ kind: 'farm', name: 'Moreno Farm', job: [1.0, 0] }, { x: 250, y: 690, w: 60, h: 50 });
+
+  // ---------- neighborhoods ----------
+  const streets = [];
+  const growStreet = (start, heading, opts) => {
+    // walk forward, turning gently; stop before running into anything
+    const pts = [start.slice()];
+    let [x, y] = start, h = heading, len = 0;
+    const turn = opts.turn || 0.06, step = 3;
+    while (len < opts.max) {
+      h += (wr() - 0.5) * turn * 2 + (opts.bias || 0);
+      const nx = x + Math.cos(h) * step, ny = y + Math.sin(h) * step;
+      const ax = nx + Math.cos(h) * 4, ay = ny + Math.sin(h) * 4;
+      if (len > 5 && (occAt(ax, ay) || occAt(ax + Math.sin(h) * 2, ay - Math.cos(h) * 2) || occAt(ax - Math.sin(h) * 2, ay + Math.cos(h) * 2))) break;
+      if (!opts.zone(nx, ny)) break;
+      x = nx; y = ny; len += step;
+      if (pts.length === 1 || len % 6 < step) pts.push([x, y]);
+    }
+    if (Math.hypot(pts[pts.length - 1][0] - x, pts[pts.length - 1][1] - y) > 0.5) pts.push([x, y]);
+    return len >= (opts.min || 12) ? pts : null;
+  };
+  const commit = (pts, cls, name, cul) => { snapStart(pts); const r = addRoad(cls, pts, name, true); r.cul = cul; streets.push(r); return r; };
+
+  // postwar west side: a gently warped grid between the interstate and River Road
+  const zW = (x, y) => x > 150 && x < 394 && y > polyAt(I80, x) + 10 && y < polyAt(RIVER_RD, x) - 5;
+  const crossX = [];
+  for (let x = 170; x < 390; x += 46) crossX.push(x);
+  for (const cx of crossX) commit([[cx, polyAt(I80, cx) + 12], RR(cx)], 'local', 'postwar');
+  for (let k = 0; k < 6; k++) {
+    const y0 = 262 + k * 19;
+    const pts = [];
+    for (let x = 152; x < 394; x += 6) { const y = y0 + Math.sin(x / 45 + k) * 3 + (x - 152) * 0.18; if (zW(x, y)) pts.push([x, y]); else if (pts.length) break; }
+    if (pts.length > 4) { const r = addRoad('local', pts, 'postwar', true); streets.push(r); }
+  }
+  // newer suburbs: "pods" with a curving collector spine and side streets ending in cul-de-sacs.
+  // Streets sit ~18 tiles (90 m) apart: two 40 m lots back to back plus the street.
+  const clearRun = (pts, minLen) => { // longest stretch of a polyline that doesn't hit anything built
+    let best = [], cur = [];
+    for (const p of pts) { const ok = !occAt(p[0], p[1]) && inMap(p[0], p[1]); if (ok) cur.push(p); else { if (cur.length > best.length) best = cur; cur = []; } }
+    if (cur.length > best.length) best = cur;
+    return best.length * 3 >= minLen ? best : null;
+  };
+  const connect = (pt, maxD, skip) => { const [q, d] = nearestOnRoads(pt[0], pt[1], skip); if (q && d > 0.3 && d < maxD) { addRoad('local', [q, pt], 'connector', true); return true; } return d <= 0.3; };
+  const pod = (cx, cy, len, half, ang, bend, zone) => {
+    const dir = [Math.cos(ang), Math.sin(ang)], nrm = [-dir[1], dir[0]];
+    const spine = [];
+    for (let u = -len / 2; u <= len / 2; u += 3) { const b = Math.sin((u / len + 0.5) * Math.PI) * bend; spine.push([cx + dir[0] * u + nrm[0] * b, cy + dir[1] * u + nrm[1] * b]); }
+    const run = clearRun(spine.filter(p => zone(p[0], p[1])), 40);
+    if (!run) return;
+    const sp = addRoad('collector', run, 'suburb collector', true); streets.push(sp);
+    if (!connect(run[0], 60, sp) && !connect(run[run.length - 1], 60, sp)) { const mid = run[run.length >> 1]; connect(mid, 90, sp); }
+    else connect(run[run.length - 1], 60, sp);
+    for (let i = 3; i < run.length - 2; i += 6) for (const side of [-1, 1]) {
+      const [ax, ay] = run[i], [bx, by] = run[i + 1], base = Math.atan2(by - ay, bx - ax) + side * Math.PI / 2;
+      const pts = [[ax, ay]]; let x = ax, y = ay, h = base, L = 0; const curl = (wr() - 0.5) * 0.04;
+      while (L < half) {
+        h += curl; const nx = x + Math.cos(h) * 3, ny = y + Math.sin(h) * 3;
+        const fx = nx + Math.cos(h) * 6, fy = ny + Math.sin(h) * 6;
+        if (L > 4 && (occAt(fx, fy) || !zone(fx, fy))) break;
+        x = nx; y = ny; L += 3; pts.push([x, y]);
+      }
+      if (L >= 15) { const r = addRoad('local', pts, 'suburb', true); r.cul = true; streets.push(r); }
+    }
+  };
+  const notForest = (x, y) => inMap(x, y) && terrain[idx(x, y)] !== T.FOREST;
+  const zSB = (x, y) => notForest(x, y) && y > polyAt(RAIL, x) + 8 && y < 720;
+  const zE = (x, y) => notForest(x, y) && x > 704 && x < 935 && y > 286 && y < polyAt(RIVER_RD, x) - 5;
+  const zN = (x, y) => notForest(x, y) && x > 220 && x < 560 && y < polyAt(I80, x) - 10;
+  const zSE = (x, y) => notForest(x, y) && x > 690 && x < 960 && y > polyAt(RAIL, x) + 8 && y < 770;
+  for (const [cx, cy, len, half, ang, bend, z] of [
+    [370, 540, 150, 40, 0.15, 10, zSB], [455, 625, 150, 34, -0.1, -12, zSB], [345, 640, 90, 30, 1.4, 8, zSB], [620, 650, 110, 32, 0.3, 10, zSB], [470, 540, 70, 26, 0.1, 6, zSB],
+    [770, 318, 120, 22, 0.05, 6, zE], [850, 410, 120, 28, -0.6, 10, zE], [750, 450, 70, 18, 0.35, 4, zE],
+    [760, 620, 140, 34, 0.35, 12, zSE], [850, 690, 140, 34, 0.45, -10, zSE], [740, 720, 90, 26, 0.2, 8, zSE],
+    [400, 190, 150, 30, 0.08, -10, zN], [300, 205, 90, 24, 0.12, 8, zN], [500, 150, 100, 26, -0.5, 10, zN],
+  ]) pod(cx, cy, len, half, ang, bend, z);
+
+  // houses along every residential street (and around cul-de-sac bulbs)
+  const tryHouse = (cx, cy, ang) => {
+    const hw = 1.2, hd = 1.0, ca = Math.cos(ang), sa = Math.sin(ang);
+    const pts = []; for (let u = -hw - 0.6; u <= hw + 0.6; u += 0.7) for (let v = -hd - 0.6; v <= hd + 0.6; v += 0.7) pts.push([cx + u * ca - v * sa, cy + u * sa + v * ca]);
+    if (pts.some(([x, y]) => occAt(x, y))) return null;
+    pts.forEach(([x, y]) => { if (inMap(x, y)) occ[idx(x, y)] = 2; });
+    const hs = { x: cx, y: cy, ang, w: 2.4, h: 2.0, roof: false, v: Math.floor(wr() * 20) };
+    houses.push(hs); return hs;
+  };
+  for (const r of roads.filter(q => q.res)) {
+    const half = RW[r.cls] / 2;
+    let carry = 2;
+    for (let i = 0; i < r.pts.length - 1; i++) {
+      const [ax, ay] = r.pts[i], [bx, by] = r.pts[i + 1], L = Math.hypot(bx - ax, by - ay);
+      if (L < 0.01) continue;
+      const tx = (bx - ax) / L, ty = (by - ay) / L, ang = Math.atan2(ty, tx);
+      let s = carry;
+      for (; s < L; s += 5.2) {
+        const px = ax + tx * s, py = ay + ty * s;
+        for (const side of [-1, 1]) {
+          const off = half + 2.4;
+          const back = [px - ty * side * (half + 7.5), py + tx * side * (half + 7.5)];
+          if (occAt(back[0], back[1]) === 1) continue;
+          tryHouse(px - ty * side * off, py + tx * side * off, ang);
+        }
+      }
+      carry = s - L;
+    }
+    if (r.cul) {
+      const [ex, ey] = r.pts[r.pts.length - 1], [qx, qy] = r.pts[Math.max(0, r.pts.length - 2)], back = Math.atan2(qy - ey, qx - ex);
+      for (let a = -2.2; a <= 2.21; a += 1.1) { const an = back + Math.PI + a; tryHouse(ex + Math.cos(an) * 6, ey + Math.sin(an) * 6, an + Math.PI / 2); }
+    }
+  }
+
+  // farmland on the open valley floor, woodlots between fields, the metro edge to the east
+  const farmZone = (x, y) => (x < 150 || x > 940 || y > 640 || (y < 230 && (x < 240 || x > 980))) && terrain[idx(x, y)] !== T.FOREST && terrain[idx(x, y)] !== T.WATER;
+  for (let fy = 0; fy < H; fy += 40) for (let fx = 0; fx < W; fx += 50) {
+    const fw = 40 + Math.floor(wr() * 20), fh = 30 + Math.floor(wr() * 12), kind = wr();
+    for (let y = fy; y < Math.min(H, fy + fh); y++) for (let x = fx; x < Math.min(W, fx + fw); x++) {
+      if (!farmZone(x, y) || occ[idx(x, y)]) continue;
+      terrain[idx(x, y)] = kind < 0.12 ? T.FOREST : kind < 0.5 ? ((Math.floor(y / 2) % 2) ? T.FIELD : T.FIELD2) : kind < 0.85 ? ((Math.floor(x / 2) % 2) ? T.FIELD3 : T.FIELD2) : T.GRASS2;
+    }
+    if (kind > 0.12 && farmZone(fx + 2, fy + 2)) fields.push({ x: fx, y: fy, w: fw, h: fh });
+  }
+  for (let y = 120; y < 360; y++) for (let x = 1150; x < W; x++) if (!occ[idx(x, y)] && terrain[idx(x, y)] !== T.WATER) terrain[idx(x, y)] = T.METRO;
+  // lawns around houses read as suburb at a distance
+  for (const hs of houses) for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) { const x = Math.floor(hs.x + dx), y = Math.floor(hs.y + dy); if (inMap(x, y) && (terrain[idx(x, y)] === T.GRASS || terrain[idx(x, y)] === T.GRASS2 || terrain[idx(x, y)] === T.FOREST)) terrain[idx(x, y)] = T.LAWN; }
+
+  // parcels for big future builds: campus halls, industrial sheds, solar farms on farmland
+  const tryParcels = (kind, x0, x1, y0, y1, w, h, gap) => { for (let y = y0; y + h <= y1; y += h + gap) for (let x = x0; x + w <= x1; x += w + gap) { const r = { x, y, w, h }; if (rectFree(r, true)) { mark(r, 4); parcels.push({ ...r, kind, used: false }); } } };
+  tryParcels('campus', 770, 980, 60, 168, 40, 20, 4);
+  tryParcels('industrial', 560, 780, 70, 176, 30, 18, 4);
+  tryParcels('farm', 960, 1190, 250, 560, 60, 50, 6);
+  tryParcels('farm', 40, 1150, 690, 860, 60, 50, 6);
+  tryParcels('farm', 20, 150, 120, 300, 60, 50, 6);
+  parcels.sort((a, b) => a.kind === b.kind ? Math.hypot(a.x - 860, a.y - 140) - Math.hypot(b.x - 860, b.y - 140) : 0);
+
+  return { terrain, occ, roads, rail, power, houses, lots, sites, parcels };
+}
+
+// ---------- road graph and routing (Yuka Graph + A*) ----------
+function buildRoadGraph(roads) {
+  // 1) densify, 2) split segments where roads meet, 3) merge coincident points into nodes
+  const segs = [];
+  roads.forEach((r, ri) => {
+    for (let i = 0; i < r.pts.length - 1; i++) {
+      const [ax, ay] = r.pts[i], [bx, by] = r.pts[i + 1], L = Math.hypot(bx - ax, by - ay), n = Math.max(1, Math.ceil(L / 12));
+      for (let k = 0; k < n; k++) segs.push({ ri, cls: r.cls, a: [lerp(ax, bx, k / n), lerp(ay, by, k / n)], b: [lerp(ax, bx, (k + 1) / n), lerp(ay, by, (k + 1) / n)], cuts: [] });
+    }
+  });
+  const CELL = 24, grid = new Map();
+  segs.forEach((s, i) => {
+    const x0 = Math.floor(Math.min(s.a[0], s.b[0]) / CELL), x1 = Math.floor(Math.max(s.a[0], s.b[0]) / CELL), y0 = Math.floor(Math.min(s.a[1], s.b[1]) / CELL), y1 = Math.floor(Math.max(s.a[1], s.b[1]) / CELL);
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const k = x + ',' + y; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(i); }
+  });
+  const crosses = (s, t) => { const iS = s.cls === 'interstate', iT = t.cls === 'interstate'; return iS === iT || s.cls === 'ramp' || t.cls === 'ramp'; };
+  const projT = (p, s) => { const dx = s.b[0] - s.a[0], dy = s.b[1] - s.a[1], L2 = dx * dx + dy * dy; const t = clamp(((p[0] - s.a[0]) * dx + (p[1] - s.a[1]) * dy) / L2, 0, 1); return [t, Math.hypot(s.a[0] + dx * t - p[0], s.a[1] + dy * t - p[1])]; };
+  const seen = new Set();
+  for (const list of grid.values()) for (let a = 0; a < list.length; a++) for (let b = a + 1; b < list.length; b++) {
+    const i = list[a], j = list[b], key = i < j ? i + ':' + j : j + ':' + i;
+    if (seen.has(key)) continue; seen.add(key);
+    const s = segs[i], t = segs[j];
+    if (s.ri === t.ri || !crosses(s, t)) continue;
+    // proper intersection
+    const d = (t.b[1] - t.a[1]) * (s.b[0] - s.a[0]) - (t.b[0] - t.a[0]) * (s.b[1] - s.a[1]);
+    if (Math.abs(d) > 1e-9) {
+      const ua = ((t.b[0] - t.a[0]) * (s.a[1] - t.a[1]) - (t.b[1] - t.a[1]) * (s.a[0] - t.a[0])) / d;
+      const ub = ((s.b[0] - s.a[0]) * (s.a[1] - t.a[1]) - (s.b[1] - s.a[1]) * (s.a[0] - t.a[0])) / d;
+      if (ua > 0.001 && ua < 0.999 && ub > 0.001 && ub < 0.999) { s.cuts.push(ua); t.cuts.push(ub); continue; }
+    }
+    // T-junctions: an endpoint lying on the other segment
+    for (const [p, q, other] of [[s.a, s, t], [s.b, s, t], [t.a, t, s], [t.b, t, s]]) {
+      const [tt, dist] = projT(p, other);
+      if (dist < 0.8) other.cuts.push(tt); // the endpoint becomes a node; nodeAt merges the two within tolerance
+    }
+  }
+  const graph = new YUKA.Graph(); graph.digraph = false;
+  const nodes = [], keyOf = new Map();
+  const nodeAt = (x, y) => { // merge points closer than 0.9 tiles into one node
+    const gx = Math.floor(x), gy = Math.floor(y);
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) for (const id of keyOf.get((gx + dx) + ',' + (gy + dy)) || []) if (Math.hypot(nodes[id].x - x, nodes[id].y - y) < 0.9) return id;
+    const id = nodes.length; nodes.push({ x, y });
+    const k = gx + ',' + gy; if (!keyOf.has(k)) keyOf.set(k, []); keyOf.get(k).push(id);
+    graph.addNode(new YUKA.NavNode(id, new YUKA.Vector3(x, y, 0))); return id;
+  };
+  const speedOf = { interstate: 2.2, ramp: 1.4, arterial: 1.5, collector: 1.2, main: 1, downtown: 0.9, local: 0.9, service: 1 };
+  for (const s of segs) {
+    const ts = [0, 1, ...s.cuts].sort((a, b) => a - b);
+    let prev = null;
+    for (const t of ts) {
+      const id = nodeAt(lerp(s.a[0], s.b[0], t), lerp(s.a[1], s.b[1], t));
+      if (prev !== null && prev !== id && !graph.hasEdge(prev, id)) { const p = nodes[prev], q = nodes[id]; const c = Math.hypot(p.x - q.x, p.y - q.y) / speedOf[s.cls]; graph.addEdge(new YUKA.NavEdge(prev, id, c)); }
+      prev = id;
+    }
+  }
+  // spatial index of nodes (driveway access: no interstate or ramp nodes)
+  const nIdx = new Map(), NC = 20;
+  const access = new Set();
+  segs.forEach(s => { if (s.cls !== 'interstate' && s.cls !== 'ramp') { access.add(nodeAt(s.a[0], s.a[1])); access.add(nodeAt(s.b[0], s.b[1])); } });
+  nodes.forEach((n, i) => { if (!access.has(i)) return; const k = Math.floor(n.x / NC) + ',' + Math.floor(n.y / NC); if (!nIdx.has(k)) nIdx.set(k, []); nIdx.get(k).push(i); });
+  const nearestNode = (x, y) => {
+    for (let r = 0; r < 12; r++) {
+      let best = -1, bd = Infinity;
+      const cx = Math.floor(x / NC), cy = Math.floor(y / NC);
+      for (let gy = cy - r; gy <= cy + r; gy++) for (let gx = cx - r; gx <= cx + r; gx++) for (const i of nIdx.get(gx + ',' + gy) || []) { const d = Math.hypot(nodes[i].x - x, nodes[i].y - y); if (d < bd) { bd = d; best = i; } }
+      if (best >= 0 && bd < (r + 1) * NC) return best;
+    }
+    return 0;
+  };
+  // keep only the largest connected component reachable for access nodes
+  return { graph, nodes, nearestNode, edges: segs.length };
+}
+
+let ROUTE_CACHE = new Map();
+function nodePath(a, b) {
+  const key = a + '>' + b;
+  let p = ROUTE_CACHE.get(key);
+  if (!p) {
+    const astar = new YUKA.AStar(S.road.graph, a, b);
+    astar.heuristic = YUKA.HeuristicPolicyEuclid;
+    astar.search();
+    p = astar.found ? astar.getPath() : [a, b];
+    if (ROUTE_CACHE.size > 20000) ROUTE_CACHE.clear();
+    ROUTE_CACHE.set(key, p);
+  }
+  return p;
+}
+// Route along the road network: to the nearest street, along the streets, then in the door.
+function route(from, site, target) {
+  const R = S.road;
+  const a = R.nearestNode(from.x, from.y), b = site ? (site.node ?? (site.node = R.nearestNode(site.cx, site.cy))) : R.nearestNode(target.x, target.y);
+  const pts = [{ x: from.x, y: from.y }];
+  for (const i of nodePath(a, b)) pts.push({ x: R.nodes[i].x, y: R.nodes[i].y });
   pts.push(target);
-  // drop consecutive duplicates
   return pts.filter((p, i) => i === 0 || Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y) > 0.3);
 }
 
@@ -389,46 +739,15 @@ let SITE_ID = 0;
 function makeSite(kind, name, r, extra = {}) {
   const s = { id: 's' + (++SITE_ID), kind, name, x: r.x, y: r.y, w: r.w, h: r.h, ...extra };
   s.cx = s.x + s.w / 2; s.cy = s.y + s.h / 2;
-  if (!s.door) {
-    const ry = nearest(ROAD_Y, s.y + s.h);
-    const inTown = s.x >= TOWN.x0 && s.x <= TOWN.x1 && s.y >= TOWN.y0 && s.y <= TOWN.y1;
-    s.door = inTown ? { x: Math.round(s.cx), y: ry, ry } : { x: Math.round(s.cx), y: Math.round(s.y + s.h + 0.5), ry: Math.round(s.y + s.h + 0.5) };
-  }
   return s;
 }
-function spotIn(site, margin = 0.8) {
-  return { x: site.x + margin + rand() * Math.max(0.1, site.w - margin * 2), y: site.y + margin + rand() * Math.max(0.1, site.h - margin * 2) };
+function spotIn(site, margin = 0.6) {
+  const m = Math.min(margin, site.w / 3, site.h / 3);
+  return { x: site.x + m + rand() * Math.max(0.1, site.w - m * 2), y: site.y + m + rand() * Math.max(0.1, site.h - m * 2) };
 }
+// "in town": the valley floor south of the interstate (the logistics park and data campus sit outside, by the highway)
+function inTown(x, y) { return x >= TOWN.x0 && x <= TOWN.x1 && y >= polyAt(I80, x) + 8 && y <= TOWN.y1; }
 
-// The present-day town, block by block. Layouts split a block into lots:
-// res6 = six houses, quad = four 5x4 lots, half = two 5x9 lots, whole = one lot.
-// Entries: a plain lot use, ['job', kind, name, jobWeight, hiSkill], ['civic', kind, name] or ['asset', key].
-const LAYOUTS = {
-  res6: [[0, 0, 3, 4], [4, 0, 3, 4], [8, 0, 3, 4], [0, 5, 3, 4], [4, 5, 3, 4], [8, 5, 3, 4]],
-  quad: [[0, 0, 5, 4], [6, 0, 5, 4], [0, 5, 5, 4], [6, 5, 5, 4]],
-  half: [[0, 0, 5, 9], [6, 0, 5, 9]],
-  whole: [[0, 0, 11, 9]],
-};
-const R6 = ['res6'];
-const BLOCK_PLAN = {
-  '0,0': R6, '1,0': R6, '2,0': ['whole', ['job', 'school', 'School', 1.0, 1]], '3,0': ['whole', ['job', 'clinic', 'Clinic', 1.1, 1]], '4,0': R6, '5,0': R6,
-  '0,1': ['half', ['job', 'market', 'Market', 1.0, 0], 'parking'], '1,1': ['quad', ['job', 'cafe', 'Café', 0.8, 0], 'shop', 'restaurant', 'parking'],
-  '2,1': ['whole', ['job', 'learn', 'Library & Learning Hub', 0.5, 1]], '3,1': ['quad', 'office', 'office', 'parking', 'office'],
-  '4,1': ['quad', 'office', ['asset', 'valleycompute'], 'parking', 'office'], '5,1': R6,
-  '0,2': ['quad', 'gas', 'carlot', 'shop', 'motel'], '1,2': ['whole', ['asset', 'okafor']], '2,2': ['whole', ['civic', 'plaza', 'Plaza']],
-  '3,2': ['whole', ['job', 'hall', 'Town Hall', 0.6, 1]], '4,2': ['whole', ['asset', 'depot']], '5,2': ['quad', 'office', 'parking', 'shop', 'church'],
-  '0,3': R6, '1,3': ['half', ['job', 'warehouse', 'Valley Distribution', 1.3, 0], 'parking'], '2,3': ['whole', ['civic', 'park', 'Park']],
-  '3,3': ['quad', 'shop', 'restaurant', 'parking', 'office'], '4,3': ['quad', 'office', 'office', 'parking', 'office'], '5,3': R6,
-  '0,4': R6, '1,4': ['quad', ['job', 'repair', 'Repair Shop', 0.7, 0], 'gas', 'shop', 'parking'], '2,4': R6, '3,4': R6,
-  '4,4': ['quad', ['job', 'diner', 'Diner', 0.8, 0], 'parking', 'shop', 'motel'], '5,4': R6,
-  '0,5': R6, '1,5': R6, '2,5': ['quad', 'church', 'shop', 'parking', 'gas'], '3,5': R6, '4,5': R6, '5,5': R6,
-  '6,0': R6, '6,1': ['quad', 'office', 'shop', 'parking', 'gas'], '6,2': ['half', 'warehouse', 'parking'], '6,3': R6, '6,4': ['quad', 'carlot', 'parking', 'shop', 'office'], '6,5': R6,
-};
-// highway strip outside town
-const STRIP_LOTS = [
-  [146, 63, 6, 5, 'gas'], [153, 62, 10, 6, 'bigbox'], [164, 63, 7, 5, 'parking'], [146, 72, 7, 5, 'motel'], [154, 72, 9, 6, 'warehouse'], [164, 72, 6, 5, 'carlot'],
-  [51, 63, 6, 5, 'gas'], [51, 72, 6, 5, 'restaurant'],
-];
 const FAMILY_NAMES = ['Okafor', 'Patel', 'Moreno', 'Kowalski', 'Nguyen', 'Haddad', 'Lindqvist', 'Mensah', 'Sato', 'Romero', 'Byrne', 'Achterberg', 'Dubois', 'Castillo', 'Ivanova', 'Park'];
 const FIRST = ['Mara', 'Teo', 'Juno', 'Odile', 'Ravi', 'Ines', 'Kofi', 'Lena', 'Omar', 'Sana', 'Pavel', 'Yuki', 'Bea', 'Tomas', 'Ada', 'Felix', 'Nia', 'Hugo', 'Rosa', 'Idris', 'Mei', 'Arlo', 'Zara', 'Emil', 'Noor', 'Cyrus', 'Lucia', 'Dev', 'Ola', 'Wren', 'Iris', 'Bram', 'Kaito', 'Esme', 'Joaquin', 'Talia', 'Sami', 'Greta', 'Milo', 'Amara', 'Rhys', 'Lark', 'Basil', 'Frida', 'Anouk', 'Tariq', 'Vera', 'Quinn', 'Ezra', 'Pia'];
 
@@ -449,6 +768,7 @@ function ownerName(id) {
   if (id === 'helix') return 'Helix Systems (outside)';
   if (id === 'town') return 'Town commons';
   if (id === 'private') return 'local owner';
+  if (id === 'coop') return 'Valley co-ops';
   if (id === 'neighbors') return 'Other valley households';
   const h = S.hh[id];
   return h ? (h.isPlayer ? 'You' : h.name + ' household') : id;
@@ -474,6 +794,19 @@ function transferShare(a, from, to, frac) {
 function isCoop(a) { return Object.keys(a.shares).filter(k => ownerKind(k) === 'resident').length >= 3; }
 function localShare(a) { return sum(Object.entries(a.shares), ([k, v]) => k === 'helix' ? 0 : v); }
 
+// Big new builds go where they would in a real valley: data halls on the campus by the substation,
+// depots and fabs in the logistics park, solar farms out on the farmland.
+const PARCEL_PREF = { compute: ['campus', 'industrial', 'farm'], fleet: ['industrial', 'campus', 'farm'], factory: ['industrial', 'campus', 'farm'], solar: ['farm', 'industrial'] };
+function pickParcel(type) {
+  for (const k of PARCEL_PREF[type] || ['farm']) {
+    const free = S.parcels.filter(p => !p.used && p.kind === k);
+    if (!free.length) continue;
+    const anchor = k === 'campus' ? [860, 130] : k === 'industrial' ? [660, 190] : [640, 450];
+    free.sort((a, b) => Math.hypot(a.x - anchor[0], a.y - anchor[1]) - Math.hypot(b.x - anchor[0], b.y - anchor[1]));
+    return free[0];
+  }
+  return null;
+}
 function placeAsset(type, name, owner, units, opts = {}) {
   let site = opts.site;
   if (!site) {
@@ -486,7 +819,7 @@ function placeAsset(type, name, owner, units, opts = {}) {
       lot.site = site;
       setUse(lot, type, `${name} is going up where a ${LOT_USE[lot.use].label.toLowerCase()} used to be.`);
     } else {
-      const parcel = S.parcels.find(p => !p.used);
+      const parcel = pickParcel(type);
       if (!parcel) return null;
       parcel.used = true;
       site = makeSite(type, name, parcel, { asset: true });
@@ -583,12 +916,14 @@ function econDay() {
 
   // ---------- income by owner ----------
   const income = {}; // owner -> $
-  const pay = (shares, amt) => { for (const k in shares) income[k] = (income[k] || 0) + shares[k] * amt; };
-  for (const a of solar) { const share = a.cap * P.solarYield * season / Math.max(0.001, solarOut); a.out = soldE * share; a.profit = a.out * M.pe - a.cap * P.solarCost * 0.01 / 30; pay(a.shares, a.profit); }
-  for (const a of racks) { a.out = a.cap * rackOut; a.profit = a.out * M.pc - a.cap * P.rackE * servedE * M.pe; pay(a.shares, a.profit); }
+  const pay0 = (shares, amt) => { for (const k in shares) income[k] = (income[k] || 0) + shares[k] * amt; };
+  // co-ops keep part of their profit as a reserve and reinvest it (see coopMonth); everyone else pays it all out
+  let pay = (shares, amt, a) => { if (a && a.coop && amt > 0) { a.reserve = (a.reserve || 0) + amt * P.coopRetain; amt *= 1 - P.coopRetain; } pay0(shares, amt); };
+  for (const a of solar) { const share = a.cap * P.solarYield * season / Math.max(0.001, solarOut); a.out = soldE * share; a.profit = a.out * M.pe - a.cap * P.solarCost * 0.01 / 30; pay(a.shares, a.profit, a); }
+  for (const a of racks) { a.out = a.cap * rackOut; a.profit = a.out * M.pc - a.cap * P.rackE * servedE * M.pe; pay(a.shares, a.profit, a); }
   const robotRev = robotWork * P.robotRate * P.wage + robotExport * exportRate * P.wage - nRobots * (P.robotE * M.pe + P.robotC * M.pc * Math.min(1, servedC));
-  for (const a of fleets) { a.out = robotEff * a.cap / Math.max(1, nRobots); a.profit = robotRev * a.cap / Math.max(1, nRobots); pay(a.shares, a.profit); }
-  for (const a of facs) { a.out = robotsBuilt; a.profit = robotsBuilt * P.robotCost * 0.25 - dFac * M.pe; pay(a.shares, a.profit); }
+  for (const a of fleets) { a.out = robotEff * a.cap / Math.max(1, nRobots); a.profit = robotRev * a.cap / Math.max(1, nRobots); pay(a.shares, a.profit, a); }
+  for (const a of facs) { a.out = robotsBuilt; a.profit = robotsBuilt * P.robotCost * 0.25 - dFac * M.pe; pay(a.shares, a.profit, a); }
 
   // town: tax + its own assets + property tax on Helix's valley profits
   const helixProfit = Math.max(0, income.helix || 0);
@@ -633,6 +968,7 @@ function econMonth() {
   const P = S.P, M = S.market;
   M.mE *= 1 + P.gE; M.mC *= 1 + P.gC; M.mX *= 1 + P.gX; M.mL *= 1 + P.gL;
   landMonth();
+  coopMonth();
   S.helix.monthBudget = P.helixBudget * (1 + S.day / 360);
   // the town council invests its treasury in whatever is shortest, in the commons
   if (S.town.cash > 250000) {
@@ -643,6 +979,37 @@ function econMonth() {
     if (existing && rand() < 0.6) expandAsset(existing, 'town', units);
     else placeAsset(type, type === 'solar' ? 'Commons Solar ' + (++S.counter) : 'Commons Compute ' + (++S.counter), 'town', units);
     log(`Town council invested ${money(spend)} in commons ${type}.`, 'town');
+  }
+}
+
+// Co-ops reinvest their reserves: bid on a vacant lot in town for a new co-op build, or grow what they have.
+// New capacity is split among the members in proportion to their stakes, so ownership stays local.
+function coopMonth() {
+  for (const a of S.assets.filter(x => x.coop && (x.reserve || 0) > 30000 && x.cap > 0)) {
+    const holders = Object.entries(a.shares).filter(([k]) => S.hh[k]);
+    const held = sum(holders, m => m[1]);
+    if (!held) continue;
+    // open membership: half the new capacity follows existing stakes, half is issued equally to every valley household
+    const w = {}; holders.forEach(([k, v]) => w[k] = 0.5 * v / held);
+    S.households.forEach(h => w[h.id] = (w[h.id] || 0) + 0.5 / S.households.length);
+    const members = Object.entries(w), tot = 1;
+    let budget = a.reserve; a.reserve = 0;
+    const type = ['solar', 'compute', 'fleet'].map(t => ({ t, r: annualReturn(t) })).sort((x, y) => y.r - x.r)[0].t;
+    const lot = budget > 60000 ? lotForInvestor('coop') : null;
+    if (lot && budget > lotValue(lot) * 1.5) {
+      const price = lotValue(lot);
+      budget -= price; payLotSeller(lot, price);
+      log(`The ${a.name} outbid outside capital for a ${LOT_USE[lot.use].label.toLowerCase()} lot (${money(price)}).`, 'coop');
+      lot.owner = 'coop';
+      const units = Math.min(lot.w * lot.h * CAP_PER_TILE[type], budget / unitCost(type));
+      const name = 'Valley ' + ASSET_LABEL[type] + ' Co-op ' + (++S.counter);
+      const site = makeSite(type, name, lot, { asset: true, lot }); S.sites.push(site); lot.site = site;
+      setUse(lot, type, `${name} is going up where a ${LOT_USE[lot.use].label.toLowerCase()} used to be.`);
+      const b = placeAsset(type, name, null, 0, { site, coop: true }); b.pending = [];
+      members.forEach(([k, v]) => { if (type === 'fleet') orderRobots(k, units * v / tot, b); else b.pending.push({ owner: k, units: units * v / tot, done: S.day + S.P.buildDays[type], start: S.day }); });
+      budget -= units * unitCost(type);
+    }
+    if (budget > 1000) { const t = a.type === 'factory' ? 'factory' : a.type; members.forEach(([k, v]) => { if (t === 'fleet') orderRobots(k, budget / unitCost(t) * v / tot, a); else expandAsset(a, k, budget / unitCost(t) * v / tot); }); }
   }
 }
 
@@ -831,6 +1198,9 @@ const LOT_USE = {
   solar: { label: 'Solar canopy', color: '#24345e' }, compute: { label: 'Compute', color: '#2f3644' }, fleet: { label: 'Robot depot', color: '#41525c' }, factory: { label: 'Micro-fab', color: '#8d6e63' },
 };
 const ASSET_USES = new Set(['solar', 'compute', 'fleet', 'factory']);
+// Capacity a lot can hold, per 5 m tile (25 m²): solar canopy ~0.6 MW/ha, racks and robot bays by floor area.
+const CAP_PER_TILE = { solar: 0.0015, compute: 0.12, fleet: 0.1, factory: 0.0012 };
+const ROOF_MW = 0.0006; // one house's rooftop array, in the economy's MW units
 
 function landSignals() {
   const P = S.P, M = S.market;
@@ -844,7 +1214,7 @@ const VIABILITY = {
   restaurant: s => 0.6 + 0.4 * s.retail, church: () => 0.85, motel: s => 0.4 + 0.6 * s.car, warehouse: s => 0.3 + 0.7 * s.work, vacant: () => 0,
 };
 function countUse(u) { return S.lots.filter(l => l.use === u).length; }
-function lotValue(l) { return l.w * l.h * 1800 * (1 + S.day / 720); }
+function lotValue(l) { return l.w * l.h * 150 * (1 + S.day / 720); } // $ per 5 m tile, rising as land gets scarce
 
 function lotOwnerValues(owner) {
   if (S.hh[owner]) return householdValues(S.hh[owner]);
@@ -863,7 +1233,11 @@ function setUse(l, use, note) {
 
 // A lot becomes a productive asset. The owner pays for the build.
 function lotToAsset(l, type, owner, opts = {}) {
-  const units = (l.w * l.h / 20) * ({ solar: 0.12, compute: 8, fleet: 8, factory: 0.12 }[type]);
+  // the full build-out the lot can hold; owners build the first phase they can afford and expand later
+  const full = l.w * l.h * CAP_PER_TILE[type];
+  const budget = opts.prepaid ? Infinity : owner === 'helix' ? S.helix.monthBudget : owner === 'town' ? S.town.cash : S.hh[owner] ? S.hh[owner].cash : Infinity;
+  const units = Math.min(full, opts.prepaid ? Math.max(full * 0.35, Math.min(full, 600000 / unitCost(type))) : budget * 0.9 / unitCost(type));
+  if (units < full * 0.15) return null;
   const cost = units * unitCost(type);
   if (!opts.prepaid) {
     if (owner === 'helix') { if (S.helix.monthBudget < cost) return null; S.helix.monthBudget -= cost; }
@@ -882,10 +1256,11 @@ function lotToAsset(l, type, owner, opts = {}) {
   return a;
 }
 
+function payLotSeller(l, price) { if (S.hh[l.owner]) S.hh[l.owner].cash += price; else if (l.owner === 'helix') S.helix.cash += price; else if (l.owner === 'town') S.town.cash += price; }
 function sellLot(l, buyer) {
   const price = lotValue(l);
   if (buyer === 'helix') S.helix.cash -= price; else if (buyer === 'town') S.town.cash -= price; else if (S.hh[buyer]) S.hh[buyer].cash -= price;
-  if (S.hh[l.owner]) S.hh[l.owner].cash += price; else if (l.owner === 'helix') S.helix.cash += price; else if (l.owner === 'town') S.town.cash += price;
+  payLotSeller(l, price);
   log(`${ownerName(l.owner) === 'local owner' ? 'A local owner' : ownerName(l.owner)} sold a ${LOT_USE[l.use].label.toLowerCase()} lot to ${ownerName(buyer)} for ${money(price)}.`, buyer === 'helix' ? 'helix' : 'town');
   l.owner = buyer;
 }
@@ -895,22 +1270,25 @@ function redevelop(l) {
   const roi = ['solar', 'compute', 'fleet'].map(t => ({ t, r: annualReturn(t) })).sort((a, b) => b.r - a.r)[0];
   const done = id => S.discoveries.some(d => d.id === id);
   // outside capital bids for vacant land when it has a use for it
-  if (l.owner !== 'helix' && l.owner !== 'town' && roi.r > P.helixHurdle && S.helix.monthBudget > lotValue(l) * 3) {
+  // (under community-first zoning, vacant lots are offered to co-ops and the town first; Helix can't buy in town)
+  if (l.owner !== 'helix' && l.owner !== 'town' && l.owner !== 'coop' && roi.r > P.helixHurdle && S.helix.monthBudget > lotValue(l) * 3) {
     const w = lotOwnerValues(l.owner);
     const sells = l.owner === 'private' ? 0.7 : 0.25 + w.self * 0.8;
     if (rand() < sells) {
-      const town = S.policy.firstRefusal && S.town.cash > lotValue(l) * 2;
-      sellLot(l, town ? 'town' : 'helix');
+      const town = (S.policy.firstRefusal || S.policy.zoning) && S.town.cash > lotValue(l) * 1.2;
+      if (town) sellLot(l, 'town');
+      else if (!S.policy.zoning) sellLot(l, 'helix');
     }
   }
   const o = l.owner, w = lotOwnerValues(o);
+  if (o === 'coop') return;
   if (o === 'helix') {
     const t = sig.rt > 0.35 && rand() < 0.3 ? 'fleet' : roi.t;
     if (lotToAsset(l, t, 'helix')) return;
   }
   if (o === 'town') {
     const t = M.shortC > M.shortE ? 'compute' : 'solar';
-    if (S.town.cash > 200000 && lotToAsset(l, t, 'town')) return;
+    if (S.town.cash > 60000 && lotToAsset(l, t, 'town')) return;
   }
   if (S.hh[o]) {
     const h = S.hh[o];
@@ -936,20 +1314,26 @@ function redevelop(l) {
 
 // Investors who need land for a new asset take the most redevelopable lot in town, else a field.
 function lotForInvestor(owner) {
-  const cands = S.lots.filter(l => !l.site && l.use !== 'house' && !l.locked && (l.owner === owner || l.owner === 'private' || (S.hh[l.owner] && owner !== 'helix')) && (l.vac > 0.3 || l.use === 'vacant' || l.use === 'parking' && landSignals().car < 0.8));
+  const outside = owner === 'helix';
+  if (outside && S.policy.zoning) return S.lots.find(l => !l.site && !l.locked && l.owner === 'helix' && (l.vac > 0.3 || l.use === 'vacant')) || null;
+  const cands = S.lots.filter(l => !l.site && l.use !== 'house' && !l.locked && (l.owner === owner || l.owner === 'private' || (S.hh[l.owner] && !outside) || (l.owner === 'town' && owner === 'coop')) && (l.vac > 0.3 || l.use === 'vacant' || l.use === 'parking' && landSignals().car < 0.8));
   cands.sort((a, b) => b.vac - a.vac);
   return cands[0] || null;
 }
 
 function landMonth() {
   const sig = landSignals();
+  // rooftop solar spreads house to house when it pays (the neighbors' arrays are one pooled asset)
+  const pRoof = clamp((annualReturn('solar') - 0.12) * 0.25, 0, 0.12);
+  let roofs = 0;
+  for (const hs of S.houses) if (!hs.roof && !hs.owner && rand() < pRoof) { hs.roof = true; roofs++; }
+  if (roofs) { addShares(S.neighborRoofs, 'neighbors', roofs * ROOF_MW); S.bakeVersion++; }
   for (const l of S.lots) {
     if (l.site || l.locked) continue;
     const v = VIABILITY[l.use];
     if (v) l.vac = lerp(l.vac, clamp(1 - v(sig), 0, 1), 0.35);
     if (l.use === 'house') {
       // rooftop solar spreads when it pays
-      if (!l.roof && rand() < clamp((annualReturn('solar') - 0.12) * 0.25, 0, 0.12)) { l.roof = true; addShares(S.neighborRoofs, 'neighbors', 0.008); }
       continue;
     }
     if ((l.vac > 0.5 || l.use === 'vacant') && rand() < 0.22) redevelop(l);
@@ -991,11 +1375,11 @@ function stopMoving(ent) { ent.moving = false; ent.follow.active = false; ent.ve
 function stepMover(ent, dt) {
   if (!ent.moving) return;
   const last = ent.wp[ent.wp.length - 1];
-  if (dt <= 0.05) {
+  if (ent.maxSpeed * dt <= 1.5) {
     ent.update(dt); // Yuka steering: FollowPath (seek through waypoints, arrive at the end)
     while (ent.wpi < ent.wp.length - 1 && Math.hypot(ent.wp[ent.wpi].x - ent.position.x, ent.wp[ent.wpi].y - ent.position.y) < 0.8) ent.wpi++;
   } else {
-    // at high time compression, walk the same path kinematically (steering would overshoot)
+    // at high time compression, walk the same path kinematically (steering would overshoot corners)
     let budget = ent.maxSpeed * dt;
     while (budget > 0 && ent.wpi < ent.wp.length) {
       const w = ent.wp[ent.wpi], dx = w.x - ent.position.x, dy = w.y - ent.position.y, d = Math.hypot(dx, dy);
@@ -1066,8 +1450,13 @@ class Eval extends GoalEvaluator {
 function cashDays(h) { return h.cash / Math.max(1, h.members.length * S.P.essential * S.P.essentialIdx); }
 function financialNeed(h) { return clamp(1 - cashDays(h) / 60, 0, 1); }
 function siteOf(kind) { return S.sites.find(s => s.kind === kind); }
+function nearSite(kind, o) { // the closest site of a kind to someone's home
+  const h = o.home.site; let best = null, bd = Infinity;
+  for (const s of S.sites) if (s.kind === kind) { const d = Math.hypot(s.cx - h.cx, s.cy - h.cy); if (d < bd) { bd = d; best = s; } }
+  return best;
+}
 function pendingSiteInTown() {
-  const a = S.assets.find(x => x.pending.length && x.site.x > TOWN.x0 - 2 && x.site.x < TOWN.x1 && x.site.y > TOWN.y0 - 2 && x.site.y < TOWN.y1);
+  const a = S.assets.find(x => x.pending.length && !x.site.rooftop && inTown(x.site.cx, x.site.cy));
   return a ? a.site : null;
 }
 
@@ -1089,7 +1478,7 @@ const EVALS = {
     o => o.home.members.some(m => m.wellbeing < 0.4) ? 'Someone at home is struggling. Heading back.' : 'Time with the family.'),
   social: new Eval('social', w => 0.35 + 0.6 * w.self + 0.6 * w.community,
     o => between(hourOf(), 7, 22) ? (1 - o.social) * 0.8 : 0,
-    o => ({ site: pick([siteOf('plaza'), siteOf('cafe'), siteOf('park'), siteOf('diner')]), hours: 1.5 }),
+    o => ({ site: pick([siteOf('plaza'), siteOf('cafe'), nearSite('park', o), siteOf('diner'), siteOf('market')]), hours: 1.5 }),
     o => 'Feeling cooped up. Out to see people.'),
   volunteer: new Eval('volunteer', w => 0.12 + 1.7 * w.community,
     o => o.age === 'kid' || !between(hourOf(), 8, 20) ? 0 : 0.32 + (pendingSiteInTown() ? 0.15 : 0) + (1 - o.purpose) * 0.2,
@@ -1121,11 +1510,11 @@ const EVALS = {
     o => 'If we don\'t build it together, Helix will. Going to start a co-op drive.'),
   school: new Eval('school', () => 1,
     o => o.age === 'kid' && isWeekday() && between(hourOf(), 8, 15) ? 0.95 : 0,
-    o => ({ site: siteOf('school'), hours: Math.max(1, 15 - hourOf()) }),
+    o => ({ site: nearSite('school', o), hours: Math.max(1, 15 - hourOf()) }),
     o => 'School.'),
   play: new Eval('play', () => 1,
     o => o.age === 'kid' && between(hourOf(), 8, 20) ? 0.3 + (1 - o.social) * 0.5 : 0,
-    o => ({ site: pick([siteOf('park'), siteOf('plaza')]), hours: 1.5 }),
+    o => ({ site: pick([nearSite('park', o), nearSite('sport', o) || siteOf('plaza')]), hours: 1.5 }),
     o => 'Playing in the park.'),
 };
 const EVAL_ORDER = ['sleep', 'work', 'family', 'social', 'volunteer', 'civic', 'learn', 'pledge', 'council', 'propose', 'school', 'play'];
@@ -1190,6 +1579,11 @@ class Agent extends Vehicle {
     const o = pick(others);
     const k = 0.03;
     SPHERES.forEach(s => { const m = (this.w[s] + o.w[s]) / 2; this.w[s] = lerp(this.w[s], m, k); o.w[s] = lerp(o.w[s], m, k); });
+    // someone you talked round keeps making the case: persuasion spreads person to person
+    for (const [a, b] of [[this, o], [o, this]]) if ((a.advocate || 0) > S.day && b.w.community < a.w.community) {
+      b.w.community += 0.025; normalize(b.w); b.trust = clamp(b.trust + 0.015, 0, 1);
+      if (b.w.community > 0.35 && !(b.advocate > S.day) && rand() < 0.25) b.advocate = S.day + 20;
+    }
     const tm = (this.trust + o.trust) / 2; this.trust = lerp(this.trust, tm, k); o.trust = lerp(o.trust, tm, k);
   }
   daily() {
@@ -1301,17 +1695,20 @@ function templateSay(a, topic, ctx) {
 // Creating the world and stepping it.
 function newWorld(seed = 7) {
   rand = makeRng(seed);
-  SITE_ID = 0; AGENT_ID = 0;
+  SITE_ID = 0; AGENT_ID = 0; ROUTE_CACHE = new Map();
+  const WD = buildWorld();
   S = {
-    seed, t: 6, day: 0, P: baseParams(), terrain: buildTerrain(), parcels: buildParcels(), sites: [], assets: [], households: [], hh: {}, agents: [], people: [], robots: [],
-    orders: [], coops: [], log: [], history: [], discoveries: [], council: null, policy: { firstRefusal: false }, counter: 0, nextAsset: 0, volHours: 0,
+    seed, t: 6, day: 0, P: baseParams(), terrain: WD.terrain, parcels: WD.parcels, roads: WD.roads, rail: WD.rail, power: WD.power, houses: WD.houses,
+    road: buildRoadGraph(WD.roads), sites: [], assets: [], households: [], hh: {}, agents: [], people: [], robots: [],
+    orders: [], coops: [], log: [], history: [], discoveries: [], council: null, policy: { firstRefusal: false, zoning: false }, counter: 0, nextAsset: 0, volHours: 0,
     helix: { cash: 5e7, monthBudget: 0, depot: null }, town: { cash: 40000 }, nation: { research: 0 },
     market: { mE: 1, mC: 1, mX: 1, mL: 1, dE: 1, dCL: 1, dCX: 1, sC: 1, pe: 80, pc: 120, jobOpen: 1, offeredAvg: 200, outflow: 0, robotCarry: 0, shortE: 0, shortC: 0, ubi: 0, solarOut: 1, L: 350, robotWork: 0 },
-    nextDiscoveryDay: 75, actions: [], base: { humanNeed: 230 }, lots: [],
+    nextDiscoveryDay: 75, actions: [], base: { humanNeed: 230 }, lots: [], bakeVersion: 0,
   };
   const add = (kind, name, r, extra) => { const s = makeSite(kind, name, r, extra); S.sites.push(s); return s; };
   const asset = (type, name, rect, shares, cap, extra = {}) => {
-    const site = add(type, name, rect, { asset: true, ...extra });
+    const site = rect.kind ? rect : add(type, name, rect, { asset: true, ...extra });
+    if (rect.kind) Object.assign(site, { asset: true, ...extra });
     const a = placeAsset(type, name, null, 0, { site, immediate: true });
     a.shares = { ...shares }; a.cap = cap;
     return a;
@@ -1340,55 +1737,40 @@ function newWorld(seed = 7) {
   }
   const okafor = S.hh.h0, patel = S.hh.h1;
   okafor.cash += 30000; patel.cash += 20000;
-  // the present-day town, lot by lot
+  // the present-day town: lots (shops, offices, parking, big boxes...) and named sites, from the world builder
   S.lots = [];
-  const mkLot = (r, use, owner) => { const l = { x: r.x, y: r.y, w: r.w, h: r.h, use, owner, vac: 0, since: 0, history: [{ day: 0, use, owner }], site: null }; S.lots.push(l); return l; };
-  const ASSETS = {
-    valleycompute: r => asset('compute', 'Patel Hosting', r, { helix: 0.7, [patel.id]: 0.3 }, 4, { jobWeight: 0.5, hiSkill: 1 }),
-    okafor: r => asset('factory', 'Okafor Manufacturing', r, { [okafor.id]: 1 }, 0.25, { jobWeight: 1.0, hiSkill: 1 }),
-    depot: r => { const a = asset('fleet', 'Helix Fulfillment Center', r, { helix: 1 }, 12, { jobWeight: 0.6, hiSkill: 0 }); S.helix.depot = a.id; return a; },
+  const mkLot = (r, use, owner, extra = {}) => { const l = { x: r.x, y: r.y, w: r.w, h: r.h, use, owner, vac: 0, since: 0, history: [{ day: 0, use, owner }], site: null, ...extra }; S.lots.push(l); return l; };
+  for (const l of WD.lots) mkLot(l, l.use, l.owner, { name: l.name, downtown: l.downtown });
+  const SPECIAL = {
+    okafor: s => asset('factory', 'Okafor Manufacturing', s, { [okafor.id]: 1 }, 0.25, { jobWeight: 1.0, hiSkill: 1 }),
+    depot: s => { const a = asset('fleet', 'Helix Fulfillment Center', s, { helix: 1 }, 12, { jobWeight: 0.6, hiSkill: 0 }); S.helix.depot = a.id; return a; },
+    dc: s => asset('compute', 'Helix Datacenter', s, { helix: 1 }, 20, { jobWeight: 0.8, hiSkill: 1 }),
+    landfill: s => asset('solar', 'Landfill Solar (town)', s, { town: 1 }, 0.3),
   };
-  const houseLots = [];
-  for (let j = 0; j < 6; j++) for (let i = 0; i < 7; i++) {
-    const plan = BLOCK_PLAN[i + ',' + j], b = blockRect(i, j);
-    const layout = LAYOUTS[plan[0]];
-    layout.forEach(([dx, dy, w, hgt], k) => {
-      const r = { x: b.x + dx, y: b.y + dy, w, h: hgt };
-      const e = plan[0] === 'res6' ? 'house' : plan[k + 1];
-      if (typeof e === 'string') {
-        const owner = e === 'house' ? 'neighbors' : e === 'parking' && rand() < 0.4 ? 'town' : e === 'office' && rand() < 0.3 ? 'helix' : 'private';
-        const l = mkLot(r, e, owner);
-        if (e === 'house') houseLots.push(l);
-      } else {
-        const l = mkLot(r, e[0] === 'asset' ? 'asset' : 'civic', e[0] === 'civic' ? 'town' : 'private');
-        l.locked = true;
-        if (e[0] === 'job') l.site = add(e[1], e[2], r, { jobWeight: e[3], hiSkill: e[4], lot: l });
-        else if (e[0] === 'civic') l.site = add(e[1], e[2], r, { lot: l });
-        else { const a = ASSETS[e[1]](r); l.site = a.site; a.site.lot = l; l.asset = a; l.use = a.type; l.history[0].use = a.type; }
-      }
-    });
+  for (const w of WD.sites) {
+    const st = add(w.kind, w.name, w, w.job ? { jobWeight: w.job[0], hiSkill: w.job[1] } : {});
+    st.big = st.w * st.h >= 200;
+    if (w.asset) { st.kind = { okafor: 'factory', depot: 'fleet', dc: 'compute', landfill: 'solar' }[w.asset]; SPECIAL[w.asset](st); }
   }
-  for (const [x, y, w, hgt, use] of STRIP_LOTS) mkLot({ x, y, w, h: hgt }, use, use === 'warehouse' || use === 'bigbox' ? 'helix' : 'private');
-  // a few households own a small business lot
-  S.lots.filter(l => ['shop', 'restaurant', 'office', 'motel'].includes(l.use) && l.owner === 'private').slice(0, 6).forEach((l, k) => { if (k % 2 === 0) { l.owner = 'h' + (2 + k); l.history[0].owner = l.owner; } });
-  add('farm', 'Moreno Farm', { x: 66, y: 110, w: 26, h: 18 }, { jobWeight: 1.0, hiSkill: 0, door: { x: 96, y: 108, ry: 100 } });
-  add('station', 'Federal Works / Rail', { x: 104, y: 102, w: 12, h: 5 }, { door: { x: 108, y: 104, ry: 100 } });
-  // Helix's one data center out by the highway spur, and a small town solar field on the old landfill
-  asset('compute', 'Helix Datacenter', { x: 168, y: 26, w: 14, h: 16 }, { helix: 1 }, 20, { jobWeight: 0.8, hiSkill: 1, door: { x: 150, y: 44, ry: 50 } });
-  S.parcels.forEach(p => { if (p.x < 182 && p.x + p.w > 168 && p.y < 42 && p.y + p.h > 26) p.used = true; });
-  asset('solar', 'Landfill Solar (town)', { x: 120, y: 112, w: 10, h: 7 }, { town: 1 }, 0.3, { door: { x: 108, y: 106, ry: 100 } });
-  // homes for the simulated households, spread over the residential blocks
-  const step = Math.floor(houseLots.length / (nH + 1));
+  // Patel Hosting: a server room in an old downtown office
+  const pl = S.lots.filter(l => l.downtown && l.use === 'office').sort((a, b) => b.w * b.h - a.w * a.h)[0];
+  if (pl) { pl.locked = true; const a = asset('compute', 'Patel Hosting', pl, { helix: 0.7, [patel.id]: 0.3 }, 4, { jobWeight: 0.5, hiSkill: 1, lot: pl }); pl.site = a.site; pl.asset = a; pl.use = 'compute'; pl.history[0].use = 'compute'; }
+  // a few households own a small business lot downtown
+  S.lots.filter(l => ['shop', 'restaurant', 'office', 'motel'].includes(l.use) && l.owner === 'private' && l.downtown).slice(0, 12).forEach((l, k) => { if (k % 2 === 0) { l.owner = 'h' + (2 + k / 2); l.history[0].owner = l.owner; } });
+  // homes for the simulated households, spread across the neighborhoods (the other ~1,700 houses are the unsimulated neighbors)
+  const inner = S.houses.filter(hs => inTown(hs.x, hs.y));
+  inner.sort((a, b) => (a.y * 0.3 + a.x) - (b.y * 0.3 + b.x));
+  const step = Math.floor(inner.length / (nH + 1));
   S.households.forEach((h, i) => {
-    const l = houseLots[(i * step + 2) % houseLots.length];
-    l.owner = h.id; l.history[0].owner = h.id; l.locked = true;
-    h.site = add('home', h.isPlayer ? 'Your place' : h.name + ' home', l, { small: true, lot: l, household: h });
-    l.site = h.site;
+    const hs = inner[(i * step + Math.floor(step / 2)) % inner.length];
+    hs.owner = h.id;
+    h.house = hs;
+    h.site = add('home', h.isPlayer ? 'Your place' : h.name + ' home', { x: hs.x - 1.6, y: hs.y - 1.6, w: 3.2, h: 3.2 }, { small: true, household: h, house: hs });
   });
-  [S.hh.h2, S.hh.h5, S.hh.h9].forEach(h => { const a = placeAsset('solar', h.name + ' rooftop', null, 0, { site: h.site, immediate: true }); a.shares = { [h.id]: 1 }; a.cap = 0.03; a.rooftop = true; });
+  [S.hh.h2, S.hh.h5, S.hh.h9].forEach(h => { const a = placeAsset('solar', h.name + ' rooftop', null, 0, { site: h.site, immediate: true }); a.shares = { [h.id]: 1 }; a.cap = 0.03; a.rooftop = true; h.house.roof = true; });
   // other households' rooftops, as one pooled asset
   S.neighborRoofs = placeAsset('solar', 'Neighborhood rooftops', null, 0, { site: add('roofs', 'Neighborhood rooftops', { x: -50, y: -50, w: 1, h: 1 }), immediate: true });
-  houseLots.filter(l => l.owner === 'neighbors').slice(0, 4).forEach(l => { l.roof = true; addShares(S.neighborRoofs, 'neighbors', 0.008); });
+  S.houses.filter(hs => !hs.owner).forEach((hs, i) => { if (i % 60 === 7) { hs.roof = true; addShares(S.neighborRoofs, 'neighbors', ROOF_MW); } });
   // jobs
   S.jobSites = S.sites.filter(s => s.jobWeight);
   for (const h of S.households) for (const m of h.members) {
@@ -1488,6 +1870,7 @@ const ACTIONS = {
       const moved = 0.04 + 0.14 * t.trust * (t.w[topic] < 0.5 ? 1 : 0.4);
       t.w[topic] += moved; normalize(t.w);
       t.trust = clamp(t.trust + 0.07, 0, 1);
+      if (topic === 'community') t.advocate = S.day + 45; // they'll carry the argument to the people they meet
       const gained = t.w[topic] - before;
       const line = Mind.say(t, 'persuade', { topic, moved: gained });
       t.remember(`You talked to me about ${topic}. ${line}`);
@@ -1541,12 +1924,13 @@ const ACTIONS = {
         let a = S.assets.find(x => x.site === h.site && x.type === 'solar');
         if (!a) { a = placeAsset('solar', 'Your rooftop', h.id, 0.04, { site: h.site, immediate: true }); a.rooftop = true; }
         else addShares(a, h.id, 0.04);
+        if (h.house && !h.house.roof) { h.house.roof = true; S.bakeVersion++; }
         markAction(`Built ${money(cost)} of rooftop solar`);
       });
     } else if (kind === 'robot') {
       const cost = S.P.robotCost;
       if (h.cash < cost) return `A robot costs ${money(cost)}.`;
-      order('Ordering a robot at Okafor Fabrication.', S.sites.find(s => s.name === 'Okafor Fabrication'), 1, () => {
+      order('Ordering a robot at Okafor Fabrication.', S.sites.find(s => s.name === 'Okafor Manufacturing'), 1, () => {
         h.cash -= cost;
         let fleet = S.assets.find(x => x.type === 'fleet' && x.yours);
         if (!fleet) { fleet = placeAsset('fleet', 'Your Robot Bay', h.id, 0, { immediate: true }); if (fleet) fleet.yours = true; }
@@ -1558,7 +1942,7 @@ const ACTIONS = {
   },
   council(motion) {
     if (S.council) return 'A council meeting is already scheduled.';
-    const titles = { buyback: 'Town buys out Helix\'s in-town stakes', refusal: 'Local right of first refusal on share sales', dividend: 'Raise the commons dividend tax' };
+    const titles = { buyback: 'Town buys out Helix\'s in-town stakes', refusal: 'Local right of first refusal on share and land sales', dividend: 'Raise the commons dividend tax', zoning: 'Community-first zoning: vacant lots go to co-ops and the town first' };
     order('Filing a motion at the Town Hall.', siteOf('hall'), 0.5, () => {
       S.council = { day: S.day + 2, motion, title: titles[motion] };
       markAction(`Filed a council motion: ${titles[motion]} (vote in 2 days, 18:00)`);
@@ -1572,7 +1956,7 @@ function resolveCouncil() {
   const voters = S.people.filter(p => p.age !== 'kid' && !p.isPlayer);
   let yes = 0, no = 0;
   for (const v of voters) {
-    let s = 0.2 + 0.7 * v.w.community + 0.35 * v.trust - 0.45 * v.w.self + (c.motion === 'dividend' ? 0.3 * financialNeed(v.home) : 0) + (c.motion === 'buyback' ? 0.2 * v.w.nation : 0);
+    let s = 0.2 + 0.7 * v.w.community + 0.35 * v.trust - 0.45 * v.w.self + (c.motion === 'dividend' ? 0.3 * financialNeed(v.home) : 0) + (c.motion === 'buyback' ? 0.2 * v.w.nation : 0) + (c.motion === 'zoning' ? 0.15 * v.w.family - 0.1 : 0);
     const attended = v.kind === 'council';
     if (rand() < clamp(s, 0.02, 0.98)) yes += attended ? 1.5 : 1; else no += attended ? 1.5 : 1;
   }
@@ -1581,52 +1965,91 @@ function resolveCouncil() {
   S.actions.push({ day: S.day, text: `Vote ${pass ? 'passed' : 'failed'}: ${c.title}` });
   if (!pass) { voters.forEach(v => { v.trust = clamp(v.trust - 0.02, 0, 1); }); return; }
   if (c.motion === 'buyback') {
-    const targets = S.assets.filter(a => (a.shares.helix || 0) > 0 && a.cap > 0 && a.site.x >= TOWN.x0 && a.site.x <= TOWN.x1 && a.site.y >= TOWN.y0 && a.site.y <= TOWN.y1);
+    const targets = S.assets.filter(a => (a.shares.helix || 0) > 0 && a.cap > 0 && inTown(a.site.cx, a.site.cy));
     let spent = 0;
     for (const a of targets) { const v = assetValue(a) * a.shares.helix * 1.1; transferShare(a, 'helix', 'town', a.shares.helix); spent += v; }
     S.town.cash -= spent; S.helix.cash += spent;
     log(`The town bought out Helix's in-town stakes for ${money(spent)}, financed with a commons bond.`, 'town');
   } else if (c.motion === 'refusal') { S.policy.firstRefusal = true; S.town.cash += 0; }
+  else if (c.motion === 'zoning') { S.policy.zoning = true; log('Community-first zoning is law: outside capital can no longer buy vacant lots in town.', 'town'); }
   else if (c.motion === 'dividend') { S.P.tax = Math.min(0.25, S.P.tax + 0.06); S.P.propTax = Math.min(0.3, S.P.propTax + 0.1); }
   voters.forEach(v => { v.trust = clamp(v.trust + 0.03, 0, 1); });
 }
 
 // ===== 09_render.js =====
-// Drawing: flat tiles, colored blocks, dots for people and robots. Everything in tile units.
+// Drawing. World units are 5 m tiles. Static things (terrain, roads, rail, power lines, the ~1,700
+// houses) are baked into one cached canvas; lots, sites, cars, robots and people are drawn live with
+// view culling. Detail and labels switch on by zoom (LOD).
 const PAL = {
-  [T.GRASS]: ['#3f7a3a', '#3b7436'], [T.GRASS2]: ['#46833f', '#3f7a3a'], [T.ROAD]: ['#5a5f6e', '#555a68'], [T.HWY]: ['#4a4e5a', '#6b6f7c'],
-  [T.WATER]: ['#2c5d9e', '#3468ad'], [T.FIELD]: ['#9c8a4a', '#8e7d42'], [T.FIELD2]: ['#7f9a44', '#76903f'], [T.FOREST]: ['#24512a', '#2c5e31'],
-  [T.PAVE]: ['#6d7a63', '#687560'], [T.BANK]: ['#b9a874', '#ad9d6b'], [T.TOWNB]: ['#7d7a78', '#8a8784'],
+  [T.GRASS]: ['#4a7d3f', '#467839'], [T.GRASS2]: ['#4f8444', '#4a7d3f'], [T.WATER]: ['#2c5d9e', '#3468ad'], [T.FIELD]: ['#a8955a', '#9c8a4a'],
+  [T.FIELD2]: ['#879f4c', '#7f9a44'], [T.FIELD3]: ['#b7a35e', '#a99550'], [T.FOREST]: ['#24512a', '#2c5e31'], [T.BANK]: ['#a99d72', '#9f936a'],
+  [T.METRO]: ['#7b7c80', '#8a8b90'], [T.PAVE]: ['#9a958c', '#8f8a82'], [T.LAWN]: ['#5b8f4a', '#578a46'], [T.SPORT]: ['#3f9a46', '#ffffff'],
 };
+const ROAD_STYLE = {
+  interstate: { c: '#3f434d', edge: '#262930', mark: '#e8d44d' }, ramp: { c: '#4a4e58', edge: '#2c2f36' }, arterial: { c: '#5a5e68', edge: '#3a3d45', mark: '#e8d44d' },
+  collector: { c: '#666a73', edge: '#474a52', mark: '#d8d8d8' }, main: { c: '#6a6560', edge: '#4a4540', mark: '#e8d44d' }, downtown: { c: '#6e6a66', edge: '#4e4a46' },
+  local: { c: '#74777e', edge: '#5d6067' }, service: { c: '#6e7178', edge: '#55585e' },
+};
+const ROAD_ORDER = ['local', 'service', 'downtown', 'collector', 'main', 'arterial', 'ramp', 'interstate'];
 const OWNER_COLOR = { outside: '#d062e6', town: '#4aa3ff', coop: '#6fdc6f', resident: '#f2c14e' };
 const SITE_COLOR = {
-  home: '#b98f5e', school: '#e0c050', clinic: '#e9ecf4', market: '#d9774b', cafe: '#a8673a', learn: '#8e7cc3', hall: '#aab3c6', warehouse: '#7a6a5a',
-  repair: '#6c8a5c', diner: '#c0504d', farm: '#a3743f', station: '#8e8e8e', plaza: '#c9bf9f', park: '#4f9a46', solar: '#24345e', compute: '#2f3644', factory: '#8d6e63', fleet: '#41525c',
+  home: '#b98f5e', school: '#d9b44a', clinic: '#e9ecf4', market: '#d9774b', cafe: '#a8673a', learn: '#8e7cc3', hall: '#aab3c6', warehouse: '#8a7c6c',
+  repair: '#6c8a5c', diner: '#c0504d', farm: '#a3743f', station: '#8e8e8e', plaza: '#c9bf9f', park: '#4f9a46', sport: '#3f9a46', solar: '#24345e', compute: '#3a4150',
+  factory: '#8d6e63', fleet: '#4d5f69', substation: '#6a6f78',
 };
-let terrainCanvas = null;
-const TPX = 4; // terrain pixels per tile
+const HOUSE_WALL = ['#c9b28a', '#b98f5e', '#a7b4a0', '#c99a7a', '#d6cbb4', '#b0a8a0'];
+const HOUSE_ROOF = ['#8a4b3a', '#5d4a3c', '#6e3b3b', '#4f5a62', '#7a6a58', '#3f4650'];
+
+let terrainCanvas = null, bakedVersion = -1, lastBake = 0;
+const BPX = 2; // baked pixels per tile
+function strokePoly(g, pts, sc, width, color, dash) {
+  g.strokeStyle = color; g.lineWidth = width; g.setLineDash(dash || []);
+  g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x * sc, y * sc) : g.moveTo(x * sc, y * sc)); g.stroke(); g.setLineDash([]);
+}
 function bakeTerrain() {
-  terrainCanvas = document.createElement('canvas');
-  terrainCanvas.width = MAP_W * TPX; terrainCanvas.height = MAP_H * TPX;
+  const t0 = performance.now();
+  if (!terrainCanvas) { terrainCanvas = document.createElement('canvas'); terrainCanvas.width = MAP_W * BPX; terrainCanvas.height = MAP_H * BPX; }
   const g = terrainCanvas.getContext('2d');
+  const img = g.createImageData(MAP_W * BPX, MAP_H * BPX), d = img.data;
+  const rgb = {}; for (const k in PAL) rgb[k] = PAL[k].map(c => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
   for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
-    const t = S.terrain[y * MAP_W + x], [c1, c2] = PAL[t];
-    g.fillStyle = c1; g.fillRect(x * TPX, y * TPX, TPX, TPX);
-    g.fillStyle = c2;
-    if (t === T.FOREST) { g.fillRect(x * TPX + 1, y * TPX + 1, 2, 2); }
-    else if (t === T.WATER) { if ((x + y) % 3 === 0) g.fillRect(x * TPX, y * TPX + 1, 2, 1); }
-    else if (t === T.ROAD || t === T.HWY) { if (t === T.HWY && x % 3 === 0) g.fillRect(x * TPX, y * TPX + 1, 2, 1); }
-    else if ((x * 3 + y * 5) % 7 === 0) g.fillRect(x * TPX + 2, y * TPX + 2, 1, 1);
+    const t = S.terrain[y * MAP_W + x], [c1, c2] = rgb[t];
+    for (let py = 0; py < BPX; py++) for (let px = 0; px < BPX; px++) {
+      let c = c1;
+      if (t === T.FOREST) c = ((x * 3 + y * 7 + px * 5 + py * 11) % 5 < 2) ? c2 : c1;
+      else if (t === T.WATER) c = ((x + y * 2 + px) % 7 === 0) ? c2 : c1;
+      else if (t === T.METRO) c = (x % 8 === 0 || y % 8 === 0) ? c1 : c2;
+      else if ((x * 3 + y * 5 + px) % 11 === 0) c = c2;
+      const i = ((y * BPX + py) * MAP_W * BPX + x * BPX + px) * 4;
+      d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2]; d[i + 3] = 255;
+    }
   }
+  g.putImageData(img, 0, 0);
+  // rail and power corridor
+  for (const r of S.rail) { strokePoly(g, r, BPX, 1.6 * BPX, '#5a4a3a'); strokePoly(g, r, BPX, 0.5 * BPX, '#a8a8a8', [3, 2]); }
+  for (const line of S.power) strokePoly(g, line, BPX, 1, 'rgba(230,230,230,0.55)', [6, 3]);
+  // roads, minor first, edge then surface
+  for (const cls of ROAD_ORDER) for (const r of S.roads) if (r.cls === cls) strokePoly(g, r.pts, BPX, (RW[cls] + 0.6) * BPX, ROAD_STYLE[cls].edge);
+  for (const cls of ROAD_ORDER) for (const r of S.roads) if (r.cls === cls) { g.lineCap = 'round'; strokePoly(g, r.pts, BPX, RW[cls] * BPX, ROAD_STYLE[cls].c); g.lineCap = 'butt'; }
+  for (const r of S.roads) if (r.cls === 'interstate') strokePoly(g, r.pts, BPX, 0.6, '#9aa0a8');
+  // houses (the unsimulated neighbors included) as tiny rotated roofs
+  for (const hs of S.houses) {
+    g.save(); g.translate(hs.x * BPX, hs.y * BPX); g.rotate(hs.ang);
+    g.fillStyle = hs.roof ? '#4f7fd1' : HOUSE_ROOF[hs.v % HOUSE_ROOF.length];
+    g.fillRect(-hs.w / 2 * BPX, -hs.h / 2 * BPX, hs.w * BPX, hs.h * BPX);
+    g.restore();
+  }
+  bakedVersion = S.bakeVersion; lastBake = performance.now();
+  S.bakeMs = Math.round(lastBake - t0);
 }
 
-const cam = { x: 102, y: 70, z: 6, tx: 102, ty: 70, tz: 6, follow: null };
+const cam = { x: 560, y: 380, z: 2, tx: 560, ty: 380, tz: 2, follow: null };
 let canvas, ctx, W = 0, H = 0, DPR = 1;
 const view = { colorBy: 'loyalty', selected: null, selSite: null, selLot: null, hover: null };
 
 function w2s(x, y) { return [(x - cam.x) * cam.z + W / 2, (y - cam.y) * cam.z + H / 2]; }
 function s2w(sx, sy) { return [(sx - W / 2) / cam.z + cam.x, (sy - H / 2) / cam.z + cam.y]; }
-function minZoom() { return Math.max(1.2, Math.min(W / MAP_W, H / MAP_H) * 0.9); }
+function minZoom() { return Math.max(0.4, Math.min(W / MAP_W, H / MAP_H)); }
 
 function resize() {
   DPR = Math.min(2, window.devicePixelRatio || 1);
@@ -1652,67 +2075,22 @@ function agentColor(p) {
   return `rgb(${Math.round(150 + 100 * v)},${Math.round(130 + 80 * v)},${Math.round(60 - 40 * v)})`;
 }
 
-function draw(now) {
-  // ease camera
-  if (cam.follow) { cam.tx = cam.follow.position.x; cam.ty = cam.follow.position.y; }
-  const k = 0.18;
-  cam.z = Math.exp(lerp(Math.log(cam.z), Math.log(cam.tz), k));
-  cam.x = lerp(cam.x, cam.tx, k); cam.y = lerp(cam.y, cam.ty, k);
-  const z = cam.z;
-  ctx.fillStyle = '#0b1020'; ctx.fillRect(0, 0, W, H);
-  const [ox, oy] = w2s(0, 0);
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(terrainCanvas, Math.round(ox), Math.round(oy), Math.round(MAP_W * z), Math.round(MAP_H * z));
-  const [vx0, vy0] = s2w(0, 0), [vx1, vy1] = s2w(W, H);
-  const visible = (x, y, w, h) => x + w > vx0 && x < vx1 && y + h > vy0 && y < vy1;
-
-  // lots (ordinary town fabric), then sites (workplaces, civic, assets, the simulated homes)
-  for (const l of S.lots) { if (!l.site && visible(l.x, l.y, l.w, l.h)) drawLot(l, now); }
-  for (const s of S.sites) { if (visible(s.x, s.y, s.w, s.h)) drawSite(s, now); }
-  drawCars();
-  // region labels
-  if (z < 5) {
-    regionLabel('ASHFORD', 19, 105); regionLabel('KESTREL', 178, 114); regionLabel('HELIX CAMPUS', 171, 11); regionLabel('VALLEY TOWN', 102, 37);
-    regionLabel('river', 40, 46, '#9cc4ff'); regionLabel('highway to the capital', 22, 68, '#c8ccd8');
+// ---------- labels: queued, then placed by priority without overlaps ----------
+let LABELS = [];
+function queueLabel(text, x, y, pri, color = '#ffffff', bg = 'rgba(8,12,28,0.78)', big = false) { LABELS.push({ text, x, y, pri, color, bg, big }); }
+function flushLabels() {
+  LABELS.sort((a, b) => b.pri - a.pri);
+  const placed = [];
+  for (const L of LABELS) {
+    ctx.font = L.big ? 'bold 11px ui-monospace, Menlo, Consolas, monospace' : '10px ui-monospace, Menlo, Consolas, monospace';
+    const w = ctx.measureText(L.text).width + 6, r = { x0: L.x - w / 2, x1: L.x + w / 2, y0: L.y - 8, y1: L.y + 6 };
+    if (r.x1 < 0 || r.x0 > W || r.y1 < 0 || r.y0 > H) continue;
+    if (placed.some(q => r.x0 < q.x1 && r.x1 > q.x0 && r.y0 < q.y1 && r.y1 > q.y0)) continue;
+    placed.push(r);
+    if (L.big) { ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillText(L.text, L.x + 1, L.y + 1); ctx.fillStyle = L.color; ctx.fillText(L.text, L.x, L.y); }
+    else label(L.text, L.x, L.y, L.color, L.bg);
   }
-  // robots
-  const rs = Math.max(2, Math.min(z * 0.42, 9));
-  for (const r of S.robots) {
-    const { x, y } = r.position; if (!visible(x - 1, y - 1, 2, 2)) continue;
-    const [sx, sy] = w2s(x, y);
-    ctx.fillStyle = '#1b2b33'; ctx.fillRect(sx - rs / 2 - 1, sy - rs / 2 - 1, rs + 2, rs + 2);
-    ctx.fillStyle = '#9fe7ff'; ctx.fillRect(sx - rs / 2, sy - rs / 2, rs, rs);
-    if (z > 18) { ctx.fillStyle = '#1b2b33'; ctx.fillRect(sx - rs * 0.25, sy - rs * 0.15, rs * 0.15, rs * 0.15); ctx.fillRect(sx + rs * 0.1, sy - rs * 0.15, rs * 0.15, rs * 0.15); }
-  }
-  // people
-  const ps = Math.max(3.5, Math.min(z * 0.62, 14));
-  for (const p of S.people) {
-    const { x, y } = p.position; if (!visible(x - 1, y - 1, 2, 2)) continue;
-    const [sx, sy] = w2s(x, y);
-    ctx.fillStyle = '#0b1020'; ctx.fillRect(sx - ps / 2 - 1, sy - ps / 2 - 1, ps + 2, ps + 2);
-    ctx.fillStyle = agentColor(p); ctx.fillRect(sx - ps / 2, sy - ps / 2, ps, ps);
-    if (p.age === 'kid' && z > 10) { ctx.fillStyle = '#0b1020'; ctx.fillRect(sx - ps / 2, sy - ps / 2, ps, ps * 0.3); ctx.fillStyle = agentColor(p); }
-    if (p.isPlayer) { const r = ps + 4 + Math.sin(now / 200) * 2; ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 2; ctx.strokeRect(sx - r / 2, sy - r / 2, r, r); }
-    if (p === view.selected) {
-      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.strokeRect(sx - ps / 2 - 4, sy - ps / 2 - 4, ps + 8, ps + 8);
-      if (p.moving && p.wp) { ctx.setLineDash([3, 3]); ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.moveTo(sx, sy); for (let i = p.wpi; i < p.wp.length; i++) { const [qx, qy] = w2s(p.wp[i].x, p.wp[i].y); ctx.lineTo(qx, qy); } ctx.stroke(); ctx.setLineDash([]); }
-    }
-    if (z >= 20 || (p === view.selected && z >= 8) || (p.isPlayer && z >= 10)) {
-      label((p.isPlayer ? 'YOU' : p.first) + (p.activity && z >= 26 ? ' · ' + p.activity : ''), sx, sy - ps / 2 - 9, p.isPlayer ? '#ffe066' : '#ffffff');
-    }
-  }
-  // night
-  const hr = S.t % 24, dark = hr < 5 ? 0.42 : hr < 7 ? lerp(0.42, 0, (hr - 5) / 2) : hr < 19 ? 0 : hr < 21 ? lerp(0, 0.42, (hr - 19) / 2) : 0.42;
-  if (dark > 0) {
-    ctx.fillStyle = `rgba(8,12,40,${dark})`; ctx.fillRect(0, 0, W, H);
-    for (const h of S.households) { const s = h.site; if (!visible(s.x, s.y, s.w, s.h) || z < 3) continue; const [sx, sy] = w2s(s.x + s.w * 0.3, s.y + s.h * 0.55); ctx.fillStyle = `rgba(255,214,110,${dark * 2})`; ctx.fillRect(sx, sy, Math.max(1, z * 0.6), Math.max(1, z * 0.6)); }
-  }
-}
-
-function regionLabel(text, x, y, color = '#ffffff') {
-  const [sx, sy] = w2s(x, y);
-  ctx.font = 'bold 11px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillText(text, sx + 1, sy + 1); ctx.fillStyle = color; ctx.fillText(text, sx, sy);
+  LABELS = [];
 }
 function label(text, sx, sy, color = '#ffffff', bg = 'rgba(8,12,28,0.78)') {
   ctx.font = '10px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center';
@@ -1720,56 +2098,169 @@ function label(text, sx, sy, color = '#ffffff', bg = 'rgba(8,12,28,0.78)') {
   ctx.fillStyle = bg; ctx.fillRect(Math.round(sx - w / 2), Math.round(sy - 7), Math.round(w), 12);
   ctx.fillStyle = color; ctx.fillText(text, Math.round(sx), Math.round(sy + 2));
 }
+const REGION_LABELS = [
+  ['DOWNTOWN', 478, 292], ['INTERSTATE 17', 230, 228, '#d8dce6'], ['VALLEY PKWY', 628, 140, '#d8dce6'], ['LOGISTICS PARK', 640, 140], ['HELIX DATA CAMPUS', 860, 100],
+  ['PARKWAY RETAIL', 660, 296], ['WEST SIDE', 270, 290], ['SOUTH BANK', 420, 560], ['RIDGE', 820, 320], ['ORCHARD HILLS', 800, 650], ['NORTH HILLS', 400, 180],
+  ['river', 120, 346, '#9cc4ff'], ['rail', 300, 470, '#cfcfcf'], ['to the metro →', 1150, 112, '#e6e6e6'], ['farmland', 1060, 420, '#e8dca0'], ['farmland', 130, 760, '#e8dca0'],
+];
+
+function draw(now) {
+  if (cam.follow) { cam.tx = cam.follow.position.x; cam.ty = cam.follow.position.y; }
+  const k = 0.18;
+  cam.z = Math.exp(lerp(Math.log(cam.z), Math.log(cam.tz), k));
+  cam.x = lerp(cam.x, cam.tx, k); cam.y = lerp(cam.y, cam.ty, k);
+  const z = cam.z;
+  if (bakedVersion !== S.bakeVersion && now - lastBake > 3000) bakeTerrain(); // throttled re-bake when rooftops spread
+  ctx.fillStyle = '#0b1020'; ctx.fillRect(0, 0, W, H);
+  const [vx0, vy0] = s2w(0, 0), [vx1, vy1] = s2w(W, H);
+  // blit only the visible part of the baked layer
+  const bx0 = clamp(Math.floor(vx0) - 1, 0, MAP_W), by0 = clamp(Math.floor(vy0) - 1, 0, MAP_H), bx1 = clamp(Math.ceil(vx1) + 1, 0, MAP_W), by1 = clamp(Math.ceil(vy1) + 1, 0, MAP_H);
+  if (bx1 > bx0 && by1 > by0) {
+    const [dx, dy] = w2s(bx0, by0);
+    ctx.imageSmoothingEnabled = z < BPX;
+    ctx.drawImage(terrainCanvas, bx0 * BPX, by0 * BPX, (bx1 - bx0) * BPX, (by1 - by0) * BPX, dx, dy, (bx1 - bx0) * z, (by1 - by0) * z);
+    ctx.imageSmoothingEnabled = false;
+  }
+  const visible = (x, y, w, h) => x + w > vx0 && x < vx1 && y + h > vy0 && y < vy1;
+  if (z >= 3) drawRoadsLive(visible);
+  if (z >= 4) drawHousesLive(visible, z);
+
+  for (const l of S.lots) { if (!l.site && visible(l.x, l.y, l.w, l.h)) drawLot(l, now); }
+  for (const s of S.sites) { if (visible(s.x, s.y, s.w, s.h)) drawSite(s, now); }
+  drawCars(visible);
+  if (z < 2.6) for (const [t, x, y, c] of REGION_LABELS) { const [sx, sy] = w2s(x, y); queueLabel(t, sx, sy, 50, c || '#ffffff', null, true); }
+  // robots
+  const rs = Math.max(2, Math.min(z * 0.25, 8));
+  for (const r of S.robots) {
+    const { x, y } = r.position; if (!visible(x - 1, y - 1, 2, 2)) continue;
+    const [sx, sy] = w2s(x, y);
+    ctx.fillStyle = '#1b2b33'; ctx.fillRect(sx - rs / 2 - 1, sy - rs / 2 - 1, rs + 2, rs + 2);
+    ctx.fillStyle = '#9fe7ff'; ctx.fillRect(sx - rs / 2, sy - rs / 2, rs, rs);
+  }
+  // people
+  const ps = Math.max(3, Math.min(z * 0.32, 12));
+  for (const p of S.people) {
+    const { x, y } = p.position; if (!visible(x - 1, y - 1, 2, 2)) continue;
+    const [sx, sy] = w2s(x, y);
+    ctx.fillStyle = '#0b1020'; ctx.fillRect(sx - ps / 2 - 1, sy - ps / 2 - 1, ps + 2, ps + 2);
+    ctx.fillStyle = agentColor(p); ctx.fillRect(sx - ps / 2, sy - ps / 2, ps, ps);
+    if (p.age === 'kid' && z > 10) { ctx.fillStyle = '#0b1020'; ctx.fillRect(sx - ps / 2, sy - ps / 2, ps, ps * 0.3); }
+    if (p.isPlayer) { const r = ps + 4 + Math.sin(now / 200) * 2; ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 2; ctx.strokeRect(sx - r / 2, sy - r / 2, r, r); }
+    if (p === view.selected) {
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.strokeRect(sx - ps / 2 - 4, sy - ps / 2 - 4, ps + 8, ps + 8);
+      if (p.moving && p.wp) { ctx.setLineDash([3, 3]); ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.moveTo(sx, sy); for (let i = p.wpi; i < p.wp.length; i++) { const [qx, qy] = w2s(p.wp[i].x, p.wp[i].y); ctx.lineTo(qx, qy); } ctx.stroke(); ctx.setLineDash([]); }
+    }
+    if (z >= 22 || p === view.selected || (p.isPlayer && z >= 6)) queueLabel((p.isPlayer ? 'YOU' : p.first) + (p.activity && z >= 30 ? ' · ' + p.activity : ''), sx, sy - ps / 2 - 9, p.isPlayer ? 100 : p === view.selected ? 95 : 40, p.isPlayer ? '#ffe066' : '#ffffff');
+  }
+  // night
+  const hr = S.t % 24, dark = hr < 5 ? 0.42 : hr < 7 ? lerp(0.42, 0, (hr - 5) / 2) : hr < 19 ? 0 : hr < 21 ? lerp(0, 0.42, (hr - 19) / 2) : 0.42;
+  if (dark > 0) {
+    ctx.fillStyle = `rgba(8,12,40,${dark})`; ctx.fillRect(0, 0, W, H);
+    if (z >= 1.5) {
+      ctx.fillStyle = `rgba(255,214,110,${dark * 1.6})`; const q = Math.max(1, z * 0.5);
+      for (const hs of S.houses) { if (hs.v % 3 === 0 || !visible(hs.x - 2, hs.y - 2, 4, 4)) continue; const [sx, sy] = w2s(hs.x, hs.y); ctx.fillRect(sx - q / 2, sy - q / 2, q, q); }
+    }
+  }
+  flushLabels();
+}
+
+function drawRoadsLive(visible) {
+  const z = cam.z;
+  for (const pass of [0, 1, 2]) for (const cls of ROAD_ORDER) for (const r of S.roads) {
+    if (r.cls !== cls) continue;
+    const bb = r.bb || (r.bb = r.pts.reduce((b, [x, y]) => ({ x0: Math.min(b.x0, x), y0: Math.min(b.y0, y), x1: Math.max(b.x1, x), y1: Math.max(b.y1, y) }), { x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9 }));
+    if (!visible(bb.x0 - 5, bb.y0 - 5, bb.x1 - bb.x0 + 10, bb.y1 - bb.y0 + 10)) continue;
+    const st = ROAD_STYLE[cls];
+    ctx.beginPath(); r.pts.forEach(([x, y], i) => { const [sx, sy] = w2s(x, y); i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy); });
+    ctx.lineJoin = 'round';
+    if (pass === 0) { ctx.strokeStyle = st.edge; ctx.lineWidth = (RW[cls] + 0.6) * z; ctx.lineCap = 'butt'; ctx.stroke(); }
+    else if (pass === 1) { ctx.strokeStyle = st.c; ctx.lineWidth = RW[cls] * z; ctx.lineCap = 'round'; ctx.stroke(); ctx.lineCap = 'butt'; }
+    else if (st.mark && z >= 6) { ctx.strokeStyle = st.mark; ctx.lineWidth = Math.max(1, z * 0.08); ctx.setLineDash(cls === 'interstate' ? [] : [z * 0.6, z * 0.9]); ctx.stroke(); ctx.setLineDash([]); }
+  }
+}
+function drawHousesLive(visible, z) {
+  for (const hs of S.houses) {
+    if (!visible(hs.x - 3, hs.y - 3, 6, 6)) continue;
+    const [sx, sy] = w2s(hs.x, hs.y);
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(hs.ang);
+    const w = hs.w * z, h = hs.h * z;
+    if (z >= 7) { ctx.fillStyle = '#5b8f4a'; ctx.fillRect(-w * 0.95, -h * 1.0, w * 1.9, h * 2.1); ctx.fillStyle = '#8a8d92'; ctx.fillRect(w * 0.15, h * 0.5, w * 0.3, h * 0.75); } // yard and driveway
+    ctx.fillStyle = HOUSE_WALL[hs.v % HOUSE_WALL.length]; ctx.fillRect(-w / 2, -h / 2, w, h);
+    ctx.fillStyle = hs.roof ? '#4f7fd1' : HOUSE_ROOF[hs.v % HOUSE_ROOF.length]; ctx.fillRect(-w / 2, -h / 2, w, h * 0.5);
+    if (hs.owner && S.hh[hs.owner] && S.hh[hs.owner].isPlayer) { ctx.strokeStyle = '#e8d44d'; ctx.lineWidth = 2; ctx.strokeRect(-w / 2 - 2, -h / 2 - 2, w + 4, h + 4); }
+    ctx.restore();
+  }
+}
 
 function drawSite(s, now) {
   const z = cam.z;
+  if (s.kind === 'roofs') return;
   const [sx, sy] = w2s(s.x, s.y), w = s.w * z, h = s.h * z;
   const asset = s.assets && s.assets.find(a => !a.rooftop);
   const kind = asset ? asset.type : s.kind;
   const base = SITE_COLOR[kind] || '#777';
-  if (s.kind === 'farm') { ctx.fillStyle = '#7a3b2a'; ctx.fillRect(sx + w * 0.75, sy + h * 0.1, w * 0.2, h * 0.25); }
-  else if (s.kind === 'park') {
-    ctx.fillStyle = base; ctx.fillRect(sx, sy, w, h);
-    ctx.fillStyle = '#2f6e2c'; for (let i = 0; i < 7; i++) { const tx = s.x + 1 + ((i * 37) % 9), ty = s.y + 1 + ((i * 23) % 7); const [px, py] = w2s(tx, ty); ctx.fillRect(px, py, z * 1.2, z * 1.2); }
+  const R = (fx, fy, fw, fh, c) => { ctx.fillStyle = c; ctx.fillRect(sx + fx * z, sy + fy * z, Math.max(1, fw * z), Math.max(1, fh * z)); };
+  if (s.kind === 'home') {
+    // the simulated households live in real houses from the street fabric; mark them
+    if (z >= 2 && s.household && s.household.isPlayer) { ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 2; ctx.strokeRect(sx, sy, w, h); }
+  } else if (s.kind === 'farm') {
+    R(0, 0, s.w, s.h, '#8e7d42'); if (z > 1.5) for (let yy = 1; yy < s.h - 1; yy += 2.5) R(1, yy, s.w - 14, 1.2, '#6f8a36');
+    R(s.w - 11, 2, 8, 6, '#7a3b2a'); R(s.w - 11, 9, 4, 4, '#bdbdbd');
+  } else if (s.kind === 'park') {
+    R(0, 0, s.w, s.h, base);
+    if (z > 1.5) for (let i = 0; i < s.w * s.h / 18; i++) { const tx = (i * 37.3) % (s.w - 2) + 1, ty = (i * 23.7) % (s.h - 2) + 1; R(tx, ty, 2, 2, '#2f6e2c'); }
+  } else if (s.kind === 'sport') {
+    R(0, 0, s.w, s.h, '#3f9a46');
+    R(1.5, 1.5, s.w * 0.55, s.h - 3, '#4fae52'); if (z > 2) { ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.strokeRect(sx + 1.5 * z, sy + 1.5 * z, s.w * 0.55 * z, (s.h - 3) * z); ctx.beginPath(); ctx.moveTo(sx + (1.5 + s.w * 0.275) * z, sy + 1.5 * z); ctx.lineTo(sx + (1.5 + s.w * 0.275) * z, sy + (s.h - 1.5) * z); ctx.stroke(); }
+    R(s.w * 0.62, 2, s.w * 0.34, s.h * 0.55, '#a65a3a'); R(s.w * 0.62 + 1.2, 3.2, s.w * 0.34 - 2.4, s.h * 0.55 - 2.4, '#4fae52');
   } else if (s.kind === 'plaza') {
-    ctx.fillStyle = base; ctx.fillRect(sx, sy, w, h);
-    ctx.fillStyle = '#9fb7d9'; const [fx, fy] = w2s(s.cx - 1, s.cy - 1); ctx.fillRect(fx, fy, z * 2, z * 2);
+    R(0, 0, s.w, s.h, base); R(s.w / 2 - 1.5, s.h / 2 - 1.5, 3, 3, '#9fb7d9');
+    if (z > 3) for (let i = 0; i < 6; i++) R(1 + (i % 3) * (s.w - 3) / 2, 1 + Math.floor(i / 3) * (s.h - 3), 1.2, 1.2, '#2f6e2c');
+  } else if (s.kind === 'substation') {
+    R(0, 0, s.w, s.h, '#8d9097');
+    if (z > 2) for (let yy = 1.5; yy < s.h - 1; yy += 2.5) for (let xx = 1.5; xx < s.w - 1; xx += 2.5) R(xx, yy, 1, 1, '#4a4e56');
+    if (z > 2) { ctx.strokeStyle = '#d8d8d8'; ctx.lineWidth = 1; ctx.strokeRect(sx, sy, w, h); }
   } else if (kind === 'solar') {
     const built = asset ? asset.cap > 0 : true;
-    ctx.fillStyle = built ? '#1c2a4f' : '#3a3424'; ctx.fillRect(sx, sy, w, h);
-    if (built && z > 2.5) { ctx.fillStyle = '#4f7fd1'; const cw = Math.max(1, z * 0.8); for (let yy = s.y + 0.5; yy < s.y + s.h - 0.8; yy += 1.4) for (let xx = s.x + 0.5; xx < s.x + s.w - 0.8; xx += 1.1) { const [px, py] = w2s(xx, yy); ctx.fillRect(px, py, cw, Math.max(1, z * 0.9)); } }
+    R(0, 0, s.w, s.h, built ? '#33402c' : '#6e5e3a');
+    if (built) {
+      // panels cover the share of the site that's actually built (bigger arrays fill more rows)
+      const fill = asset ? clamp(asset.cap / Math.max(1e-6, s.w * s.h * CAP_PER_TILE.solar * 1.0), 0.15, 1) : 1;
+      const rows = Math.max(1, Math.floor((s.h - 1) / 1.4)), shown = Math.ceil(rows * fill);
+      if (z > 1.2) for (let r = 0; r < shown; r++) R(0.5, 0.5 + r * 1.4, s.w - 1, 0.9, '#2b4c8f');
+      else R(0.5, 0.5, s.w - 1, (s.h - 1) * fill, '#2b4c8f');
+    }
   } else if (kind === 'compute') {
-    ctx.fillStyle = base; ctx.fillRect(sx, sy, w, h);
-    if (z > 2.5 && asset && asset.cap > 0) {
-      const lit = S.market.servedE;
-      for (let xx = s.x + 1; xx < s.x + s.w - 1; xx += 2) { const [px, py] = w2s(xx, s.y + 1); ctx.fillStyle = '#151a24'; ctx.fillRect(px, py, z * 1.2, h - z * 2); }
-      for (let i = 0; i < Math.min(60, s.w * s.h / 3); i++) {
-        const xx = s.x + 1.2 + ((i * 7) % Math.max(1, Math.floor(s.w - 2))), yy = s.y + 1.2 + ((i * 13) % Math.max(1, Math.floor(s.h - 2)));
+    R(0, 0, s.w, s.h, '#575d68'); R(0.8, 0.8, s.w - 1.6, s.h - 1.6, base);
+    if (z > 1.5 && asset && asset.cap > 0) {
+      const lit = S.market.servedE ?? 1;
+      for (let xx = 2; xx < s.w - 2; xx += 3.5) R(xx, 1.8, 1.6, s.h - 3.6, '#262b36'); // cooling rows on the roof
+      if (z > 3) for (let i = 0; i < Math.min(80, s.w * s.h / 8); i++) {
+        const xx = 1.5 + ((i * 7.3) % Math.max(1, s.w - 3)), yy = 1.5 + ((i * 13.1) % Math.max(1, s.h - 3));
         const on = ((i * 97 + Math.floor(now / 300)) % 5) < 4 * lit;
-        const [px, py] = w2s(xx, yy); ctx.fillStyle = on ? (lit > 0.6 ? '#5dff8f' : '#ffb347') : '#3a2020'; ctx.fillRect(px, py, Math.max(1, z * 0.3), Math.max(1, z * 0.3));
+        R(xx, yy, 0.4, 0.4, on ? (lit > 0.6 ? '#5dff8f' : '#ffb347') : '#3a2020');
       }
     }
   } else if (kind === 'factory') {
-    ctx.fillStyle = base; ctx.fillRect(sx, sy + h * 0.25, w, h * 0.75);
-    ctx.fillStyle = '#6d5249'; for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(sx + w * i / 4, sy + h * 0.25); ctx.lineTo(sx + w * (i + 1) / 4, sy); ctx.lineTo(sx + w * (i + 1) / 4, sy + h * 0.25); ctx.fill(); }
-  } else if (s.kind === 'home') {
-    const h0 = s.household;
-    ctx.fillStyle = base; ctx.fillRect(sx, sy + h * 0.35, w, h * 0.65);
-    ctx.fillStyle = h0 && h0.isPlayer ? '#e8d44d' : '#8a4b3a'; ctx.fillRect(sx - z * 0.2, sy, w + z * 0.4, h * 0.4);
-    if (z > 8) { ctx.fillStyle = '#3a2a1e'; ctx.fillRect(sx + w * 0.45, sy + h * 0.65, w * 0.15, h * 0.35); }
-    const roof = s.assets && s.assets.find(a => a.rooftop && a.cap > 0);
-    if (roof) { ctx.fillStyle = '#4f7fd1'; ctx.fillRect(sx + w * 0.1, sy + h * 0.05, w * 0.8, h * 0.25); }
+    R(0, s.h * 0.2, s.w, s.h * 0.8, base);
+    ctx.fillStyle = '#6d5249'; const n = Math.max(2, Math.round(s.w / 5)); for (let i = 0; i < n; i++) { ctx.beginPath(); ctx.moveTo(sx + w * i / n, sy + h * 0.2); ctx.lineTo(sx + w * (i + 1) / n, sy); ctx.lineTo(sx + w * (i + 1) / n, sy + h * 0.2); ctx.fill(); }
+  } else if (kind === 'fleet' || s.kind === 'warehouse') {
+    R(0, 0, s.w, s.h, '#c8c8c4'); R(0.5, 0.5, s.w - 1, s.h - 1, kind === 'fleet' ? '#5d6f79' : base);
+    if (z > 2) for (let xx = 1.5; xx < s.w - 2; xx += 2.4) R(xx, s.h - 1.4, 1.4, 1.2, '#2e3438'); // loading docks
+    if (z > 2 && kind === 'fleet') for (let xx = 2; xx < s.w - 2; xx += 6) R(xx, 1.5, 4, s.h * 0.5, '#4a5a63');
   } else {
-    ctx.fillStyle = base; ctx.fillRect(sx, sy, w, h);
-    if (s.kind === 'clinic' && z > 3) { ctx.fillStyle = '#d33'; ctx.fillRect(sx + w / 2 - z * 0.5, sy + h / 2 - z * 1.5, z, z * 3); ctx.fillRect(sx + w / 2 - z * 1.5, sy + h / 2 - z * 0.5, z * 3, z); }
-    if (s.kind === 'station' && z > 2) { ctx.fillStyle = '#3a3a3a'; ctx.fillRect(sx, sy + h * 0.8, w, Math.max(1, z * 0.3)); }
-    if (s.kind === 'hall' && z > 3) { ctx.fillStyle = '#e8ecf6'; for (let i = 0; i < 5; i++) ctx.fillRect(sx + w * (0.15 + i * 0.16), sy + h * 0.3, z * 0.6, h * 0.55); }
+    R(0, 0, s.w, s.h, base);
+    if (s.kind === 'clinic' && z > 1.5) { R(s.w / 2 - 0.6, s.h / 2 - 2, 1.2, 4, '#d33'); R(s.w / 2 - 2, s.h / 2 - 0.6, 4, 1.2, '#d33'); }
+    if (s.kind === 'station' && z > 1.5) R(0, s.h * 0.75, s.w, 0.6, '#3a3a3a');
+    if (s.kind === 'hall' && z > 3) for (let i = 0; i < 5; i++) R(s.w * (0.15 + i * 0.16), s.h * 0.3, 0.6, s.h * 0.55, '#e8ecf6');
+    if (s.kind === 'school' && z > 1.5) { R(1, 1, s.w * 0.4, s.h - 2, '#c9a23e'); R(s.w * 0.5, 1, s.w * 0.45, s.h * 0.4, '#c9a23e'); }
+    if (s.kind === 'market' && z > 2) R(1, 1, s.w - 2, 1.2, '#f4f6f7');
   }
   // fleet: robot count
-  if (kind === 'fleet' && asset && z > 3) { label(`${Math.round(asset.cap)} robots`, sx + w / 2, sy + h / 2, '#9fe7ff'); }
+  if (kind === 'fleet' && asset && z > 2.5 && w > 40) queueLabel(`${Math.round(asset.cap)} robots`, sx + w / 2, sy + h / 2, 30, '#9fe7ff');
   // ownership bar along the bottom of anything productive
   const assets = (s.assets || []).filter(a => a.cap > 0);
-  if (assets.length) {
+  if (assets.length && s.kind !== 'home') {
     const a = assets.find(x => !x.rooftop) || assets[0];
     const b = ownerBuckets(a), bh = Math.max(2, Math.min(z * 0.6, 6));
     let x = sx;
@@ -1777,16 +2268,17 @@ function drawSite(s, now) {
   }
   // construction
   const pend = (s.assets || []).flatMap(a => a.pending);
-  if (pend.length) {
+  if (pend.length && s.kind !== 'home') {
     const p = pend[0], prog = clamp((S.day + (S.t % 24) / 24 - p.start) / Math.max(1, p.done - p.start), 0, 1);
     ctx.strokeStyle = Math.floor(now / 250) % 2 ? '#ffd23f' : '#222'; ctx.lineWidth = 2; ctx.setLineDash([4, 4]); ctx.strokeRect(sx + 1, sy + 1, w - 2, h - 2); ctx.setLineDash([]);
-    if (z > 2) { ctx.fillStyle = '#222'; ctx.fillRect(sx + 2, sy + 2, w - 4, Math.max(2, z * 0.4)); ctx.fillStyle = '#ffd23f'; ctx.fillRect(sx + 2, sy + 2, (w - 4) * prog, Math.max(2, z * 0.4)); }
+    if (w > 12) { ctx.fillStyle = '#222'; ctx.fillRect(sx + 2, sy + 2, w - 4, Math.max(2, z * 0.4)); ctx.fillStyle = '#ffd23f'; ctx.fillRect(sx + 2, sy + 2, (w - 4) * prog, Math.max(2, z * 0.4)); }
   }
   if (s === view.selSite) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(sx - 2, sy - 2, w + 4, h + 4); }
-  // labels
-  if (!s.small && (z >= 14 || (z >= 7 && (!s.lot || s.w * s.h >= 45)))) label(s.name, sx + w / 2, sy - 6);
-  else if (z >= 3 && z < 7 && !s.small && (asset || s.kind === 'hall' || s.kind === 'plaza') && w > 30) label(s.name.replace('Helix ', 'H. '), sx + w / 2, sy + h / 2, '#ffffff', 'rgba(8,12,28,0.55)');
-  if (z >= 14 && s.small && s.household) label(s.household.isPlayer ? 'your place' : s.household.name, sx + w / 2, sy - 5, '#e6ecff');
+  // labels (LOD): big sites once they cover a decent patch of screen, small ones only up close or when selected
+  const px2 = w * h, area = s.w * s.h;
+  if (s === view.selSite) queueLabel(s.name, sx + w / 2, sy - 7, 99);
+  else if (s.kind === 'home') { if (z >= 10) queueLabel(s.household.isPlayer ? 'your place' : s.household.name, sx + w / 2, sy - 5, s.household.isPlayer ? 60 : 20, '#e6ecff'); }
+  else if ((area >= 200 && px2 >= 1800 && z >= 1.2) || (area >= 60 && z >= 5) || z >= 12) queueLabel(s.name.replace('Helix ', 'H. ').replace(' (town)', ''), sx + w / 2, sy + Math.min(h / 2, 10), 20 + Math.min(40, Math.sqrt(area) / 2), '#ffffff', 'rgba(8,12,28,0.62)');
 }
 
 // ---------- lots: the ordinary town, and whatever replaces it ----------
@@ -1796,118 +2288,121 @@ function drawLot(l, now) {
   const z = cam.z;
   const [sx, sy] = w2s(l.x, l.y), w = l.w * z, h = l.h * z;
   const u = LOT_USE[l.use] || LOT_USE.vacant;
-  const hs = hash2(l.x, l.y);
+  const hs = hash2(l.x * 10 | 0, l.y * 10 | 0);
   const R = (fx, fy, fw, fh, c) => { ctx.fillStyle = c; ctx.fillRect(sx + fx * z, sy + fy * z, Math.max(1, fw * z), Math.max(1, fh * z)); };
   const detail = z > 3;
   switch (l.use) {
-    case 'house': {
-      const walls = ['#b98f5e', '#c9b28a', '#a7b4a0', '#c99a7a', '#d6cbb4'][hs % 5], roof = ['#8a4b3a', '#5d4a3c', '#6e3b3b', '#4f5a62'][hs % 4];
-      R(0.2, 1.4, l.w - 0.4, l.h - 1.6, walls); R(0, 0.3, l.w, 1.4, roof);
-      if (l.roof) R(0.3, 0.45, l.w - 0.6, 1.0, '#4f7fd1');
-      if (detail && z > 8) R(l.w / 2 - 0.3, l.h - 1.2, 0.6, 1.0, '#3a2a1e');
+    case 'parking': case 'carlot': {
+      R(0, 0, l.w, l.h, '#55595f');
+      if (z > 4) {
+        const fill = l.use === 'carlot' ? 0.9 : (1 - l.vac) * 0.8;
+        // real stalls: ~2.7 m × 5.5 m, in double rows with aisles
+        for (let yy = 0.4; yy < l.h - 1.2; yy += 3.4) for (const off of [0, 1.15]) for (let xx = 0.3; xx < l.w - 0.6; xx += 0.55) {
+          if (((hash2(xx * 20 | 0, (yy + off) * 10 | 0) % 100) / 100) < fill) R(xx + 0.06, yy + off + 0.1, 0.42, 0.9, CAR_COLORS[hash2(xx * 7 | 0, yy * 3 | 0) % CAR_COLORS.length]);
+        }
+      } else if (z > 1.5) for (let yy = 0.4; yy < l.h - 1.2; yy += 3.4) R(0.3, yy, l.w - 0.6, 2.3, (1 - l.vac) > 0.4 ? '#6d6f74' : '#5d6066');
       break;
     }
-    case 'parking': case 'bigbox': case 'carlot': {
-      R(0, 0, l.w, l.h, '#54585e');
-      const lotx = l.use === 'bigbox' ? 0 : 0, big = l.use === 'bigbox';
-      if (big) { R(0.3, 0.3, l.w - 0.6, l.h * 0.45, '#7d8fb0'); R(l.w * 0.4, l.h * 0.45 - 0.5, l.w * 0.2, 0.5, '#e8d44d'); }
-      if (detail) {
-        const y0 = big ? l.h * 0.55 : 0.4, fill = l.use === 'carlot' ? 0.9 : (1 - l.vac) * 0.85;
-        for (let yy = y0; yy < l.h - 0.9; yy += 1.6) for (let xx = 0.3 + lotx; xx < l.w - 0.6; xx += 1.0) {
-          R(xx - 0.05, yy, 0.06, 1.2, '#9aa0a6');
-          if (((hash2(xx * 10 | 0, yy * 10 | 0) % 100) / 100) < fill) R(xx + 0.15, yy + 0.15, 0.65, 0.95, CAR_COLORS[hash2(xx * 7 | 0, yy * 3 | 0) % CAR_COLORS.length]);
-        }
-      }
+    case 'bigbox': {
+      R(0, 0, l.w, l.h, '#c9ccd2'); R(0.4, 0.4, l.w - 0.8, l.h - 0.8, l.vac > 0.6 ? '#8b919c' : '#aeb6c4');
+      if (z > 1.5) { for (let i = 0; i < 9; i++) R(2 + (i * 5.3) % (l.w - 4), 2 + (i * 3.7) % (l.h - 6), 1.2, 1, '#7d8592'); R(l.w * 0.3, l.h - 1.2, l.w * 0.4, 0.8, l.vac > 0.6 ? '#555' : '#e8d44d'); }
       break;
     }
     case 'gas':
-      R(0, 0, l.w, l.h, '#6a6e74'); R(0.5, 0.5, l.w - 1, l.h * 0.5, '#e8e8e8'); R(0.5, 0.5, l.w - 1, 0.4, '#c0392b');
-      if (detail) for (let i = 0; i < 3; i++) R(1 + i * (l.w - 2) / 3, l.h * 0.65, 0.5, 0.7, '#2e86c1');
+      R(0, 0, l.w, l.h, '#6a6e74'); R(1, 1, l.w - 2, l.h * 0.45, '#e8e8e8'); R(1, 1, l.w - 2, 0.6, '#c0392b');
+      if (detail) for (let i = 0; i < 3; i++) R(1.5 + i * (l.w - 3) / 3, l.h * 0.65, 0.6, 1, '#2e86c1');
       break;
     case 'office': {
       R(0.2, 0.2, l.w - 0.4, l.h - 0.4, l.vac > 0.6 ? '#5f6b78' : '#8fa3b8');
-      if (detail) for (let yy = 0.7; yy < l.h - 0.6; yy += 0.9) for (let xx = 0.6; xx < l.w - 0.6; xx += 0.8) R(xx, yy, 0.45, 0.5, ((hash2(xx * 9 | 0, yy * 9 | 0) % 100) / 100) < (1 - l.vac) * 0.9 ? '#ffe9a8' : '#2b3440');
+      if (detail) for (let yy = 0.8; yy < l.h - 0.6; yy += 1.1) for (let xx = 0.7; xx < l.w - 0.6; xx += 1.0) R(xx, yy, 0.5, 0.5, ((hash2(xx * 9 | 0, yy * 9 | 0) % 100) / 100) < (1 - l.vac) * 0.9 ? '#ffe9a8' : '#2b3440');
       break;
     }
     case 'shop': case 'restaurant': {
-      R(0.2, 0.6, l.w - 0.4, l.h - 0.8, u.color);
-      if (detail) for (let xx = 0.2; xx < l.w - 0.4; xx += 0.6) R(xx, 0.4, 0.3, 0.5, Math.round(xx / 0.6) % 2 ? '#ffffff' : (l.use === 'restaurant' ? '#2e7d32' : '#c0392b'));
-      if (l.vac > 0.6) R(0.4, 1.2, l.w - 0.8, l.h - 2, 'rgba(20,20,20,0.55)');
+      R(0.15, 0.15, l.w - 0.3, l.h - 0.3, u.color);
+      if (detail) for (let xx = 0.2; xx < l.w - 0.4; xx += 0.6) R(xx, 0.15, 0.3, 0.5, Math.round(xx / 0.6) % 2 ? '#ffffff' : (l.use === 'restaurant' ? '#2e7d32' : '#c0392b'));
+      if (l.vac > 0.6) R(0.4, 1, l.w - 0.8, l.h - 1.4, 'rgba(20,20,20,0.55)');
       break;
     }
-    case 'motel': R(0, 0, l.w, l.h, '#6a6e74'); R(0.3, 0.3, l.w - 0.6, 1.4, u.color); R(0.3, 0.3, 1.4, l.h - 0.6, u.color); if (detail) R(l.w - 1.4, 0.4, 0.9, 0.9, '#e74c3c'); break;
-    case 'church': R(0.5, 1, l.w - 1, l.h - 1.4, u.color); R(l.w / 2 - 0.5, 0.1, 1, 1.4, '#bfb6a4'); if (detail) { R(l.w / 2 - 0.1, 0, 0.2, 0.9, '#5d4a3c'); } break;
-    case 'warehouse': R(0.2, 0.2, l.w - 0.4, l.h - 0.4, u.color); if (detail) for (let xx = 0.8; xx < l.w - 1; xx += 1.6) R(xx, l.h - 1.4, 1.0, 1.0, '#4e4238'); break;
+    case 'motel': R(0, 0, l.w, l.h, '#6a6e74'); R(0.3, 0.3, l.w - 0.6, 2.2, u.color); R(0.3, 0.3, 2.2, l.h - 0.6, u.color); if (detail) R(l.w - 1.6, l.h - 1.6, 1, 1, '#e74c3c'); break;
+    case 'church': R(0.5, 1, l.w - 1, l.h - 1.4, u.color); R(l.w / 2 - 0.6, 0.1, 1.2, 1.6, '#bfb6a4'); break;
+    case 'warehouse': R(0, 0, l.w, l.h, '#c8c8c4'); R(0.4, 0.4, l.w - 0.8, l.h - 0.8, u.color); if (detail) for (let xx = 1; xx < l.w - 1.5; xx += 2.4) R(xx, l.h - 1.3, 1.4, 1, '#4e4238'); break;
     case 'garden':
       R(0, 0, l.w, l.h, '#6b4f2e');
-      if (detail) for (let yy = 0.4; yy < l.h - 0.3; yy += 0.8) R(0.3, yy, l.w - 0.6, 0.45, ['#5aa04a', '#7fc65a', '#c9b44a'][Math.round(yy / 0.8) % 3]);
+      if (z > 2) for (let yy = 0.4; yy < l.h - 0.3; yy += 0.9) R(0.3, yy, l.w - 0.6, 0.5, ['#5aa04a', '#7fc65a', '#c9b44a'][Math.round(yy / 0.9) % 3]);
       break;
     case 'apartments':
       R(0.2, 0.2, l.w - 0.4, l.h - 0.4, u.color);
-      if (detail) for (let yy = 0.6; yy < l.h - 0.5; yy += 0.8) for (let xx = 0.6; xx < l.w - 0.5; xx += 0.8) R(xx, yy, 0.4, 0.4, '#ffe9a8');
-      if (detail) R(0.4, 0.3, l.w - 0.8, 0.4, '#4f7fd1');
+      if (detail) for (let yy = 0.8; yy < l.h - 0.5; yy += 1.0) for (let xx = 0.7; xx < l.w - 0.5; xx += 1.0) R(xx, yy, 0.45, 0.45, '#ffe9a8');
       break;
-    case 'makerspace': R(0.2, 0.2, l.w - 0.4, l.h - 0.4, u.color); if (detail) { R(l.w / 2 - 0.8, l.h / 2 - 0.8, 1.6, 1.6, '#e8d44d'); R(l.w / 2 - 0.3, l.h / 2 - 0.3, 0.6, 0.6, u.color); } break;
+    case 'makerspace': R(0.2, 0.2, l.w - 0.4, l.h - 0.4, u.color); if (detail) { R(l.w / 2 - 0.8, l.h / 2 - 0.8, 1.6, 1.6, '#e8d44d'); } break;
     case 'vfarm':
       R(0.2, 0.2, l.w - 0.4, l.h - 0.4, '#1f3b33');
-      if (detail) for (let yy = 0.5; yy < l.h - 0.4; yy += 0.7) R(0.5, yy, l.w - 1, 0.35, (Math.floor(now / 700) + Math.round(yy * 3)) % 4 ? '#3fae7a' : '#c86bd6');
+      if (z > 2) for (let yy = 0.6; yy < l.h - 0.4; yy += 0.8) R(0.5, yy, l.w - 1, 0.4, (Math.floor(now / 700) + Math.round(yy * 3)) % 4 ? '#3fae7a' : '#c86bd6');
       break;
     default:
-      R(0, 0, l.w, l.h, '#4a4440');
-      if (detail) { ctx.strokeStyle = '#2b2622'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + w, sy + h); ctx.moveTo(sx + w, sy); ctx.lineTo(sx, sy + h); ctx.stroke(); }
+      R(0, 0, l.w, l.h, '#6a6250');
+      if (detail) { ctx.strokeStyle = '#4b4438'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + w, sy + h); ctx.moveTo(sx + w, sy); ctx.lineTo(sx, sy + h); ctx.stroke(); }
   }
   if (view.colorBy === 'stake') {
     const k = l.owner === 'helix' ? 'outside' : l.owner === 'town' ? 'town' : S.hh[l.owner] ? 'resident' : null;
     if (k) { ctx.fillStyle = OWNER_COLOR[k] + '88'; ctx.fillRect(sx, sy, w, h); }
   }
-  if (l === view.selLot) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(sx - 2, sy - 2, w + 4, h + 4); }
-  if (z >= 16 && l.use !== 'house') label(u.label + (l.vac > 0.6 && !ASSET_USES.has(l.use) && l.use !== 'vacant' ? ' (empty)' : ''), sx + w / 2, sy + h / 2, '#e6ecff', 'rgba(8,12,28,0.6)');
+  if (l === view.selLot) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(sx - 2, sy - 2, w + 4, h + 4); queueLabel(l.name || u.label, sx + w / 2, sy - 7, 98); }
+  else if (l.name && l.w * l.h >= 300 && w * h > 2000) queueLabel(l.name, sx + w / 2, sy + h / 2, 25, '#ffffff', 'rgba(8,12,28,0.6)');
+  else if (z >= 14) queueLabel(u.label + (l.vac > 0.6 && !ASSET_USES.has(l.use) && l.use !== 'vacant' ? ' (empty)' : ''), sx + w / 2, sy + h / 2, 10, '#e6ecff', 'rgba(8,12,28,0.6)');
 }
 
-// ---------- traffic: cars now, robotaxis later. Visual only, but the mix follows the economy ----------
+// ---------- traffic: cars on the road graph; robotaxis replace them as the economy shifts. Visual only ----------
 const CARS = [];
 function syncCars() {
   const sig = landSignals();
-  const want = Math.round(26 + 20 * Math.min(1, S.people.length / 40));
+  const want = 160;
   const taxis = Math.round(want * sig.rt);
   while (CARS.length < want) CARS.push(newCar());
   CARS.length = want;
   CARS.forEach((c, i) => { c.taxi = i < taxis; });
 }
 function newCar() {
-  const horiz = rand() < 0.5;
-  const c = { horiz, dir: rand() < 0.5 ? 1 : -1, color: pick(CAR_COLORS), speed: rr(30, 45) };
-  if (horiz) { c.y = pick(ROAD_Y); c.x = rr(TOWN.x0, TOWN.x1); } else { c.x = pick(ROAD_X); c.y = rr(TOWN.y0, TOWN.y1); }
-  return c;
+  const G = S.road;
+  const a = Math.floor(rand() * G.nodes.length), ed = []; G.graph.getEdgesOfNode(a, ed);
+  const e = ed.length ? pick(ed) : null;
+  return { from: a, to: e ? e.to : a, t: rand(), color: pick(CAR_COLORS), speed: rr(0.85, 1.15), prev: -1 };
 }
 function stepCars(hours) {
-  const d = Math.min(2.5, hours * 38);
+  const G = S.road;
   for (const c of CARS) {
-    const move = d * c.speed / 38;
-    if (c.horiz) {
-      const nx = c.x + c.dir * move;
-      const lo = c.y === 70 ? 0 : TOWN.x0, hi = c.y === 70 ? MAP_W : TOWN.x1;
-      const cross = ROAD_X.find(x => (c.x - x) * (nx - x) <= 0 && x !== c.x);
-      if (cross !== undefined && c.y !== 70 && rand() < 0.35) { c.x = cross; c.horiz = false; c.dir = rand() < 0.5 ? 1 : -1; continue; }
-      c.x = nx; if (c.x < lo || c.x > hi) { c.dir *= -1; c.x = clamp(c.x, lo, hi); }
-    } else {
-      const ny = c.y + c.dir * move;
-      const cross = ROAD_Y.find(y => (c.y - y) * (ny - y) <= 0 && y !== c.y);
-      if (cross !== undefined && rand() < 0.35) { c.y = cross; c.horiz = true; c.dir = rand() < 0.5 ? 1 : -1; continue; }
-      c.y = ny; if (c.y < TOWN.y0 || c.y > TOWN.y1) { c.dir *= -1; c.y = clamp(c.y, TOWN.y0, TOWN.y1); }
+    let move = Math.min(hours, 0.02) * 4000 * c.speed; // ~20 km/h average in town, faster on the interstate
+    let guard = 0;
+    while (move > 0 && guard++ < 8) {
+      const A = G.nodes[c.from], B = G.nodes[c.to], L = Math.max(0.01, Math.hypot(B.x - A.x, B.y - A.y));
+      const e = []; G.graph.getEdgesOfNode(c.from, e); const ed = e.find(x => x.to === c.to);
+      const k = ed ? (L / ed.cost) : 1; // the edge cost encodes road speed
+      const left = (1 - c.t) * L;
+      if (move * k < left) { c.t += move * k / L; move = 0; }
+      else {
+        move -= left / k; c.t = 0;
+        const nx = []; G.graph.getEdgesOfNode(c.to, nx);
+        const opts = nx.filter(x => x.to !== c.from);
+        const n = opts.length ? pick(opts) : nx[0];
+        c.from = c.to; c.to = n ? n.to : c.from;
+      }
     }
   }
 }
-function drawCars() {
-  const z = cam.z; if (z < 2.2) return;
+function drawCars(visible) {
+  const z = cam.z; if (z < 1.5) return;
+  const G = S.road;
   for (const c of CARS) {
-    const off = 0.28 * c.dir;
-    const x = c.horiz ? c.x : c.x + off, y = c.horiz ? c.y + off : c.y;
-    const [sx, sy] = w2s(x, y);
-    const L = Math.max(2, z * 0.9), Wd = Math.max(1.5, z * 0.45);
-    const w = c.horiz ? L : Wd, h = c.horiz ? Wd : L;
-    ctx.fillStyle = c.taxi ? '#f4f6f7' : c.color; ctx.fillRect(sx - w / 2, sy - h / 2, w, h);
-    if (c.taxi) { ctx.fillStyle = '#ffd23f'; ctx.fillRect(sx - Math.max(1, z * 0.12), sy - Math.max(1, z * 0.12), Math.max(1.5, z * 0.24), Math.max(1.5, z * 0.24)); }
+    const A = G.nodes[c.from], B = G.nodes[c.to];
+    const x = lerp(A.x, B.x, c.t), y = lerp(A.y, B.y, c.t);
+    if (!visible(x - 1, y - 1, 2, 2)) continue;
+    const ang = Math.atan2(B.y - A.y, B.x - A.x), off = 0.6;
+    const [sx, sy] = w2s(x - Math.sin(ang) * off, y + Math.cos(ang) * off);
+    const L = Math.max(2.5, z * 0.9), Wd = Math.max(1.5, z * 0.38);
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(ang);
+    ctx.fillStyle = c.taxi ? '#f4f6f7' : c.color; ctx.fillRect(-L / 2, -Wd / 2, L, Wd);
+    if (c.taxi) { ctx.fillStyle = '#ffd23f'; ctx.fillRect(-Wd * 0.4, -Wd * 0.4, Wd * 0.8, Wd * 0.8); }
+    ctx.restore();
   }
 }
 
@@ -2012,6 +2507,7 @@ function menuItems(a) {
   if (a === 'council') return [
     { t: 'Town buys out Helix in town', d: 'commons bond buys every Helix stake inside the town grid', f: () => doAction('council', 'buyback') },
     { t: 'Local right of first refusal', d: 'when a family must sell a stake, the town buys it, not Helix', f: () => doAction('council', 'refusal') },
+    { t: 'Community-first zoning', d: 'vacant lots go to co-ops and the town before outside capital', f: () => doAction('council', 'zoning') },
     { t: 'Raise the commons dividend', d: 'higher tax on income and outside profits, paid out per person', f: () => doAction('council', 'dividend') },
   ].map(i => ({ ...i, dis: !!S.council }));
   return [];
@@ -2095,9 +2591,9 @@ function renderLotInspect(el, l) {
 
 // ===== 11_main.js =====
 // Main loop, input, and test hooks.
-// Speeds: sim-hours advanced per real second. 1x = one hour every 2.5 s.
-const SPEEDS = [0, 0.4, 12, 120, 600];
-const SPEED_LABEL = ['paused', '1 h / 2.5 s', '1 day / 2 s', '1 month / 6 s', '1 year / 15 s'];
+// Speeds: sim-hours advanced per real second. 1x = one hour every 10 s, slow enough to watch people walk.
+const SPEEDS = [0, 0.1, 12, 120, 600];
+const SPEED_LABEL = ['paused', '1 h / 10 s', '1 day / 2 s', '1 month / 6 s', '1 year / 15 s'];
 let speed = 1, lastFrame = 0, uiClock = 0;
 
 function setSpeed(i) {
@@ -2107,9 +2603,9 @@ function setSpeed(i) {
 }
 function advance(hours) {
   // fine steps at low speed keep Yuka's steering smooth; coarser steps at high speed keep it fast
-  const step = speed <= 2 ? 0.05 : speed === 3 ? 0.25 : 0.5;
+  const step = speed <= 1 ? 0.002 : speed === 2 ? 0.05 : speed === 3 ? 0.25 : 0.5;
   let left = hours, n = 0;
-  while (left > 1e-9 && n < 48) { const dt = Math.min(step, left); simStep(dt); left -= dt; n++; }
+  while (left > 1e-9 && n < 60) { const dt = Math.min(step, left); simStep(dt); left -= dt; n++; }
 }
 
 function frame(now) {
@@ -2135,17 +2631,17 @@ function refreshUI() {
 function zoomPreset(which) {
   cam.follow = null;
   if (which === 'region') { cam.tx = MAP_W / 2; cam.ty = MAP_H / 2; cam.tz = minZoom(); }
-  if (which === 'town') { cam.tx = (TOWN.x0 + TOWN.x1) / 2; cam.ty = (TOWN.y0 + TOWN.y1) / 2 + 4; cam.tz = Math.min(W / 100, H / 80); }
-  if (which === 'you') { cam.follow = S.player; cam.tz = 28; }
+  if (which === 'town') { cam.tx = 560; cam.ty = 360; cam.tz = Math.max(minZoom(), Math.min(W / 520, H / 380)); }
+  if (which === 'you') { cam.follow = S.player; cam.tz = 30; }
 }
 
 function pickAt(sx, sy) {
   const [wx, wy] = s2w(sx, sy);
-  const r = Math.max(0.8, 7 / cam.z);
+  const r = Math.max(0.6, 7 / cam.z);
   let best = null, bd = r;
   for (const p of S.people) { const d = Math.hypot(p.position.x - wx, p.position.y - wy); if (d < bd) { bd = d; best = p; } }
   if (best) return { agent: best };
-  const site = S.sites.slice().reverse().find(s => wx >= s.x && wx <= s.x + s.w && wy >= s.y && wy <= s.y + s.h);
+  const site = S.sites.slice().reverse().find(s => s.kind !== 'roofs' && wx >= s.x && wx <= s.x + s.w && wy >= s.y && wy <= s.y + s.h);
   if (site) return { site };
   const lot = S.lots.find(l => !l.site && wx >= l.x && wx <= l.x + l.w && wy >= l.y && wy <= l.y + l.h);
   return lot ? { lot } : {};
@@ -2171,7 +2667,7 @@ function setupInput() {
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
     const [wx, wy] = s2w(e.clientX, e.clientY);
-    const nz = clamp(cam.tz * Math.pow(1.0018, -e.deltaY), minZoom(), 64);
+    const nz = clamp(cam.tz * Math.pow(1.0018, -e.deltaY), minZoom(), 80);
     // keep the point under the cursor fixed
     cam.follow = null;
     cam.tx = wx - (e.clientX - W / 2) / nz; cam.ty = wy - (e.clientY - H / 2) / nz; cam.tz = nz;
@@ -2180,8 +2676,8 @@ function setupInput() {
     if (e.target.tagName === 'INPUT') return;
     if (e.key === ' ') { e.preventDefault(); setSpeed(speed === 0 ? 1 : 0); }
     if (e.key >= '0' && e.key <= '4') setSpeed(+e.key);
-    if (e.key === '+' || e.key === '=') cam.tz = clamp(cam.tz * 1.25, minZoom(), 64);
-    if (e.key === '-') cam.tz = clamp(cam.tz / 1.25, minZoom(), 64);
+    if (e.key === '+' || e.key === '=') cam.tz = clamp(cam.tz * 1.25, minZoom(), 80);
+    if (e.key === '-') cam.tz = clamp(cam.tz / 1.25, minZoom(), 80);
     if (e.key === 'Escape') { view.selected = null; view.selSite = null; view.selLot = null; hideMenu(); renderInspect(); $('help').hidden = true; }
   });
   document.querySelectorAll('#speeds button').forEach(b => b.onclick = () => setSpeed(+b.dataset.s));
