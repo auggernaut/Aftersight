@@ -150,7 +150,7 @@ function siteSpot(pid) {
   if (pid === 'workshop') return { x: 1725, y: 1004 };
   return { x: 960, y: 1392 };
 }
-function breakfastHours() { const h = (S.minute % 1440) / 60; return h >= 6.5 && h < 11.5; }
+function breakfastHours() { const h = (S.minute % 1440) / 60; return h >= 6 && h < 11.5; }
 function findInteractable(g) {
   const list = interactables();
   return list.find(i => i.type === g.type && (i.id || i.key || i.pid || i.cid) === (g.id || g.key || g.pid || g.cid)) || null;

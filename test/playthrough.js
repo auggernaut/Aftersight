@@ -66,7 +66,7 @@ const log = (...a) => console.log(...a);
       if (await ev(i => __AL.NPCS[i].visible, id)) return true;
       // try knocking first
       const door = await ev(i => __AL.interactables().find(x => x.type === 'door' && x.id === i), id);
-      if (door) { await useAt('door', id); await page.waitForTimeout(700); if (await visible('#dialog')) return 'dialog'; }
+      if (door) { try { await useAt('door', id); } catch (e) { continue; } await page.waitForTimeout(700); if (await visible('#dialog')) return 'dialog'; }
       await ev(() => { __AL.S.speed = 3; __AL.S.paused = false; });
       await page.waitForTimeout(300);
     }

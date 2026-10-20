@@ -370,7 +370,7 @@ function objectives() {
     out.push({ text: 'Plan the Shared Kitchen on the old terrace', detail: 'The terrace is east of the store. Choose a style, what it holds, and how it gets built.', target: POI.terraceSpot });
   } else if (q === 'breakfast') {
     const hour = S.minute / 60;
-    out.push({ text: 'Host the first breakfast at the terrace kitchen', detail: hour >= 6.5 && hour < 11.5 ? 'Everyone is invited. Go to the kitchen.' : 'Breakfast happens between 7:00 and 11:30. Press "Next morning" or wait.', target: POI.kitchenTable });
+    out.push({ text: 'Host the first breakfast at the terrace kitchen', detail: hour >= 6 && hour < 11.5 ? 'Everyone is invited. Go to the kitchen.' : 'Breakfast happens between 6:00 and 11:30. Press "Next morning" or wait.', target: POI.kitchenTable });
   } else if (q === 'epilogue') {
     const opts = [];
     if (S.creations.garden.status === 'available') opts.push('the Waterfall Garden');
