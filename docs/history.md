@@ -50,3 +50,7 @@ Augustin's reaction was that it looked about the same. The honest reason: everyt
 - Endings branch on who owns the engine: "We made room, and we pay rent on it" (Brightline), "on Odile's savings", "We own the engine" (community-owned compute), and "We bought it back". The epilogue shows an ownership bar and each household's total paid hours.
 - Added Community Compute: an optional project in the depot yard, suggested by Juno (her night gig is labeling images for a city AI company). Its power cost depends on who owns the array.
 - Tightened the middle: upgrades cost about 30% less, households can cut up to 4.5 h of work a night (was 3.5), Mara settles into free time a day sooner, and the kitchen's base cost dropped from 40 to 25 parts. With all four paths played end to end, co-op paths finish in 13–14 days (was 15–18) and Brightline takes 20.
+
+## 2026-10-20: pivot to a simulation (branch `sim`)
+
+Augustin decided the game wants to be a simulation of living through the singularity rather than a scripted walkthrough. The cozy story build was retired (it remains on `main` at `f81a611`) and the repo restarted on the `sim` branch as a graphically minimal, agent-based sim using Yuka for agent decisions, with a seam left for a local model (Muse's Glimmer) later.

@@ -1,92 +1,64 @@
-// ---------- small math + color helpers ----------
-const TAU = Math.PI * 2;
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+// Small helpers shared by every file. All src files are concatenated into one scope.
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
-const smooth = t => t * t * (3 - 2 * t);
-const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
-const round1 = v => Math.round(v * 10) / 10;
+const sum = (arr, f = x => x) => arr.reduce((s, x) => s + f(x), 0);
 
-function rng(seed) {
-  let s = (seed >>> 0) || 1;
+// Seeded RNG so a run is reproducible (mulberry32).
+function makeRng(seed) {
+  let a = seed >>> 0;
   return () => {
-    s ^= s << 13; s >>>= 0;
-    s ^= s >> 17;
-    s ^= s << 5; s >>>= 0;
-    return s / 4294967296;
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-function hash(n) { let x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+let rand = makeRng(7);
+const rr = (a, b) => a + rand() * (b - a);
+const pick = arr => arr[Math.floor(rand() * arr.length)];
 
-function hex2rgb(h) {
-  h = h.replace('#', '');
-  if (h.length === 3) h = h.split('').map(c => c + c).join('');
-  const n = parseInt(h, 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+function money(v) {
+  const s = v < 0 ? '-' : '';
+  v = Math.abs(v);
+  if (v >= 1e9) return s + '$' + (v / 1e9).toFixed(1) + 'B';
+  if (v >= 1e6) return s + '$' + (v / 1e6).toFixed(1) + 'M';
+  if (v >= 1e4) return s + '$' + Math.round(v / 1e3) + 'k';
+  if (v >= 1e3) return s + '$' + (v / 1e3).toFixed(1) + 'k';
+  return s + '$' + Math.round(v);
 }
-function rgb2hex(r, g, b) {
-  return '#' + [r, g, b].map(v => clamp(Math.round(v), 0, 255).toString(16).padStart(2, '0')).join('');
-}
-function mixHex(a, b, t) {
-  const A = hex2rgb(a), B = hex2rgb(b);
-  return rgb2hex(lerp(A[0], B[0], t), lerp(A[1], B[1], t), lerp(A[2], B[2], t));
-}
-function shade(hex, amt) {
-  return amt >= 0 ? mixHex(hex, '#fff8ee', amt) : mixHex(hex, '#1c1622', -amt);
-}
+const pct = v => Math.round(v * 100) + '%';
+const num = v => v >= 100 ? Math.round(v).toLocaleString('en-US') : v >= 10 ? v.toFixed(1) : v.toFixed(2);
 
-// The whole town is color-graded by "warmth": muted and hazy at first,
-// saturated and golden as community life returns. GRADE is 0..20.
-let GRADE = 0;
-const _colCache = new Map();
-function gradeRGB(hex, k) {
-  const key = hex + '|' + GRADE + '|' + k;
-  let c = _colCache.get(key);
-  if (c) return c;
-  const [r, g, b] = hex2rgb(hex);
-  const w = GRADE / 20;
-  const l = 0.3 * r + 0.59 * g + 0.11 * b;
-  // goes negative near full warmth: pushes colors past their base saturation
-  const ds = ((1 - w) * 0.6 - w * w * 0.12) * k;
-  let R = lerp(r, l, ds), G = lerp(g, l, ds), B = lerp(b, l, ds);
-  const hz = (1 - w) * 0.16 * k;
-  R = lerp(R, 122, hz); G = lerp(G, 130, hz); B = lerp(B, 146, hz);
-  // golden-hour cast: lift reds and greens, pull blue down a little
-  const wb = w * 0.09;
-  R = R * (1 + wb); G = G * (1 + wb * 0.5); B = B * (1 - w * 0.06);
-  // a touch more contrast as the town comes alive, like gouache
-  const ct = 1 + w * 0.14;
-  R = 128 + (R - 128) * ct; G = 128 + (G - 128) * ct; B = 128 + (B - 128) * ct;
-  c = [clamp(R, 0, 255) | 0, clamp(G, 0, 255) | 0, clamp(B, 0, 255) | 0];
-  _colCache.set(key, c);
-  return c;
-}
-function col(hex, a, k = 1) {
-  const c = gradeRGB(hex, k);
-  return a === undefined ? `rgb(${c[0]},${c[1]},${c[2]})` : `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+// Gini coefficient of a list of non-negative values.
+function gini(vals) {
+  const v = vals.map(x => Math.max(0, x)).sort((a, b) => a - b);
+  const n = v.length, tot = sum(v);
+  if (!n || tot <= 0) return 0;
+  let acc = 0;
+  v.forEach((x, i) => { acc += (2 * (i + 1) - n - 1) * x; });
+  return acc / (n * tot);
 }
 
-function rrect(ctx, x, y, w, h, r) {
-  r = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+// Calendar: 30-day months, 360-day years keep the arithmetic readable.
+function dateLabel(hours) {
+  const d = Math.floor(hours / 24), y = Math.floor(d / 360) + 1, m = Math.floor((d % 360) / 30), dd = d % 30 + 1;
+  const h = Math.floor(hours % 24), mi = Math.floor((hours % 1) * 60);
+  return { y, m, dd, text: `Year ${y} · ${MONTHS[m]} ${dd}`, clock: `${String(h).padStart(2, '0')}:${String(mi - mi % 15).padStart(2, '0')}` };
 }
-function ellipse(ctx, x, y, rx, ry) {
-  ctx.beginPath();
-  ctx.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), 0, 0, TAU);
-}
-function circle(ctx, x, y, r) { ctx.beginPath(); ctx.arc(x, y, Math.max(0.1, r), 0, TAU); }
 
-function fmtMoney(v) { const s = Math.round(Math.abs(v)).toLocaleString('en-US'); return (v < 0 ? '−$' : '$') + s; }
-function fmtHours(h) { return (Math.round(h * 10) / 10).toFixed(h >= 10 || Number.isInteger(Math.round(h * 10) / 10) ? 0 : 1) + ' h'; }
-function fmtClock(min) {
-  const m = ((Math.floor(min) % 1440) + 1440) % 1440;
-  const h = Math.floor(m / 60), mm = m % 60;
-  return String(h).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+// Weighted random choice: items [{w, v}]
+function weighted(items) {
+  const tot = sum(items, i => Math.max(0, i.w));
+  if (tot <= 0) return null;
+  let r = rand() * tot;
+  for (const i of items) { r -= Math.max(0, i.w); if (r <= 0) return i.v; }
+  return items[items.length - 1].v;
 }
-const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+// Loyalty spheres and their colors (used for agent dots and charts).
+const SPHERES = ['self', 'family', 'community', 'nation'];
+const SPHERE_COLOR = { self: '#f2b955', family: '#e8805a', community: '#7fd36b', nation: '#6fb7ff' };
+function dominant(w) { return SPHERES.reduce((b, k) => w[k] > w[b] ? k : b, 'self'); }
+function normalize(w) { const t = sum(SPHERES, k => w[k]); SPHERES.forEach(k => w[k] /= t); return w; }

@@ -1,0 +1,13 @@
+{
+  "name": "afterlight-sim",
+  "private": true,
+  "description": "Afterlight: an agent-based sim of living through the singularity. Single-file build, no runtime dependencies beyond the vendored Yuka.",
+  "scripts": {
+    "build": "node build.js",
+    "balance": "node test/headless.js 3",
+    "smoke": "node test/smoke.js"
+  },
+  "dependencies": {
+    "yuka": "0.7.8"
+  }
+}

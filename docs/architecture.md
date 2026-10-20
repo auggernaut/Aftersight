@@ -1,52 +1,35 @@
-# How the code is organized
+# How the sim is organized
 
-Afterlight is plain JavaScript drawing to a single Canvas 2D element. There is no framework, bundler or package dependency for the game itself.
-
-## Build
-
-`node build.js` reads every `src/*.js` file in name order, concatenates them inside one strict-mode function, and substitutes the result for the `/*__GAME__*/` marker in `template.html`. It writes:
-
-- `dist/index.html`: a complete standalone page you can open straight from disk.
-- `dist/afterlight.html`: the same body without the outer html/head wrapper, used to publish the Artifact.
-
-Because the files are concatenated rather than imported, every top-level name is shared across files and the numeric prefixes set the load order. Never edit `dist/` by hand.
-
-## Source files
+Plain JavaScript drawing to one Canvas 2D element, plus HTML panels. `node build.js` concatenates `src/*.js` in name order inside one strict-mode function, inlines `vendor/yuka.min.js` (Yuka 0.7.8, MIT) in its own script tag, and writes `dist/index.html`. Every top-level name is shared across files; the numeric prefixes set load order. Files `01`–`08` never touch the DOM, so `test/headless.js` can run the whole simulation in Node.
 
 | File | What it holds |
 |---|---|
-| `01_util.js` | Math and color helpers, including `gradeRGB`, the grey-to-golden color grade driven by town warmth. |
-| `02_world.js` | The 2400 × 1700 map: buildings, lots, paths, water, collision grid (16 px cells) and pathfinding. |
-| `03_data.js` | Static content: residents (`RES`), technologies (`PROJECTS`), ownership models (`OWNERSHIP`), creations (kitchen, garden, pavilion), styles and build modes. |
-| `04_sim.js` | The saved state `S`, household economics, days and time, the story chain (`QUEST_ORDER`), salvage and project progress. |
-| `05_npc.js` | Daily schedules and movement for residents. |
-| `06_dialogue.js` | All conversations, which branch on quest, mood and each resident's situation. |
-| `07_render.js` | Camera and drawing of the world: ground, buildings, trees, people, the diorama shading, tilt-shift blur and the low-effects fallback (`LOW_FX`). |
-| `08_projects_art.js` | Drawing of the technologies and creations as they are built, plus helper robots. |
-| `09_ui.js` | HTML panels: dialogue, Ledger, Notebook, Projects, town meetings, the Next card and guide arrow. |
-| `10_main.js` | Main loop, input, saving and loading, title and character creation screens, and the `window.__AL` test hooks. |
+| `01_util.js` | Seeded RNG, formatting, Gini, calendar (30-day months, 360-day years), loyalty colors. |
+| `02_rules.js` | `baseParams()` (every tunable number) and `DISCOVERIES` (tiers 1–4, then generated "generation N" discoveries forever). |
+| `03_world.js` | The 200 × 140 tile valley: terrain, the town street grid, parcels for new builds, street routing, job sites, names. |
+| `04_economy.js` | State `S`, ownership shares, the daily market (`econDay`), monthly appetite growth, investment by Helix / households / the town, distress sales, co-op drives, metrics and history. |
+| `05_agents.js` | Yuka-based agents: movement (`Vehicle` + `FollowPathBehavior`), goals (`ActivityGoal` = move then dwell), the goal evaluators, and the visible robot workers. |
+| `06_mind.js` | The Mind seam for a future local model (see below), plus template dialogue. |
+| `07_sim.js` | `newWorld(seed)`, the fixed-step `simStep(dt)`, day rollover, discoveries. |
+| `08_player.js` | Player actions and council votes. |
+| `09_render.js` | Camera, baked terrain, buildings, ownership bars, people, robots, night. |
+| `10_ui.js` | Indicators, happenings feed, inspector, action menus, chart, discovery banner. |
+| `11_main.js` | Main loop, speeds, input, and `window.__SIM` test hooks. |
 
-`template.html` holds the page shell, CSS and the HTML for panels.
+## Time
 
-## Story chain
+Agents run in hours, the economy in days. One step is 0.05 h at low speed (Yuka steering), 0.25–0.5 h at high speed (agents walk the same street path kinematically so they don't overshoot). The economy ticks once per day at midnight; appetite grows monthly; history is sampled weekly.
 
-The main quest runs through `QUEST_ORDER` in `src/04_sim.js`:
+## Decisions (Yuka)
 
-meet → solar (idea, plan, build) → first look at the Ledger → Teo's van → workshop (idea, plan, build) → Rosa's garden → greenhouse (idea, plan, build) → cover everyone's essentials → freedom → shared kitchen (plan, build) → first breakfast → epilogue.
+Each resident owns an `AgentBrain` (a `YUKA.Think`) with goal evaluators: sleep, work, family, social, volunteer, civic (national service), learn (retrain), pledge (to a co-op), council, propose (start a co-op), school and play. Each evaluator returns a desirability from the situation (time of day, household savings, job openness, open co-ops, construction in town, automation level) and is multiplied by a **character bias computed from that agent's loyalties**. For example work's bias is `0.35 + 0.9·self + 0.9·family`, volunteer's is `0.12 + 1.7·community`, civic's is `0.12 + 1.7·nation`. `arbitrate()` runs about hourly; the top four scores are kept so the inspector can show why someone is doing what they're doing.
+
+Loyalties drift: people dwelling at the same place nudge each other toward the average (3% per encounter), and trust in the player spreads the same way.
+
+## The Mind seam (for Muse Glimmer or another local model)
+
+`Mind.use(provider)` installs a provider with optional `choose(agent, scored, snapshot)` (return a goal kind to override Yuka's pick) and `say(agent, topic, ctx, snapshot)` (return a line). `snapshot(agent)` is the plain-data view a prompt would get: loyalties, needs, household and stakes, job, memory, and world state. Providers must answer synchronously from a cache and do any model work in the background; the sim never waits.
 
 ## Economy in one paragraph
 
-Each household has essential costs (housing, food, power, transport, other), a wage and a commute. Projects cost parts to build, have a daily operating cost and produce revenue plus a service (cheaper power, repairs and transport, cheaper food). Revenue after costs is split by ownership shares, with a slice to the Commons Fund. A household's required paid work is whatever its essentials still need after services and ownership income. Fewer required hours means more free time and energy, which changes routines, dialogue and the town's warmth.
-
-## Saving
-
-The game saves to `localStorage` under the key `afterlight-save-v1`. If the state shape changes in a way old saves can't load, bump that key.
-
-## Testing
-
-Both tests use Playwright with Chromium and open `dist/index.html`, so run `node build.js` first.
-
-- `node test/smoke.js`: boots the title screen, creates a character and takes a few screenshots.
-- `OPTION=equal node test/playthrough.js`: plays the full story through the real UI, using `window.__AL` only to teleport between places. `OPTION` can be `equal`, `need`, `odile` or `brightline`. Screenshots go to `/tmp/claude-0/play-<option>/` (override with `OUT`).
-
-If Playwright is installed globally, prefix with `NODE_PATH=$(npm root -g)`.
+Solar makes energy (yield × season); homes, racks, robots and the factory consume it; shortfalls are partly imported from the national grid at a high price, and prices follow demand/supply. Powered racks make compute; locally owned racks serve local demand first, Helix sells to whoever pays, including an outside appetite that grows 7% a month. Robots need energy and compute and do the automatable share of the town's work; spare robot hours are sold outside at a falling price. Humans get the remaining hours at a wage. Every asset pays its profit to its shareholders. The town taxes resident income and Helix's local profits and pays most of it out as a per-person dividend, investing the rest in commons assets. Households with savings invest according to their loyalties (co-op, commons, best-paying stake, national bonds that speed research, or keep a family buffer); households that run out of cash sell stakes, to Helix by default or to the town under right of first refusal.
