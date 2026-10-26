@@ -338,7 +338,7 @@ nav li {
   position: absolute;
   top: 40px;
   width: 305px;
-  height: 220px;
+  height: 300px;
 }
 
 #debug {
@@ -389,7 +389,8 @@ nav li {
 
 #monstertv {
   position: absolute;
-  top: 364px;
+  right: 380px;
+  top: 40px;
   width: 200px;
   background-color: red;
 }
@@ -918,3 +919,33 @@ nav li {
   left: 5px;
   bottom: 5px;
 }
+
+
+/* ---- Afterlight ---- */
+.alSub { font-size: 12px; opacity: 0.75; font-weight: normal; }
+.alTool { border-left: 4px solid #a23bd6; }
+#dcCoopButton, #depotCoopButton, #clinicButton { border-left-color: #2fbf4a; }
+#solarButton, #fusionButton { border-left-color: #3c59a8; }
+.alLocked { color: #999; }
+#alPanel { position: absolute; top: 350px; width: 305px; font-size: 12px; padding: 6px 8px; }
+#alPanel .alTitle { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+#alPanel .alTitle span { font-weight: 400; color: #555; }
+#alPanel .alSection { border-top: 1px solid #cfd8d3; padding: 4px 0; }
+#alPanel .alRow { display: flex; align-items: center; margin: 2px 0; }
+#alPanel .alLabel { width: 92px; }
+#alPanel .alBar { flex: 1; height: 9px; background: #e3e8e5; border: 1px solid #b9c4be; margin: 0 6px; position: relative; }
+#alPanel .alFill { display: block; height: 100%; width: 0; }
+#alPanel .alVal { width: 34px; text-align: right; }
+#alPanel .alStats { display: grid; grid-template-columns: 1fr 1fr; gap: 1px 8px; }
+#alPanel .alPolicy { display: block; cursor: pointer; }
+#alPanel .alNewsTitle { font-weight: 600; }
+#alNews { list-style: none; margin: 2px 0 0; padding: 0; max-height: 130px; overflow: hidden; }
+#alNews li { margin: 2px 0; line-height: 1.25; }
+#alNews .alDate { color: #777; }
+#alNews .al_bad { color: #b0201a; }
+#alNews .al_good { color: #1d7d33; }
+#alPaper { width: 520px; font-family: Georgia, 'Times New Roman', serif; background: #fbf7ec; }
+#alPaper .alPaperHead { background: #222; color: #fbf7ec; letter-spacing: 3px; height: auto; }
+#alPaper h2 { font-size: 22px; margin: 6px 0 10px; line-height: 1.2; }
+#alPaper.alBad .alPaperHead { background: #8b1a14; }
+#alPaper p { font-size: 15px; margin: 8px 0; }

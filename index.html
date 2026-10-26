@@ -18,9 +18,9 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, height=device-height, user-scalable=no">
-    <meta name="description" content="Play micropolisJS and build a virtual city in your browser! micropolisJS is a handwritten HTML5/Javascript port of Micropolis, the open-source release of SimCity (the 1989 version).">
+    <meta name="description" content="Afterlight: a city builder about living through the shift to a post-labor economy. A modified version of micropolisJS, the HTML5 port of Micropolis.">
     <link rel="stylesheet" media="screen" type="text/css" href="css/style.css">
-    <title>micropolisJS</title>
+    <title>Afterlight</title>
   </head>
   <body>
     <img id="tiles" class="imageData" src="images/tiles.png" alt="These are the game's principal tiles">
@@ -28,12 +28,12 @@
     <img id="sprites" class="imageData" src="images/sprites.png" alt="These are the game's sprites">
     <header id="header" class="chunk border-bottom padding10">
       <div class="left inlineblock">
-        <h1 id="title" class="white fontlarge">micropolisJS</h1>
+        <h1 id="title" class="white fontlarge">Afterlight <span class="alSub">a modified micropolisJS</span></h1>
       </div>
       <nav class="white right padding10 inlineblock">
         <ul>
           <li class="padding10"><a href="about.html" target="_blank">About</a></li>
-          <li class="padding10"><a href="https://github.com/graememcc/micropolisJS" target="_blank">GitHub</a></li>
+          <li class="padding10"><a href="https://github.com/graememcc/micropolisJS" target="_blank">micropolisJS on GitHub</a></li>
         </ul>
       </nav>
     </header>
@@ -43,7 +43,7 @@
         <div data-hasscript="false" id="loadingBanner" class="alignCenter padding10 mintcream chunk shadow centred">Loading</div>
         <div id="splash" class="mintcream awaitGeneration open shadow padding10 centred">
           <h2 class="chunk alignCenter">Welcome!</h2>
-          <p>micropolisJS is a handmade Javascript port of the open-source city simulator <cite>Micropolis</cite></p>
+          <p><b>Afterlight</b>: run a present-day town through the arrival of AI, robots and abundance. Built on micropolisJS, a Javascript port of the open-source city simulator <cite>Micropolis</cite>.</p>
           <div id="splashContainer"></div>
           <div id="splashButtonContainer">
             <div id="splashButtons">
@@ -62,6 +62,7 @@
             <input type="radio" class="difficulty" name="difficulty" id="difficultyEasy" value="0" checked="checked"><label for="difficultyEasy">Easy</label>
             <input type="radio" class="difficulty" name="difficulty" id="difficultyMed" value="1"><label for="difficultyMed">Medium</label>
             <input type="radio" class="difficulty" name="difficulty" id="difficultyHard" value="2"><label for="difficultyHard">Hard</label>
+            <div class="margin10"><input type="checkbox" id="alStarter" checked="checked"><label for="alStarter">Start with a present-day town (2026)</label></div>
             <div id="playSubmitDiv">
               <input id="playit" type="submit" value="Play!">
             </div>
@@ -134,6 +135,13 @@
             <button id="airportButton" data-size="6" data-tool="airport" data-colour="violet" class="toolButton unselected">Airport $10000</button>
             <button id="queryButton" data-size="1" data-tool="query" data-colour="cyan" class="toolButton unselected">Query</button>
             <button id="parkButton" data-size="1" data-tool="park" data-colour="darkgreen" class="toolButton unselected">Park $10</button>
+            <button id="dcHelixButton" data-size="3" data-tool="dcHelix" data-colour="#a23bd6" class="toolButton unselected alTool" title="Helix pays to build it and keeps the profits. The town gets a small fee.">Helix Data Ctr $100</button>
+            <button id="dcCoopButton" data-size="3" data-tool="dcCoop" data-colour="#2fbf4a" class="toolButton unselected alTool" title="The town owns it: profits go to the treasury or the dividend.">Co-op Data Ctr $4000</button>
+            <button id="depotHelixButton" data-size="3" data-tool="depotHelix" data-colour="#a23bd6" class="toolButton unselected alTool" title="Robots owned by Helix.">Helix Robot Depot $100</button>
+            <button id="depotCoopButton" data-size="3" data-tool="depotCoop" data-colour="#2fbf4a" class="toolButton unselected alTool" title="Robots owned by the town.">Co-op Robot Depot $2500</button>
+            <button id="solarButton" data-size="3" data-tool="solar" data-colour="#3c59a8" class="toolButton unselected alTool">Solar Farm $1500</button>
+            <button id="clinicButton" data-size="3" data-tool="clinic" data-colour="#ffffff" class="toolButton unselected alTool alLocked" title="Unlocked by the Cure">Healing Clinic $1200</button>
+            <button id="fusionButton" data-size="3" data-tool="fusion" data-colour="#5fe3ff" class="toolButton unselected alTool alLocked" title="Unlocked by Fusion">Fusion Plant $8000</button>
           </div>
         </div>
         <div id="tw" class="z1 rightedge initialHidden">
@@ -167,8 +175,8 @@
         </noscript>
       </main>
       <footer id="footer" class="alignCenter chunk white padding10">
-        Enjoyed micropolisJS? <a href="https://www.refuweegee.co.uk/your-donations">Click here to donate to a charity whose work I love!</a>
-        <div id="author" class="open">Brought to you by <a rel="author" href="http://www.graememcc.co.uk" target="_blank">Graeme McCutcheon</a><i><a rel="author" href="https://twitter.com/graememcc" target="_blank">(@graememcc)</a></i> and <a rel="author" href="https://github.com/graememcc/micropolisJS/graphs/contributors" target="_blank">contributors</a>
+        Afterlight is a modified version of <a href="https://github.com/graememcc/micropolisJS">micropolisJS</a>, released under the GNU GPL v3 with additional terms (see LICENSE and COPYING). It is not SimCity and is not affiliated with Electronic Arts.
+        <div id="author" class="open">micropolisJS brought to you by <a rel="author" href="http://www.graememcc.co.uk" target="_blank">Graeme McCutcheon</a><i><a rel="author" href="https://twitter.com/graememcc" target="_blank">(@graememcc)</a></i> and <a rel="author" href="https://github.com/graememcc/micropolisJS/graphs/contributors" target="_blank">contributors</a>
           <div id="build">Build: <%= htmlWebpackPlugin.options.gitHash %></div>
         </div>
         <div class="nameLicense">

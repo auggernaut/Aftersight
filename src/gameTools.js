@@ -22,6 +22,7 @@ import { RoadTool } from './roadTool.js';
 import { QueryTool } from './queryTool.js';
 import * as TileValues from "./tileValues.ts";
 import { WireTool } from './wireTool.js';
+import * as AL from './afterlight/buildings.js';
 
 function GameTools(map) {
   var tools = EventEmitter({
@@ -41,6 +42,15 @@ function GameTools(map) {
     query: new QueryTool(map),
     stadium: new BuildingTool(5000, TileValues.STADIUM, map, 4, false),
     wire: new WireTool(map),
+    // Afterlight buildings (see afterlight/buildings.js)
+    dcHelix: new BuildingTool(100, AL.DC_HELIX, map, 3, false),
+    dcCoop: new BuildingTool(4000, AL.DC_COOP, map, 3, false),
+    solar: new BuildingTool(1500, AL.SOLAR, map, 3, false),
+    solarCheap: new BuildingTool(750, AL.SOLAR, map, 3, false),
+    depotHelix: new BuildingTool(100, AL.DEPOT_HELIX, map, 3, false),
+    depotCoop: new BuildingTool(2500, AL.DEPOT_COOP, map, 3, false),
+    fusion: new BuildingTool(8000, AL.FUSION, map, 3, false),
+    clinic: new BuildingTool(1200, AL.CLINIC, map, 3, false),
   });
 
   tools.query.addEventListener(QUERY_WINDOW_NEEDED, MiscUtils.reflectEvent.bind(tools, QUERY_WINDOW_NEEDED));

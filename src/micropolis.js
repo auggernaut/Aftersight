@@ -18,6 +18,7 @@ import { SplashScreen } from './splashScreen.js';
 import { TileSet } from './tileSet.js';
 import { TileSetURI } from './tileSetURI.ts';
 import { TileSetSnowURI } from './tileSetSnowURI.ts';
+import { patchTileSet } from './afterlight/buildings.js';
 
 /*
  *
@@ -40,6 +41,9 @@ var onAllTilesLoaded = function() {
   // Kick things off properly
   var sprites = $('#sprites')[0];
   if (sprites.complete) {
+    // Afterlight: paint data centers, solar farms, depots, fusion and clinics into the reserved tile slots
+    patchTileSet(tileSet);
+    patchTileSet(snowTileSet);
     $('#loadingBanner').css('display', 'none');
     var s = new SplashScreen(tileSet, snowTileSet, sprites);
   } else {

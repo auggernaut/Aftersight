@@ -54,3 +54,7 @@ Augustin's reaction was that it looked about the same. The honest reason: everyt
 ## 2026-10-20: pivot to a simulation (branch `sim`)
 
 Augustin decided the game wants to be a simulation of living through the singularity rather than a scripted walkthrough. The cozy story build was retired (it remains on `main` at `f81a611`) and the repo restarted on the `sim` branch as a graphically minimal, agent-based sim using Yuka for agent decisions, with a seam left for a local model (Muse's Glimmer) later.
+
+## 2026-10-26: micropolis branch
+
+Augustin asked for "SimCity today": the singularity played out on a SimCity clone, with data-center backlash, riots, job loss and purposelessness alongside abundance and healing technologies. We forked micropolisJS (GPL-3.0) into the `micropolis` branch and added an Afterlight layer: compute and robots, a jobs shock, mood indicators, ownership policies, protests/riots/strikes/slumps and five discoveries. The agent sim stays on `sim`.

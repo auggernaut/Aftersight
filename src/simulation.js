@@ -34,6 +34,7 @@ import { Stadia } from './stadia.js';
 import { Traffic } from './traffic.js';
 import { Transport } from './transport.js';
 import { Valves } from './valves.js';
+import { AfterlightLayer } from './afterlight/layer.js';
 
 var Simulation = EventEmitter(function (gameMap, gameLevel, speed, savedGame) {
   this._map = gameMap;
@@ -45,7 +46,7 @@ var Simulation = EventEmitter(function (gameMap, gameLevel, speed, savedGame) {
   this._cityTime = 0;
   this._cityPopLast = 0;
   this._messageLast = undefined;
-  this._startingYear = 1900;
+  this._startingYear = 2026; // Afterlight: the game opens on a present-day town
 
   // Last date sent to front end
   this._cityYearLast = -1;
@@ -65,6 +66,8 @@ var Simulation = EventEmitter(function (gameMap, gameLevel, speed, savedGame) {
   this._repairManager = new RepairManager(this._map);
   this._traffic = new Traffic(this._map, this.spriteManager);
   this.disasterManager = new DisasterManager(this._map, this.spriteManager, this._gameLevel);
+  this.afterlight = new AfterlightLayer(this._map, this);
+  this._powerManager.afterlight = this.afterlight;
 
   this.blockMaps = {
     // Holds a "distance score" for the block from the city centre, range  -64 to 64
@@ -159,6 +162,7 @@ Simulation.prototype.save = function(saveData) {
   this._valves.save(saveData);
   this.budget.save(saveData);
   this._census.save(saveData);
+  this.afterlight.save(saveData);
 };
 
 
@@ -171,6 +175,7 @@ Simulation.prototype.load = function(saveData) {
   this._valves.load(saveData);
   this.budget.load(saveData);
   this._census.load(saveData);
+  this.afterlight.load(saveData);
 };
 
 
@@ -220,6 +225,7 @@ Simulation.prototype._simFrame = function() {
 
 Simulation.prototype._clearCensus = function() {
   this._census.clearCensus();
+  this.afterlight.beginScan();
   this._powerManager.clearPowerStack();
   this.blockMaps.fireStationMap.clear();
   this.blockMaps.policeStationMap.clear();
@@ -288,6 +294,7 @@ Simulation.prototype.init = function() {
   Residential.registerHandlers(this._mapScanner, this._repairManager);
   Stadia.registerHandlers(this._mapScanner, this._repairManager);
   Transport.registerHandlers(this._mapScanner, this._repairManager);
+  this.afterlight.registerHandlers(this._mapScanner, this._powerManager);
 
   var simData = this._constructSimData();
   this._mapScanner.mapScan(0, this._map.width, simData);
@@ -339,8 +346,11 @@ var simulate = function(simData) {
       break;
 
     case 9:
-      if (this._cityTime % CENSUS_FREQUENCY_10 === 0)
+      if (this._cityTime % CENSUS_FREQUENCY_10 === 0) {
         this._census.take10Census(budget);
+        // Afterlight: one month has passed (4 city-time units)
+        this.afterlight.monthly(simData);
+      }
 
       if (this._cityTime % CENSUS_FREQUENCY_120 === 0)
         this._census.take120Census(budget);

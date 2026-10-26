@@ -11,6 +11,7 @@
  *
  */
 
+import * as AL from './afterlight/buildings.js';
 import $ from "jquery";
 
 import { BaseTool } from './baseTool.js';
@@ -115,6 +116,13 @@ QueryTool.prototype.classifyZone = function(x, y) {
   for (index = 0, l = baseTiles.length - 1; index < l; index++) {
     if (tileValue < baseTiles[index + 1])
       break;
+  }
+
+  // Afterlight buildings live in the old church tile slots
+  var alCentre = AL.centreOf(this._map.getTileValue(x, y));
+  if (alCentre !== -1) {
+    $('#queryZoneType').text(AL.NAMES[alCentre]);
+    return;
   }
 
   $('#queryZoneType').text(Text.zoneTypes[index]);

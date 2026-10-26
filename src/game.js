@@ -39,6 +39,9 @@ import { Simulation } from './simulation.js';
 import { Storage } from './storage.js';
 import { Text } from './text.js';
 import { TouchWarnWindow } from './touchWarnWindow.js';
+import { AL_NEWS } from './afterlight/layer.js';
+import { AfterlightPanel } from './afterlight/panel.js';
+import { buildStarterTown, prewarm } from './afterlight/starterTown.js';
 
 var disasterTimeout = 20 * 1000;
 
@@ -59,6 +62,12 @@ function Game(gameMap, tileSet, snowTileSet, spriteSheet, difficulty, name) {
   this.snowTileSet = snowTileSet;
   this.defaultSpeed = Simulation.SPEED_MED;
   this.simulation = new Simulation(this.gameMap, difficulty, this.defaultSpeed, savedGame);
+
+  // Afterlight: unless the player asked for an empty valley, start from an ordinary present-day town
+  if (!savedGame && $('#alStarter').length && $('#alStarter').is(':checked')) {
+    this.starterTown = buildStarterTown(this.simulation, this.gameMap);
+    prewarm(this.simulation, 3);
+  }
 
   this.name = name || 'MyTown';
   this.everClicked = false;
@@ -227,6 +236,47 @@ function Game(gameMap, tileSet, snowTileSet, spriteSheet, difficulty, name) {
 
   // Unhide controls
   this.revealControls();
+
+  // Afterlight indicators, policies and newspaper
+  this.alPanel = new AfterlightPanel(this);
+  this.alPaperWindow = this.alPanel.paperWindow;
+  if (this.starterTown)
+    this.gameCanvas.centreOn(this.starterTown.x + 13, this.starterTown.y + 11);
+
+  // Test/debug hooks
+  var game = this;
+  window.__AL = {
+    game: this,
+    layer: this.simulation.afterlight,
+    // Run the simulation flat out for a number of game months, without waiting for wall-clock ticks
+    fastForward: function(months) {
+      var sim = game.simulation;
+      for (var i = 0; i < months * 4 * 16; i++)
+        sim._simulate(sim._constructSimData());
+      sim._updateTime();
+      game.alPanel.refresh(true);
+    },
+    discover: function(id) { game.simulation.afterlight.discover(id, game.simulation._constructSimData()); game.alPanel.refresh(true); },
+    protest: function() { var r = game.simulation.afterlight.startProtest(); game.alPanel.refresh(true); return r; },
+    riot: function() { var sim = game.simulation; var p = sim.afterlight.s.protest; var r = p ? sim.afterlight.riot(sim._constructSimData(), p.x, p.y) : sim.afterlight.riot(sim._constructSimData()); game.alPanel.refresh(true); return r; },
+    strike: function() { game.simulation.afterlight.strike(); game.alPanel.refresh(true); },
+    state: function() { return JSON.parse(JSON.stringify(game.simulation.afterlight.s)); },
+    census: function() { var c = game.simulation._census; return {resPop: c.resPop, comPop: c.comPop, indPop: c.indPop, totalPop: c.totalPop, powered: c.poweredZoneCount, unpowered: c.unpoweredZoneCount, dc: c.alDCCount}; },
+    sites: function() { return game.simulation.afterlight.sites.slice(); },
+    centreOn: function(x, y) { game.gameCanvas.centreOn(x, y); },
+    // Build with a player tool at a map position (centre tile), paying from city funds like a click would
+    build: function(toolName, x, y) {
+      var tool = game.inputStatus.gameTools[toolName];
+      if (!game.simulation.afterlight.isUnlocked(toolName)) return 'locked';
+      if (toolName === 'solar' && game.simulation.afterlight.toolCostMultiplier('solar') < 1) tool = game.inputStatus.gameTools.solarCheap;
+      tool.doTool(x, y, game.simulation.blockMaps);
+      return tool.modifyIfEnoughFunding(game.simulation.budget) ? 'ok' : 'failed:' + tool.result;
+    },
+    findSite: function() { return game.simulation.afterlight.findSite(); },
+    setPolicy: function(name, v) { game.simulation.afterlight.setPolicy(name, v); game.alPanel.refresh(true); },
+    funds: function() { return game.simulation.budget.totalFunds; },
+    date: function() { return game.simulation.getDate(); }
+  };
 
   // Run the sim
   this.tick = tick.bind(this);
@@ -457,6 +507,22 @@ Game.prototype.handleTool = function(data) {
     return;
 
   var tool = this.inputStatus.currentTool;
+  var toolName = this.inputStatus.toolName;
+  var layer = this.simulation.afterlight;
+
+  // Afterlight: later-tier buildings wait for their discovery; cheap solar halves the solar farm's price
+  if (!layer.isUnlocked(toolName)) {
+    $('#toolOutput').text(toolName === 'fusion' ? 'Fusion has not been invented yet' : 'Needs the Cure discovery first');
+    return;
+  }
+  if (toolName === 'solar' && layer.toolCostMultiplier('solar') < 1)
+    tool = this.inputStatus.gameTools.solarCheap;
+  if (toolName === 'dcHelix' || toolName === 'depotHelix') {
+    if (!layer.s.policies.helixExpansion) {
+      $('#toolOutput').text('The council has blocked new Helix construction');
+      return;
+    }
+  }
 
   var budget = this.simulation.budget;
   var evaluation = this.simulation.evaluation;
@@ -539,6 +605,22 @@ var touchListener = function(e) {
 Game.prototype.processFrontEndMessage = function(message) {
   var subject = message.subject;
   var d = new Date();
+
+  // Afterlight news: notification bar, map link, and a newspaper page for big stories
+  if (subject === AL_NEWS) {
+    var al = message.data;
+    this._notificationBar.custom(al.tone, al.text, al.x, al.y);
+    if (al.showable && al.x !== undefined)
+      this.monsterTV.show(al.x, al.y);
+    if (al.paper && !this.dialogOpen && !this.alNoPaper) {
+      this.dialogOpen = true;
+      this._openWindow = 'alPaperWindow';
+      this.alPaperWindow.open(al);
+    }
+    if (this.alPanel)
+      this.alPanel.refresh(true);
+    return;
+  }
 
   if (Text.goodMessages[subject] !== undefined) {
     var cMessage = this.name + ' is now a ';
@@ -688,6 +770,10 @@ var commonAnimate = function() {
 
   var sprites = this.calculateSpritesForPaint(this.gameCanvas);
   this.gameCanvas.paint(this.mouse, sprites, this.isPaused);
+  if (this.alPanel) {
+    this.gameCanvas.paintOverlays(this.alPanel.overlays(), AfterlightPanel.drawOverlay);
+    this.alPanel.refresh(false);
+  }
 
   sprites = this.calculateSpritesForPaint(this.monsterTV.canvas);
   this.monsterTV.paint(sprites, this.isPaused);

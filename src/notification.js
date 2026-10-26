@@ -107,6 +107,17 @@ Notification.prototype.createMessage = function(message) {
 };
 
 
+// Afterlight: free-text news with an optional map link
+Notification.prototype.custom = function(tone, text, x, y) {
+  this._element.removeClass('neutral good bad');
+  this._element.addClass(tone === 'good' ? 'good' : tone === 'bad' ? 'bad' : 'neutral');
+  if (x !== undefined && y !== undefined)
+    this._displayLink(text, x, y);
+  else
+    this._displayText(text);
+};
+
+
 Notification.prototype.badNews = function(message) {
   this._element.removeClass('neutral');
   this._element.removeClass('good');

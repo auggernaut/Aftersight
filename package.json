@@ -1,7 +1,7 @@
 {
-  "name": "micropolisJS",
+  "name": "afterlight",
   "version": "0.0.1",
-  "description": "A port of the open-source simulator \"Micropolis\" to Javascript/HTML5",
+  "description": "Afterlight: a city builder about living through the shift to a post-labor economy. A modified version of micropolisJS (GPL-3.0).",
   "repository": {
     "type": "git",
     "url": "https://github.com/graememcc/micropolisJS.git"
@@ -17,7 +17,9 @@
     "test:watch": "jest --watch",
     "lint": "tslint src/*.ts test/*.ts",
     "dev": "webpack serve --mode development",
-    "production": "webpack serve --mode production"
+    "production": "webpack serve --mode production",
+    "smoke": "node e2e/smoke.cjs",
+    "compare": "node e2e/compare.cjs"
   },
   "devDependencies": {
     "@types/jest": "30.0.0",
@@ -38,5 +40,6 @@
   "readmeFilename": "README.md",
   "dependencies": {
     "jquery": "3.7.1"
-  }
+  },
+  "private": true
 }

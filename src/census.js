@@ -78,6 +78,16 @@ Census.prototype.clearCensus = function() {
   this.fireStationPop = 0;
   this.stadiumPop = 0;
   this.coalPowerPop = 0;
+  // Afterlight layer counters (filled by its map scanner handlers)
+  this.alDCCount = 0;
+  this.alDCHelixOn = 0;
+  this.alDCCoopOn = 0;
+  this.alDepotHelixOn = 0;
+  this.alDepotCoopOn = 0;
+  this.alClinicOn = 0;
+  this.alSolarPop = 0;
+  this.alFusionPop = 0;
+  this.alPowerDraw = 0;
   this.nuclearPowerPop = 0;
   this.seaportPop = 0;
   this.airportPop = 0;

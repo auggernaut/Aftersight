@@ -72,8 +72,13 @@ Valves.prototype.setValves = function(gameLevel, census, budget) {
   // A lack of developed commercial and industrial zones means there are no employment opportunities, which constrain
   // growth. (This might hurt initially if, for example, the player lays out an initial grid, as the residential zones
   // will likely develop first, so the residential valve will immediately crater).
+  // Afterlight jobs shock: automation removes a share of the jobs each commercial/industrial zone offers
+  // (alJobFactor), while a citizen dividend can replace lost wages (alIncomeSupport) so people stay.
+  var jobFactor = census.alJobFactor === undefined ? 1 : census.alJobFactor;
+  var incomeSupport = census.alIncomeSupport || 0;
+
   if (census.resPop > 0)
-    employment = (census.comHist10[1] + census.indHist10[1]) / normalizedResPop;
+    employment = ((census.comHist10[1] + census.indHist10[1]) * jobFactor + incomeSupport) / normalizedResPop;
   else
     employment = 1;
 
@@ -83,7 +88,8 @@ Valves.prototype.setValves = function(gameLevel, census, budget) {
   var projectedResPop = normalizedResPop + migration + births;
 
   // Examine how many zones require workers
-  labourBase = census.comHist10[1] + census.indHist10[1];
+  // Robots fill jobs too, so automated zones aren't held back by a shortage of human labour
+  labourBase = (census.comHist10[1] + census.indHist10[1]) * jobFactor;
   if (labourBase > 0.0)
     labourBase = census.resHist10[1] / labourBase;
   else

@@ -658,6 +658,35 @@ GameCanvas.prototype.paint = function(mouse, sprites, isPaused) {
 };
 
 
+// Afterlight: draw overlays (e.g. protest camps) on top of the tiles, and mark the tiles underneath as damaged so
+// the incremental painter repaints them next frame (which also lets overlays animate).
+GameCanvas.prototype.paintOverlays = function(list, drawFn) {
+  if (!this.ready || !list || list.length === 0)
+    return;
+
+  var ctx = this._canvas.getContext('2d');
+  var tw = this._tileSet.tileWidth;
+  var t = Date.now();
+  var viewW = this._totalTilesInViewX, viewH = this._totalTilesInViewY;
+
+  for (var i = 0; i < list.length; i++) {
+    var item = list[i];
+    var vx = item.x - this._originX, vy = item.y - this._originY;
+    if (vx + item.w + 2 < 0 || vy + item.h + 2 < 0 || vx - 2 > viewW || vy - 2 > viewH)
+      continue;
+
+    drawFn(ctx, item, vx * tw, vy * tw, tw, t);
+
+    if (this._lastPaintedTiles === null)
+      continue;
+
+    for (var y = Math.max(0, vy - 2); y < Math.min(viewH, vy + item.h + 2); y++)
+      for (var x = Math.max(0, vx - 2); x < Math.min(viewW, vx + item.w + 2); x++)
+        this._lastPaintedTiles[y * viewW + x] = -2;
+  }
+};
+
+
 GameCanvas.DEFAULT_ID = 'MicropolisCanvas';
 
 

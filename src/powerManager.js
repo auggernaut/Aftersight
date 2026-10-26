@@ -19,6 +19,7 @@ import { NOT_ENOUGH_POWER } from './messages.ts';
 import { Random } from './random.ts';
 import { ANIMBIT, BURNBIT, CONDBIT, POWERBIT } from "./tileFlags.ts";
 import { NUCLEAR, POWERPLANT } from "./tileValues.ts";
+import { FUSION, SOLAR } from "./afterlight/buildings.js";
 
 var COAL_POWER_STRENGTH = 700;
 var NUCLEAR_POWER_STRENGTH = 2000;
@@ -35,7 +36,7 @@ PowerManager.prototype.setTilePower = function(x, y) {
   var tile = this._map.getTile(x, y);
   var tileValue = tile.getValue();
 
-  if (tileValue === NUCLEAR || tileValue === POWERPLANT ||
+  if (tileValue === NUCLEAR || tileValue === POWERPLANT || tileValue === SOLAR || tileValue === FUSION ||
       this.powerGridMap.worldGet(x, y) > 0) {
     tile.addFlags(POWERBIT);
     return;
@@ -76,7 +77,15 @@ PowerManager.prototype.doPowerScan = function(census) {
   var maxPower = census.coalPowerPop * COAL_POWER_STRENGTH +
                  census.nuclearPowerPop * NUCLEAR_POWER_STRENGTH;
 
+  // Afterlight: solar and fusion add capacity; data centers, depots and clinics pull extra load
+  if (this.afterlight)
+    maxPower += this.afterlight.extraPower(census);
+  this.extraDraw = census.alPowerDraw || 0;
+
   var powerConsumption = 0; // Amount of power used.
+  this.lastMaxPower = Math.max(0, maxPower);
+  this.lastConsumption = 0;
+  this.lastShort = false;
 
   while (this._powerStack.length > 0) {
     var pos = this._powerStack.pop();
@@ -84,7 +93,9 @@ PowerManager.prototype.doPowerScan = function(census) {
     var conNum;
     do {
       powerConsumption++;
+      this.lastConsumption = Math.min(powerConsumption, this.lastMaxPower);
       if (powerConsumption > maxPower) {
+        this.lastShort = true;
         this._emitEvent(NOT_ENOUGH_POWER);
         return;
       }

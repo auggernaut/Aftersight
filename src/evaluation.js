@@ -42,7 +42,7 @@ Evaluation.prototype.cityEvaluation = function(simData) {
     this.getPopulation(census);
     this.doProblems(simData.census, simData.budget, simData.blockMaps);
     this.getScore(simData);
-    this.doVotes();
+    this.doVotes(census);
   } else {
     this.evalInit();
     this.cityYes = 50;
@@ -211,6 +211,10 @@ Evaluation.prototype.doProblems = function(census, budget, blockMaps) {
   problemData[Evaluation.TAXES]        = budget.cityTax * 10;
   problemData[Evaluation.TRAFFIC]      = getTrafficAverage(blockMaps, census);
   problemData[Evaluation.UNEMPLOYMENT] = getUnemployment(census);
+  // Afterlight: automation-driven joblessness counts too
+  if (census.alUnemployment !== undefined)
+    problemData[Evaluation.UNEMPLOYMENT] = Math.max(problemData[Evaluation.UNEMPLOYMENT],
+                                                   Math.min(255, Math.round(census.alUnemployment * 400)));
   problemData[Evaluation.FIRE]         = getFireSeverity(census);
 
   this.voteProblems();
@@ -312,7 +316,7 @@ Evaluation.prototype.getScore = function(simData) {
 };
 
 
-Evaluation.prototype.doVotes = function() {
+Evaluation.prototype.doVotes = function(census) {
   // Survey 100 voters on the mayor's performance
   this.cityYes = 0;
 
@@ -321,6 +325,10 @@ Evaluation.prototype.doVotes = function() {
     if (this.cityScore > voterExpectation)
       this.cityYes++;
   }
+
+  // Afterlight: hope lifts approval, backlash sinks it
+  if (census && census.alOpinionShift)
+    this.cityYes = MiscUtils.clamp(this.cityYes + census.alOpinionShift, 0, 100);
 };
 
 
