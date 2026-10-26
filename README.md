@@ -1,8 +1,8 @@
-# Afterlight (micropolis-iso branch)
+# Aftersight (micropolis-iso branch)
 
-Afterlight is a city builder about living through the singularity: a present-day town meets AI, robots and abundance. The central question is still who owns the economic engine (energy, compute, robots), and what that does to jobs, purpose and peace.
+Aftersight (formerly Afterlight) is a city builder about living through the singularity: a present-day town meets AI, robots and abundance. The central question is still who owns the economic engine (energy, compute, robots), and what that does to jobs, purpose and peace.
 
-This branch is built on **[micropolisJS](https://github.com/graememcc/micropolisJS)**, Graeme McCutcheon's HTML5 port of Micropolis, the open-source release of the 1989 SimCity engine. Afterlight is a **modified version** of micropolisJS. It is not SimCity and is not affiliated with Electronic Arts. The upstream README is kept as [README.micropolisJS.md](README.micropolisJS.md).
+This branch is built on **[micropolisJS](https://github.com/graememcc/micropolisJS)**, Graeme McCutcheon's HTML5 port of Micropolis, the open-source release of the 1989 SimCity engine. Aftersight is a **modified version** of micropolisJS. It is not SimCity and is not affiliated with Electronic Arts. The upstream README is kept as [README.micropolisJS.md](README.micropolisJS.md).
 
 This branch (`micropolis-iso`) keeps the Micropolis engine and the Afterlight layer from `micropolis` and replaces the presentation: an isometric city view and a modern interface (see below). Other branches: `micropolis` has the same game with the original 1989 top-down tiles; `sim` holds the earlier agent-based valley sim (Yuka agents); `main` holds the retired cozy story build.
 

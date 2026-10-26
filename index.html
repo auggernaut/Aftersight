@@ -18,17 +18,17 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, height=device-height, user-scalable=no">
-    <meta name="description" content="Afterlight: a city builder about living through the shift to a post-labor economy. A modified version of micropolisJS, the HTML5 port of Micropolis.">
+    <meta name="description" content="Aftersight: a city builder about living through the shift to a post-labor economy. A modified version of micropolisJS, the HTML5 port of Micropolis.">
     <link rel="stylesheet" media="screen" type="text/css" href="css/style.css">
     <link rel="stylesheet" media="screen" type="text/css" href="css/afterlight-iso.css">
-    <title>Afterlight</title>
+    <title>Aftersight</title>
   </head>
   <body>
     <img id="tiles" class="imageData" src="images/tiles.png" alt="These are the game's principal tiles">
     <img id="snowtiles" class="imageData" src="images/tilessnow.png" alt="These are the game's alternate tiles">
     <img id="sprites" class="imageData" src="images/sprites.png" alt="These are the game's sprites">
     <header id="header">
-      <div id="brand"><span id="brandMark"></span><h1 id="title">Afterlight</h1><span class="alSub">a modified micropolisJS</span></div>
+      <div id="brand"><span id="brandMark"></span><h1 id="title">Aftersight</h1><span class="alSub">a modified micropolisJS</span></div>
       <div id="hud" class="initialHidden">
         <div class="hudItem hudCity"><span id="name">Your Name Here</span><span id="cclass" class="hudSub">VILLAGE</span></div>
         <div class="hudItem"><label>Date</label><span id="date">Jan 1900</span></div>
@@ -63,7 +63,7 @@
         <div data-hasscript="false" id="loadingBanner" class="alignCenter padding10 mintcream chunk shadow centred">Loading</div>
         <div id="splash" class="mintcream awaitGeneration open shadow padding10 centred">
           <h2 class="chunk alignCenter">Welcome!</h2>
-          <p><b>Afterlight</b>: run a present-day town through the arrival of AI, robots and abundance. Built on micropolisJS, a Javascript port of the open-source city simulator <cite>Micropolis</cite>.</p>
+          <p><b>Aftersight</b>: run a present-day town through the arrival of AI, robots and abundance. Built on micropolisJS, a Javascript port of the open-source city simulator <cite>Micropolis</cite>.</p>
           <div id="splashContainer"></div>
           <div id="splashButtonContainer">
             <div id="splashButtons">
@@ -120,7 +120,7 @@
             <button id="solarButton" data-size="3" data-tool="solar" data-colour="#3c59a8" class="toolButton unselected alTool" data-tip="Solar farm · $1,500"><span class="tbIcon" data-icon="solar"></span><span class="tbLabel">Solar</span></button>
             <button id="fusionButton" data-size="3" data-tool="fusion" data-colour="#5fe3ff" class="toolButton unselected alTool alLocked" data-tip="Fusion plant · $8,000. Unlocked by the Fusion discovery"><span class="tbIcon" data-icon="fusion"></span><span class="tbLabel">Fusion</span></button>
           </div>
-          <div class="toolGroup" data-group="Afterlight"><div class="toolGroupLabel">Afterlight</div>
+          <div class="toolGroup" data-group="Afterlight"><div class="toolGroupLabel">Aftersight</div>
             <button id="dcHelixButton" data-size="3" data-tool="dcHelix" data-colour="#a23bd6" class="toolButton unselected alTool" data-tip="Helix data center · $100. Helix pays to build it and keeps the profits; the town gets a small fee"><span class="tbIcon" data-icon="dcHelix"></span><span class="tbLabel">Helix DC</span></button>
             <button id="dcCoopButton" data-size="3" data-tool="dcCoop" data-colour="#2fbf4a" class="toolButton unselected alTool" data-tip="Co-op data center · $4,000. The town owns it: profits go to the treasury or the dividend"><span class="tbIcon" data-icon="dcCoop"></span><span class="tbLabel">Co-op DC</span></button>
             <button id="depotHelixButton" data-size="3" data-tool="depotHelix" data-colour="#a23bd6" class="toolButton unselected alTool" data-tip="Helix robot depot · $100. Robots owned by Helix"><span class="tbIcon" data-icon="depotHelix"></span><span class="tbLabel">Helix robots</span></button>
@@ -157,7 +157,7 @@
         </noscript>
       </main>
       <footer id="footer" class="alignCenter chunk white padding10">
-        Afterlight is a modified version of <a href="https://github.com/graememcc/micropolisJS">micropolisJS</a>, released under the GNU GPL v3 with additional terms (see LICENSE and COPYING). It is not SimCity and is not affiliated with Electronic Arts.
+        Aftersight is a modified version of <a href="https://github.com/graememcc/micropolisJS">micropolisJS</a>, released under the GNU GPL v3 with additional terms (see LICENSE and COPYING). It is not SimCity and is not affiliated with Electronic Arts.
         <div id="author" class="open">micropolisJS brought to you by <a rel="author" href="http://www.graememcc.co.uk" target="_blank">Graeme McCutcheon</a><i><a rel="author" href="https://twitter.com/graememcc" target="_blank">(@graememcc)</a></i> and <a rel="author" href="https://github.com/graememcc/micropolisJS/graphs/contributors" target="_blank">contributors</a>
           <div id="build">Build: <%= htmlWebpackPlugin.options.gitHash %></div>
         </div>
@@ -166,12 +166,12 @@
         </div>
       </footer>
       <div class="hidden modal shadow" id="aboutWindow">
-        <header class="padding10 chunk alignCenter">About Afterlight</header>
+        <header class="padding10 chunk alignCenter">About Aftersight</header>
         <div class="padding10 open aboutBody">
-          <p><b>Afterlight</b> is a city builder about living through the shift to a post-labor economy: who owns the energy, the compute and the robots, and what happens to work, purpose and hope when machines can do most jobs.</p>
-          <p>It is a modified version of <a href="https://github.com/graememcc/micropolisJS" target="_blank">micropolisJS</a> by Graeme McCutcheon and contributors, the HTML5 port of Micropolis, which is based on the original city simulator by Will Wright and Maxis, open-sourced by Electronic Arts. The simulation engine is micropolisJS; the isometric view, the interface and the Afterlight layer (compute, robots, ownership, mood and events) are new and drawn procedurally in code.</p>
-          <p>Afterlight and micropolisJS are free software released under the <a href="LICENSE" target="_blank">GNU General Public License v3</a> with additional terms; see <a href="LICENSE" target="_blank">LICENSE</a> and <a href="COPYING" target="_blank">COPYING</a>. You are entitled to the source code of this modified version.</p>
-          <p>Micropolis is a registered trademark of <a href="https://www.micropolis.com" target="_blank">Micropolis Corporation (Micropolis GmbH)</a> and is licensed here as a courtesy of the owner under the <a href="name_license.html" target="_blank">Micropolis Public Name License</a>. Afterlight is not SimCity and is not affiliated with or endorsed by Electronic Arts or Maxis.</p>
+          <p><b>Aftersight</b> is a city builder about living through the shift to a post-labor economy: who owns the energy, the compute and the robots, and what happens to work, purpose and hope when machines can do most jobs.</p>
+          <p>It is a modified version of <a href="https://github.com/graememcc/micropolisJS" target="_blank">micropolisJS</a> by Graeme McCutcheon and contributors, the HTML5 port of Micropolis, which is based on the original city simulator by Will Wright and Maxis, open-sourced by Electronic Arts. The simulation engine is micropolisJS; the isometric view, the interface and the Aftersight layer (compute, robots, ownership, mood and events) are new and drawn procedurally in code.</p>
+          <p>Aftersight and micropolisJS are free software released under the <a href="LICENSE" target="_blank">GNU General Public License v3</a> with additional terms; see <a href="LICENSE" target="_blank">LICENSE</a> and <a href="COPYING" target="_blank">COPYING</a>. You are entitled to the source code of this modified version.</p>
+          <p>Micropolis is a registered trademark of <a href="https://www.micropolis.com" target="_blank">Micropolis Corporation (Micropolis GmbH)</a> and is licensed here as a courtesy of the owner under the <a href="name_license.html" target="_blank">Micropolis Public Name License</a>. Aftersight is not SimCity and is not affiliated with or endorsed by Electronic Arts or Maxis.</p>
           <p class="aboutMore"><a href="about.html" target="_blank">The original micropolisJS about page</a></p>
           <form id="aboutForm" class="alignCenter margin10"><input type="submit" id="aboutOK" class="dialogOK" value="Close"></form>
         </div>
