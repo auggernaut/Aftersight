@@ -1,5 +1,6 @@
 /* Afterlight layer for micropolisJS. Modified version of micropolisJS; GPL-3.0 (see LICENSE, COPYING).
  * The indicators/policy panel, the Valley Ledger newspaper window, and map overlays (protest camps).
+ * The iso build restyles these (css/afterlight-iso.css) and draws protests itself (iso/isoCanvas.js).
  */
 
 import $ from "jquery";
@@ -11,8 +12,8 @@ var bar = function(id, label, colour) {
 };
 
 var policy = function(id, label, title) {
-  return '<label class="alPolicy" title="' + title + '"><input type="checkbox" id="alPol_' + id + '" data-policy="' + id + '"> ' +
-         label + '</label>';
+  return '<label class="alPolicy" data-tip="' + title + '"><input type="checkbox" class="alSwitch" id="alPol_' + id + '" data-policy="' + id + '">' +
+         '<span>' + label + '</span></label>';
 };
 
 function AfterlightPanel(game) {
@@ -21,38 +22,46 @@ function AfterlightPanel(game) {
   this._last = 0;
 
   var html =
-    '<div id="alPanel" class="controlShadow mintcream z1 rightedge open">' +
-      '<div class="alTitle">Afterlight <span id="alEra"></span></div>' +
-      '<div class="alSection">' +
-        bar('alUnemp', 'Unemployment', '#d9534f') +
+    '<div id="alPanel">' +
+      '<div class="alTitle"><span class="alTitleText">City pulse</span> <span id="alEra"></span>' +
+        '<button id="alCollapse" class="alCollapse" data-tip="Hide or show the panel">&#x2013;</button></div>' +
+      '<div class="alBody">' +
+      '<div class="alSection alDemand"><div class="alSectionTitle">Demand</div><div id="alRCI"></div></div>' +
+      '<div class="alSection alMood"><div class="alSectionTitle">Mood</div>' +
+        bar('alUnemp', 'Unemployment', '#e0574f') +
         bar('alPurpose', 'Purpose', '#5b8def') +
-        bar('alBacklash', 'Backlash', '#e08a1e') +
-        bar('alHope', 'Hope', '#2fbf4a') +
+        bar('alBacklash', 'Backlash', '#f0962e') +
+        bar('alHope', 'Hope', '#35c45a') +
       '</div>' +
       '<div class="alSection alStats">' +
-        '<div>Power <b id="alPower"></b></div>' +
-        '<div>Compute <b id="alCompute"></b></div>' +
-        '<div>Robots <b id="alRobots"></b></div>' +
-        '<div>Automation <b id="alAuto"></b></div>' +
-        '<div>Helix owns <b id="alHelix"></b></div>' +
-        '<div>Dividend <b id="alDividend"></b></div>' +
+        '<div><span>Power</span><b id="alPower"></b></div>' +
+        '<div><span>Compute</span><b id="alCompute"></b></div>' +
+        '<div><span>Robots</span><b id="alRobots"></b></div>' +
+        '<div><span>Automation</span><b id="alAuto"></b></div>' +
+        '<div><span>Helix owns</span><b id="alHelix"></b></div>' +
+        '<div><span>Dividend</span><b id="alDividend"></b></div>' +
       '</div>' +
-      '<div class="alSection">' +
+      '<div class="alSection alPolicies"><div class="alSectionTitle">Policies</div>' +
         policy('helixExpansion', 'Let Helix build', 'Helix may build data centers and robot depots on its own wherever there is power.') +
         policy('dividend', 'Citizen dividend', '20% of Helix automation income and half of co-op profits go to residents.') +
         policy('communityFirst', 'Community-first zoning', 'Every Helix site gives the town a 25% stake; Helix builds half as often.') +
         policy('purposeProgram', 'Purpose programs', 'City-funded guilds, apprenticeships and civic projects. Costs money each month.') +
       '</div>' +
-      '<div class="alSection"><div class="alNewsTitle">Valley news</div><ul id="alNews"></ul></div>' +
+      '<div class="alSection alNewsBox"><div class="alSectionTitle">Valley news</div><ul id="alNews"></ul></div>' +
+      '</div>' +
     '</div>' +
     '<div class="hidden modal shadow" id="alPaper">' +
-      '<header class="padding10 chunk alignCenter alPaperHead">THE VALLEY LEDGER <span id="alPaperDate"></span></header>' +
-      '<div class="padding10 open">' +
-        '<h2 id="alPaperHeadline" class="alignCenter"></h2>' +
-        '<p id="alPaperBody"></p>' +
-        '<p><b>Helps:</b> <span id="alPaperHelps"></span></p>' +
-        '<p><b>Strains:</b> <span id="alPaperStrains"></span></p>' +
-        '<form id="alPaperForm" class="alignCenter margin10"><input type="submit" id="alPaperOK" class="dialogOK" value="OK"></form>' +
+      '<div class="paperMast"><div class="paperEdition"><span>Vol. XXVI</span><span id="alPaperDate"></span><span>One dollar</span></div>' +
+        '<div class="alPaperHead">The Valley Ledger</div>' +
+        '<div class="paperRule"></div></div>' +
+      '<div class="paperBody open">' +
+        '<div class="paperKicker" id="alPaperKicker">Breaking</div>' +
+        '<h2 id="alPaperHeadline"></h2>' +
+        '<div class="paperPhoto"><canvas id="alPaperPhoto" width="1120" height="440"></canvas><div class="paperCaption" id="alPaperCaption"></div></div>' +
+        '<div class="paperCols"><p id="alPaperBody"></p>' +
+          '<div class="paperFacts"><div class="paperHelps"><b>Helps</b><span id="alPaperHelps"></span></div>' +
+          '<div class="paperStrains"><b>Strains</b><span id="alPaperStrains"></span></div></div></div>' +
+        '<form id="alPaperForm" class="alignCenter"><input type="submit" id="alPaperOK" class="dialogOK" value="Back to the city"></form>' +
       '</div>' +
     '</div>';
   $('#canvasContainer').append(html);
@@ -73,6 +82,8 @@ function AfterlightPanel(game) {
       $('#alPaperHelps').text(data.helps || '');
       $('#alPaperStrains').text(data.strains || '');
       $('#alPaper').toggleClass('alBad', data.tone === 'bad');
+      $('#alPaperKicker').text(data.tone === 'bad' ? 'Trouble in the Valley' : data.tone === 'good' ? 'Good news' : 'Breaking');
+      if (self.onPaperOpen) self.onPaperOpen(data);
       $('#opaque').removeClass('hidden');
       $('#alPaper').removeClass('hidden');
     },
@@ -124,7 +135,7 @@ AfterlightPanel.prototype.refresh = function(force) {
   for (var name in s.policies) $('#alPol_' + name).prop('checked', !!s.policies[name]);
   $('#clinicButton').toggleClass('alLocked', !this.layer.isUnlocked('clinic'));
   $('#fusionButton').toggleClass('alLocked', !this.layer.isUnlocked('fusion'));
-  $('#solarButton').text(this.layer.toolCostMultiplier('solar') < 1 ? 'Solar Farm $750' : 'Solar Farm $1500');
+  $('#solarButton').attr('data-tip', this.layer.toolCostMultiplier('solar') < 1 ? 'Solar farm · $750 (cheap solar)' : 'Solar farm · $1,500');
 };
 
 // Protest camps drawn over the map: a pulsing ring of red placards around the blockaded data center

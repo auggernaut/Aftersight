@@ -20,21 +20,41 @@
     <meta name="viewport" content="width=device-width, height=device-height, user-scalable=no">
     <meta name="description" content="Afterlight: a city builder about living through the shift to a post-labor economy. A modified version of micropolisJS, the HTML5 port of Micropolis.">
     <link rel="stylesheet" media="screen" type="text/css" href="css/style.css">
+    <link rel="stylesheet" media="screen" type="text/css" href="css/afterlight-iso.css">
     <title>Afterlight</title>
   </head>
   <body>
     <img id="tiles" class="imageData" src="images/tiles.png" alt="These are the game's principal tiles">
     <img id="snowtiles" class="imageData" src="images/tilessnow.png" alt="These are the game's alternate tiles">
     <img id="sprites" class="imageData" src="images/sprites.png" alt="These are the game's sprites">
-    <header id="header" class="chunk border-bottom padding10">
-      <div class="left inlineblock">
-        <h1 id="title" class="white fontlarge">Afterlight <span class="alSub">a modified micropolisJS</span></h1>
+    <header id="header">
+      <div id="brand"><span id="brandMark"></span><h1 id="title">Afterlight</h1><span class="alSub">a modified micropolisJS</span></div>
+      <div id="hud" class="initialHidden">
+        <div class="hudItem hudCity"><span id="name">Your Name Here</span><span id="cclass" class="hudSub">VILLAGE</span></div>
+        <div class="hudItem"><label>Date</label><span id="date">Jan 1900</span></div>
+        <div class="hudItem"><label>Funds</label><span class="hudMoney">$<span id="funds">20000</span></span></div>
+        <div class="hudItem"><label>Population</label><span id="population">0</span></div>
+        <div class="hudItem"><label>Score</label><span id="score">0</span></div>
+        <div id="speedButtons" class="hudItem" role="group" aria-label="Speed">
+          <button class="speedButton" data-speed="0" data-tip="Pause"><svg viewBox="0 0 16 16"><rect x="3" y="3" width="3.5" height="10" rx="1"/><rect x="9.5" y="3" width="3.5" height="10" rx="1"/></svg></button>
+          <button class="speedButton" data-speed="1" data-tip="Slow"><svg viewBox="0 0 16 16"><path d="M5 3l8 5-8 5z"/></svg></button>
+          <button class="speedButton" data-speed="2" data-tip="Normal"><svg viewBox="0 0 16 16"><path d="M2 3l6 5-6 5zM8 3l6 5-6 5z"/></svg></button>
+          <button class="speedButton" data-speed="3" data-tip="Fast"><svg viewBox="0 0 16 16"><path d="M1 3l5 5-5 5zM6 3l5 5-5 5zM11 3l4 5-4 5z"/></svg></button>
+        </div>
       </div>
-      <nav class="white right padding10 inlineblock">
-        <ul>
-          <li class="padding10"><a href="about.html" target="_blank">About</a></li>
-          <li class="padding10"><a href="https://github.com/graememcc/micropolisJS" target="_blank">micropolisJS on GitHub</a></li>
-        </ul>
+      <nav id="menuButtons" class="initialHidden">
+        <button id="budgetRequest" class="miscButton" data-tip="Budget and taxes">Budget</button>
+        <button id="evalRequest" class="miscButton" data-tip="What residents think">Evaluation</button>
+        <button id="disasterRequest" class="miscButton" data-tip="Unleash a disaster">Disasters</button>
+        <button id="saveRequest" class="miscButton loadSave" disabled data-tip="Save to this browser">Save</button>
+        <button id="settingsRequest" class="miscButton" data-tip="Speed, autobudget, disasters">Settings</button>
+        <button id="screenshotRequest" class="miscButton" data-tip="Take a picture of the city">Photo</button>
+        <button id="pauseRequest" class="miscButton">Pause</button>
+        <button id="aboutRequest" class="miscButton" data-tip="Credits and licenses">About</button>
+      </nav>
+      <nav id="headerLinks">
+        <a href="about.html" target="_blank">About</a>
+        <a href="https://github.com/graememcc/micropolisJS" target="_blank">micropolisJS on GitHub</a>
       </nav>
     </header>
     <div id="wrapper">
@@ -68,84 +88,46 @@
             </div>
           </form>
         </div>
-        <div id="infobar" class="alignCenter leftedge open width140 padding10 controlShadow mintcream z1 initialHidden">
-          <div class="inner">
-            <div class="semibold chunk">
-              <span id="name">Your Name Here</span>
-            </div>
-            <div>
-              <span id="date">Jan 1900</span>
-            </div>
-            <div class="elided">
-              Funds $<span id="funds">20000</span>
-            </div>
-            <div class="elided">
-              Score: <span id="score">0</span>
-            </div>
-            <div>
-              <span id="cclass">VILLAGE</span>
-            </div>
-            <div class="elided">
-              Population:<br /> <span id="population">0</span>
-            </div>
-          </div>
-        </div>
-        <div id="miscButtons" class="alignCenter leftedge open controlShadow width140 padding10 mintcream z1 initialHidden">
-          <div class="inner">
-            <div>
-              <button id="budgetRequest" class="miscButton">Budget</button>
-            </div>
-            <div>
-              <button id="evalRequest" class="miscButton">Evaluation</button>
-            </div>
-            <div>
-              <button id="disasterRequest" class="miscButton">Disasters</button>
-            </div>
-            <div>
-              <button id="saveRequest" class="miscButton loadSave" disabled>Save</button>
-            </div>
-            <div>
-              <button id="settingsRequest" class="miscButton">Settings</button>
-            </div>
-            <div>
-              <button id="screenshotRequest" class="miscButton">Take Picture</button>
-            </div>
-            <div>
-              <button id="pauseRequest" class="miscButton">Pause</button>
-            </div>
-          </div>
-        </div>
         <div id="RCIContainer" class="controlShadow leftedge width140 padding10 mintcream z1 initialHidden"></div>
-        <div id="controls" class="controlShadow mintcream z1 initialHidden rightedge open">
-          <div id="toolInfo" class="alignCenter"><span id="toolOutput">Tools</span></div>
+        <div id="controls" class="initialHidden">
+          <div id="toolInfo"><span id="toolOutput">Tools</span></div>
           <div id="buttons">
-            <button id="residentialButton" data-size="3" data-tool="residential" data-colour="lime" class="toolButton unselected">Residential $100</button>
-            <button id="nuclearButton" data-size="4" data-tool="nuclear" data-colour="mistyrose" class="toolButton unselected">Nuclear $5000</button>
-            <button id="commercialButton" data-size="3" data-tool="commercial" data-colour="blue" class="toolButton unselected">Commercial $100</button>
-            <button id="coalButton" data-size="4" data-tool="coal" data-colour="gray" class="toolButton unselected">Coal $3000</button>
-            <button id="industrialButton" data-size="3" data-tool="industrial" data-colour="yellow" class="toolButton unselected">Industrial $100</button>
-            <button id="policeButton" data-size="3" data-tool="police" data-colour="darkblue" class="toolButton unselected">Police $500</button>
-            <button id="roadButton" data-size="1" data-tool="road" data-colour="black" class="toolButton unselected">Road $10</button>
-            <button id="fireButton" data-size="3" data-tool="fire" data-colour="red" class="toolButton unselected">Fire $500</button>
-            <button id="railButton" data-size="1" data-tool="rail" data-colour="brown" class="toolButton unselected">Rail $20</button>
-            <button id="portButton" data-size="4" data-tool="port" data-colour="dodgerblue" class="toolButton unselected">Port $3000</button>
-            <button id="wireButton" data-size="1" data-tool="wire" data-colour="khaki" class="toolButton unselected">Wire $5</button>
-            <button id="stadiumButton" data-size="4" data-tool="stadium" data-colour="indigo" class="toolButton unselected">Stadium $5000</button>
-            <button id="bulldozerButton" data-size="1" data-tool="bulldozer" data-colour="salmon" class="toolButton unselected">Bulldozer $1</button>
-            <button id="airportButton" data-size="6" data-tool="airport" data-colour="violet" class="toolButton unselected">Airport $10000</button>
-            <button id="queryButton" data-size="1" data-tool="query" data-colour="cyan" class="toolButton unselected">Query</button>
-            <button id="parkButton" data-size="1" data-tool="park" data-colour="darkgreen" class="toolButton unselected">Park $10</button>
-            <button id="dcHelixButton" data-size="3" data-tool="dcHelix" data-colour="#a23bd6" class="toolButton unselected alTool" title="Helix pays to build it and keeps the profits. The town gets a small fee.">Helix Data Ctr $100</button>
-            <button id="dcCoopButton" data-size="3" data-tool="dcCoop" data-colour="#2fbf4a" class="toolButton unselected alTool" title="The town owns it: profits go to the treasury or the dividend.">Co-op Data Ctr $4000</button>
-            <button id="depotHelixButton" data-size="3" data-tool="depotHelix" data-colour="#a23bd6" class="toolButton unselected alTool" title="Robots owned by Helix.">Helix Robot Depot $100</button>
-            <button id="depotCoopButton" data-size="3" data-tool="depotCoop" data-colour="#2fbf4a" class="toolButton unselected alTool" title="Robots owned by the town.">Co-op Robot Depot $2500</button>
-            <button id="solarButton" data-size="3" data-tool="solar" data-colour="#3c59a8" class="toolButton unselected alTool">Solar Farm $1500</button>
-            <button id="clinicButton" data-size="3" data-tool="clinic" data-colour="#ffffff" class="toolButton unselected alTool alLocked" title="Unlocked by the Cure">Healing Clinic $1200</button>
-            <button id="fusionButton" data-size="3" data-tool="fusion" data-colour="#5fe3ff" class="toolButton unselected alTool alLocked" title="Unlocked by Fusion">Fusion Plant $8000</button>
+          <div class="toolGroup" data-group="Inspect"><div class="toolGroupLabel">Inspect</div>
+            <button id="queryButton" data-size="1" data-tool="query" data-colour="cyan" class="toolButton unselected" data-tip="Query: inspect a tile"><span class="tbIcon" data-icon="query"></span><span class="tbLabel">Query</span></button>
+            <button id="bulldozerButton" data-size="1" data-tool="bulldozer" data-colour="salmon" class="toolButton unselected" data-tip="Bulldozer · $1 a tile"><span class="tbIcon" data-icon="bulldozer"></span><span class="tbLabel">Bulldoze</span></button>
           </div>
-        </div>
-        <div id="tw" class="z1 rightedge initialHidden">
-          <a class="twitter-share-button" href="https://twitter.com/share?count=none" data-text="I'm city-building like it's 1989! Playing micropolisJS, a HTML5 retro city-builder https://graememcc.github.io/micropolisJS">Tweet</a><script type="text/javascript">window.twttr=(function(d,s,id){var t,js,fjs=d.getElementsByTagName(s)[0];if(d.getElementById(id)){return}js=d.createElement(s);js.id=id;js.src="https://platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);return window.twttr||(t={_e:[],ready:function(f){t._e.push(f)}})}(document,"script","twitter-wjs"));</script>
+          <div class="toolGroup" data-group="Transport"><div class="toolGroupLabel">Transport</div>
+            <button id="roadButton" data-size="1" data-tool="road" data-colour="#333333" class="toolButton unselected" data-tip="Road · $10 a tile. Drag to lay"><span class="tbIcon" data-icon="road"></span><span class="tbLabel">Road</span></button>
+            <button id="railButton" data-size="1" data-tool="rail" data-colour="brown" class="toolButton unselected" data-tip="Rail · $20 a tile"><span class="tbIcon" data-icon="rail"></span><span class="tbLabel">Rail</span></button>
+            <button id="wireButton" data-size="1" data-tool="wire" data-colour="khaki" class="toolButton unselected" data-tip="Power line · $5 a tile"><span class="tbIcon" data-icon="wire"></span><span class="tbLabel">Power line</span></button>
+            <button id="parkButton" data-size="1" data-tool="park" data-colour="darkgreen" class="toolButton unselected" data-tip="Park · $10"><span class="tbIcon" data-icon="park"></span><span class="tbLabel">Park</span></button>
+          </div>
+          <div class="toolGroup" data-group="Zones"><div class="toolGroupLabel">Zones</div>
+            <button id="residentialButton" data-size="3" data-tool="residential" data-colour="lime" class="toolButton unselected" data-tip="Residential zone · $100"><span class="tbIcon" data-icon="residential"></span><span class="tbLabel">Residential</span></button>
+            <button id="commercialButton" data-size="3" data-tool="commercial" data-colour="#3c8cff" class="toolButton unselected" data-tip="Commercial zone · $100"><span class="tbIcon" data-icon="commercial"></span><span class="tbLabel">Commercial</span></button>
+            <button id="industrialButton" data-size="3" data-tool="industrial" data-colour="yellow" class="toolButton unselected" data-tip="Industrial zone · $100"><span class="tbIcon" data-icon="industrial"></span><span class="tbLabel">Industrial</span></button>
+          </div>
+          <div class="toolGroup" data-group="Services"><div class="toolGroupLabel">Services</div>
+            <button id="policeButton" data-size="3" data-tool="police" data-colour="#3355cc" class="toolButton unselected" data-tip="Police station · $500"><span class="tbIcon" data-icon="police"></span><span class="tbLabel">Police</span></button>
+            <button id="fireButton" data-size="3" data-tool="fire" data-colour="red" class="toolButton unselected" data-tip="Fire station · $500"><span class="tbIcon" data-icon="fire"></span><span class="tbLabel">Fire</span></button>
+            <button id="stadiumButton" data-size="4" data-tool="stadium" data-colour="indigo" class="toolButton unselected" data-tip="Stadium · $5,000"><span class="tbIcon" data-icon="stadium"></span><span class="tbLabel">Stadium</span></button>
+            <button id="portButton" data-size="4" data-tool="port" data-colour="dodgerblue" class="toolButton unselected" data-tip="Seaport · $3,000"><span class="tbIcon" data-icon="port"></span><span class="tbLabel">Seaport</span></button>
+            <button id="airportButton" data-size="6" data-tool="airport" data-colour="violet" class="toolButton unselected" data-tip="Airport · $10,000"><span class="tbIcon" data-icon="airport"></span><span class="tbLabel">Airport</span></button>
+          </div>
+          <div class="toolGroup" data-group="Power"><div class="toolGroupLabel">Power</div>
+            <button id="coalButton" data-size="4" data-tool="coal" data-colour="gray" class="toolButton unselected" data-tip="Coal plant · $3,000"><span class="tbIcon" data-icon="coal"></span><span class="tbLabel">Coal</span></button>
+            <button id="nuclearButton" data-size="4" data-tool="nuclear" data-colour="mistyrose" class="toolButton unselected" data-tip="Nuclear plant · $5,000"><span class="tbIcon" data-icon="nuclear"></span><span class="tbLabel">Nuclear</span></button>
+            <button id="solarButton" data-size="3" data-tool="solar" data-colour="#3c59a8" class="toolButton unselected alTool" data-tip="Solar farm · $1,500"><span class="tbIcon" data-icon="solar"></span><span class="tbLabel">Solar</span></button>
+            <button id="fusionButton" data-size="3" data-tool="fusion" data-colour="#5fe3ff" class="toolButton unselected alTool alLocked" data-tip="Fusion plant · $8,000. Unlocked by the Fusion discovery"><span class="tbIcon" data-icon="fusion"></span><span class="tbLabel">Fusion</span></button>
+          </div>
+          <div class="toolGroup" data-group="Afterlight"><div class="toolGroupLabel">Afterlight</div>
+            <button id="dcHelixButton" data-size="3" data-tool="dcHelix" data-colour="#a23bd6" class="toolButton unselected alTool" data-tip="Helix data center · $100. Helix pays to build it and keeps the profits; the town gets a small fee"><span class="tbIcon" data-icon="dcHelix"></span><span class="tbLabel">Helix DC</span></button>
+            <button id="dcCoopButton" data-size="3" data-tool="dcCoop" data-colour="#2fbf4a" class="toolButton unselected alTool" data-tip="Co-op data center · $4,000. The town owns it: profits go to the treasury or the dividend"><span class="tbIcon" data-icon="dcCoop"></span><span class="tbLabel">Co-op DC</span></button>
+            <button id="depotHelixButton" data-size="3" data-tool="depotHelix" data-colour="#a23bd6" class="toolButton unselected alTool" data-tip="Helix robot depot · $100. Robots owned by Helix"><span class="tbIcon" data-icon="depotHelix"></span><span class="tbLabel">Helix robots</span></button>
+            <button id="depotCoopButton" data-size="3" data-tool="depotCoop" data-colour="#2fbf4a" class="toolButton unselected alTool" data-tip="Co-op robot depot · $2,500. Robots owned by the town"><span class="tbIcon" data-icon="depotCoop"></span><span class="tbLabel">Co-op robots</span></button>
+            <button id="clinicButton" data-size="3" data-tool="clinic" data-colour="#ffffff" class="toolButton unselected alTool alLocked" data-tip="Healing clinic · $1,200. Unlocked by the Cure"><span class="tbIcon" data-icon="clinic"></span><span class="tbLabel">Clinic</span></button>
+          </div>
+          </div>
         </div>
         <div id="monstertv" class="alignCenter z1 hidden rightedge padding10 controlShadow open">
           <div id="monsterTVContainer">
@@ -183,6 +165,18 @@
           Micropolis is a registered trademark of <a href="https://www.micropolis.com">Micropolis Corporation (Micropolis GmbH)</a> and is licensed here as a courtesy of the owner under the <a href="name_license.html">Micropolis Public Name License</a>.
         </div>
       </footer>
+      <div class="hidden modal shadow" id="aboutWindow">
+        <header class="padding10 chunk alignCenter">About Afterlight</header>
+        <div class="padding10 open aboutBody">
+          <p><b>Afterlight</b> is a city builder about living through the shift to a post-labor economy: who owns the energy, the compute and the robots, and what happens to work, purpose and hope when machines can do most jobs.</p>
+          <p>It is a modified version of <a href="https://github.com/graememcc/micropolisJS" target="_blank">micropolisJS</a> by Graeme McCutcheon and contributors, the HTML5 port of Micropolis, which is based on the original city simulator by Will Wright and Maxis, open-sourced by Electronic Arts. The simulation engine is micropolisJS; the isometric view, the interface and the Afterlight layer (compute, robots, ownership, mood and events) are new and drawn procedurally in code.</p>
+          <p>Afterlight and micropolisJS are free software released under the <a href="LICENSE" target="_blank">GNU General Public License v3</a> with additional terms; see <a href="LICENSE" target="_blank">LICENSE</a> and <a href="COPYING" target="_blank">COPYING</a>. You are entitled to the source code of this modified version.</p>
+          <p>Micropolis is a registered trademark of <a href="https://www.micropolis.com" target="_blank">Micropolis Corporation (Micropolis GmbH)</a> and is licensed here as a courtesy of the owner under the <a href="name_license.html" target="_blank">Micropolis Public Name License</a>. Afterlight is not SimCity and is not affiliated with or endorsed by Electronic Arts or Maxis.</p>
+          <p class="aboutMore"><a href="about.html" target="_blank">The original micropolisJS about page</a></p>
+          <form id="aboutForm" class="alignCenter margin10"><input type="submit" id="aboutOK" class="dialogOK" value="Close"></form>
+        </div>
+      </div>
+      <div id="tooltip" class="hidden"></div>
       <div class="hidden modal shadow" id="budget">
         <header id="budgetHeader" class="budgetHeader padding10 chunk alignCenter">
            Budget

@@ -20,12 +20,12 @@ import { CongratsWindow } from './congratsWindow.js';
 import { DebugWindow } from './debugWindow.js';
 import { DisasterWindow } from './disasterWindow.js';
 import { EvaluationWindow } from './evaluationWindow.js';
-import { GameCanvas } from './gameCanvas.js';
+import { IsoCanvas } from './afterlight/iso/isoCanvas.js';
+import { AfterlightUI } from './afterlight/ui.js';
 import { GameMap } from './gameMap.js';
 import { InfoBar } from './infoBar.js';
 import { InputStatus } from './inputStatus.js';
 import * as Messages from './messages.ts';
-import { MonsterTV } from './monsterTV.js';
 import { NagWindow } from './nagWindow.js';
 import { Notification } from './notification.js';
 import { QueryWindow } from './queryWindow.js';
@@ -78,9 +78,12 @@ function Game(gameMap, tileSet, snowTileSet, spriteSheet, difficulty, name) {
   this.rci = new RCI('RCIContainer', this.simulation);
 
   // Note: must init canvas before inputStatus
-  this.gameCanvas = new GameCanvas('canvasContainer');
+  // Afterlight: the isometric view replaces the top-down GameCanvas (same interface)
+  this.gameCanvas = new IsoCanvas('canvasContainer');
   this.gameCanvas.init(this.gameMap, this.tileSet, spriteSheet);
   this.inputStatus = new InputStatus(this.gameMap, tileSet.tileWidth);
+  this.inputStatus.tileAt = this.gameCanvas.screenToTile.bind(this.gameCanvas);
+  this.gameCanvas.toolActive = function() { return this.inputStatus.currentTool !== null; }.bind(this);
 
   this.dialogOpen = false;
   this._openWindow = null;
@@ -111,8 +114,8 @@ function Game(gameMap, tileSet, snowTileSet, spriteSheet, difficulty, name) {
     });
   }
 
-  // Initialise monsterTV
-  this.monsterTV = new MonsterTV(this.gameMap, tileSet, spriteSheet, this.gameCanvas.animationManager);
+  // Afterlight: no picture-in-picture monster TV in the iso UI; clicking the news ticker jumps the camera instead
+  this.monsterTV = {show: function() {}, track: function() {}};
 
   var opacityLayerID = 'opaque';
 
@@ -240,6 +243,7 @@ function Game(gameMap, tileSet, snowTileSet, spriteSheet, difficulty, name) {
   // Afterlight indicators, policies and newspaper
   this.alPanel = new AfterlightPanel(this);
   this.alPaperWindow = this.alPanel.paperWindow;
+  this.alUI = new AfterlightUI(this);
   if (this.starterTown)
     this.gameCanvas.centreOn(this.starterTown.x + 13, this.starterTown.y + 11);
 
@@ -610,8 +614,6 @@ Game.prototype.processFrontEndMessage = function(message) {
   if (subject === AL_NEWS) {
     var al = message.data;
     this._notificationBar.custom(al.tone, al.text, al.x, al.y);
-    if (al.showable && al.x !== undefined)
-      this.monsterTV.show(al.x, al.y);
     if (al.paper && !this.dialogOpen && !this.alNoPaper) {
       this.dialogOpen = true;
       this._openWindow = 'alPaperWindow';
@@ -775,8 +777,8 @@ var commonAnimate = function() {
     this.alPanel.refresh(false);
   }
 
-  sprites = this.calculateSpritesForPaint(this.monsterTV.canvas);
-  this.monsterTV.paint(sprites, this.isPaused);
+  if (this.alUI)
+    this.alUI.frame();
 
   nextFrame(this.animate);
 };

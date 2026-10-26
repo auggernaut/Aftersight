@@ -175,8 +175,9 @@ var mouseDownHandler = function(e) {
   this._dragging = true;
   this._emitEvent(Messages.TOOL_CLICKED, {x: this.mouseX, y: this.mouseY});
 
-  this._lastDragX = Math.floor(this.mouseX / this._tileWidth);
-  this._lastDragY = Math.floor(this.mouseY / this._tileWidth);
+  var start = this._dragTile(this.mouseX, this.mouseY);
+  this._lastDragX = start.x;
+  this._lastDragY = start.y;
 
   $(this.canvasID).on('mouseup', this.mouseUpHandler);
   e.preventDefault();
@@ -219,8 +220,9 @@ var mouseMoveHandler = function(e) {
   if (this._dragging) {
     // XXX Work up how to patch up the path for fast mouse moves. My first attempt was too slow, and ended up missing
     // mouseUp events
-    var x = Math.floor(this.mouseX / this._tileWidth);
-    var y = Math.floor(this.mouseY / this._tileWidth);
+    var t = this._dragTile(this.mouseX, this.mouseY);
+    var x = t.x;
+    var y = t.y;
 
     var lastX = this._lastDragX;
     var lastY = this._lastDragY;
@@ -230,6 +232,14 @@ var mouseMoveHandler = function(e) {
       this._lastDragY = y;
     }
   }
+};
+
+
+// Afterlight: the isometric view sets tileAt so drags follow diamond tiles rather than square ones
+InputStatus.prototype._dragTile = function(x, y) {
+  if (this.tileAt)
+    return this.tileAt(x, y);
+  return {x: Math.floor(x / this._tileWidth), y: Math.floor(y / this._tileWidth)};
 };
 
 
