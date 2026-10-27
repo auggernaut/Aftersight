@@ -40,10 +40,13 @@ The end-to-end tests use Playwright from a separate install. Point `NODE_PATH` a
 ```
 export NODE_PATH=/path/to/playwright/node_modules      # on the agent box: /workspace/pw/node_modules
 OUT=shots node e2e/festus.cjs     # Festus through the real UI: intro, offer, counter, accept, campus, Research Lab,
-                                  # breakthrough, clinic, design asks, fund/projects, alert window, both election outcomes
+                                  # breakthrough, clinic, design asks, fund/projects, alert window, both election outcomes,
+                                  # real dollars, the automation tide, Keystone leaving for good, a ticker ask, a co-op
+                                  # bond, a project on the map
 OUT=shots node e2e/mobile.cjs     # emulated iPhone 14 and Pixel 7: tap, pan, pinch, toolbar, sheet, Festus cards, alert window
 OUT=shots node e2e/smoke.cjs      # starter town: tools, zoom/pan, policies, 4 game years, events, save
-N=30 node e2e/balance.cjs         # headless Festus balance: win rates for negotiate / firm / yes / no autoplayers
+N=30 node e2e/balance.cjs         # headless Festus balance: win rates for negotiate / firm / yes / no autoplayers, and
+                                  # each town's unemployment, Purpose, ownership share of income and path in April 2032
 RUNS=3 node e2e/compare.cjs       # starter town: hands-off vs community-ownership mayor
 BASE_URL=https://aftersight-zeta.vercel.app/index.html OUT=shots node e2e/festus.cjs   # against the live site
 npm test                          # upstream jest unit tests
@@ -57,6 +60,8 @@ Test hooks live on `window.__AL` (defined in `src/game.js`):
 - `card()` and `decide(option, asks)` read and answer the current decision card.
 - `mayor()`, `state()` and `census()` read state.
 - `build(tool, x, y)` and `findSite()` place buildings.
+- `quickAsk()` and `decideQuick(option)` read and answer the town hall ask waiting in the ticker (`decide()` also answers it when no card is open).
+- `income()` and `path()` read the household income mix and the town's path.
 - `force('Counter'|'Court'|'Vote', v)` forces a random outcome.
 - `election(i, vote)` and `bump(deltas)` drive elections and faction moods.
 - The layer itself is `__AL.layer`. Setting `__AL.layer.autoDecide = fn` makes an autoplayer.

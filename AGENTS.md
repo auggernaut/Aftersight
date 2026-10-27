@@ -25,6 +25,7 @@ Tests serve `dist/`, so rebuild after every change. Set `BASE_URL` only for one 
 ## Conventions
 
 - AfterSight code lives in `src/afterlight/`. Mayor-scenario logic is in `mayor.js`, with tuning constants at the top. The economy, mood and events are in `layer.js`. The Festus map is in `festus.js`. Cards, the alert window, the panel and the UI each have their own file.
+- Money shown to the player goes through `money.js`: in Festus one game dollar is $1,000, so show `money(n)` (game dollars) or `usd(n)` (already real dollars), never a bare `'$' + n`.
 - Engine edits stay small and are marked with an `Afterlight` or `Aftersight` comment. Prefer a hook into the layer over changing engine logic.
 - All state that must survive a save lives in `layer.s` (it's saved under `saveData.afterlight`). Test hooks go on `window.__AL` in `game.js`.
 - `isoCanvas.js` replaces GameCanvas. Keep its public methods in step with what `game.js`, `inputStatus.js` and `notification.js` call.

@@ -17,7 +17,7 @@ It is not a utopia and not a doom story. A town can come out rich and empty, com
 ## How it should feel
 
 - **SimCity-simple.** You zone, build, budget and watch a town grow, with a few big decisions on top. Every system should be readable from the screen. If a mechanic needs a manual, it's probably too much. Prefer fewer, clearer systems over more of them.
-- **Paced like SimCity.** About 12 seconds per game month at Normal speed, and at most one decision card every 6 game months.
+- **Paced like SimCity.** About 12 seconds per game month at Normal speed, and at most one decision card every 6 game months. Everyday town hall asks wait in the news ticker instead, so the game doesn't stop for them.
 - **No single right answer.** Saying yes to every offer and saying no to every offer can both win sometimes. Negotiating should win most often, and the town you end up with should differ by path.
 - **Honest about trade-offs.** Every breakthrough helps and strains. Every data center design has a cost. Cards show how each faction would react before you choose.
 

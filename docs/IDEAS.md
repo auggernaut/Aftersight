@@ -19,16 +19,17 @@ A plan in phases for where a town's ownership can come from. Each layer is bigge
    - **Founders' Shares:** every kid gets a stake vesting at 21, and each birth year adds a slice, copying the ii.inc Champion
    - a **universal AI allowance** (free daily AI for every resident; it helps schools and health but uses compute that breakthroughs also need)
    - **Benefit Credits:** town compute earns credits only when it runs public work (clinic, school, projects), and credits pay for projects. This copies ii.inc's Proof of Benefit.
+   - **Done:** a bonded town-owned data center (the `coop_bond` ask), paid off from its own revenue.
 3. **State:** a regional power co-op, carbon royalties, a **Regional Champion** (the town's compute fund spun out as a company), and a Missouri wealth fund through a coalition of towns that copied yours. This needs re-election or allies.
 4. **Nation:** national funds and royalties arrive as events you back or oppose. Your stance moves approval, and how many towns followed you moves the odds. A running readout shows which path you're on.
 
-Track two new numbers: **ownership share of income** (Shapiro's key metric) and **median net worth**.
+**Ownership share of income** (Shapiro's key metric) is now tracked and shown (household income in the top bar and City pulse). **Median net worth** is still only the Fund's dividends added up per resident.
 
 **The four capitals as a lens.** *The Last Economy* scores a place as Material × Intelligence × Network × Diversity. Money without trust (network), or all-in on one company (no diversity), still collapses. This could become part of the path readout.
 
 ## The five paths to 2036
 
-The trajectories the sim should drift toward, shown as the years pass rather than as a forced ending:
+The trajectories the sim should drift toward, shown as the years pass rather than as a forced ending. **A live readout is built** (the path chip in City pulse, `pathNow()` in `mayor.js`), with two in-between states (early days, building a stake), and election night names the path. Still open: whether the win should depend on it (see [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md)).
 
 1. **Thriving owners:** most households own a stake, dividends cover the basics, and the parks are busy. You get here by pushing for equity, funding the endowment, co-ops, closed-loop cooling and solar, and community-built projects.
 2. **Rich few (enclosure):** Keystone owns everything; tax money is good but stops at City Hall; Purpose slides. You get here with cash-heavy deals, spent windfalls and robots-only projects.
@@ -38,8 +39,7 @@ The trajectories the sim should drift toward, shown as the years pass rather tha
 
 ## Purpose and projects
 
-- **A fuller project catalog** whose costs fall with abundance: little library, pop-up market, tool library, youth league, theater, makerspace, festival, a night-sky observatory and science center, and up to **The Lantern**, a deliberately absurd megaproject that only deep abundance makes possible.
-- **Projects visible on the map:** a garden, murals and a park that appear as buildings or decorations instead of only panel lines.
+- **Built:** eight projects (garden, murals, market hall, tool library and makerspace, youth league, riverfront park, observatory, The Lantern) whose costs fall with abundance, a new season when one fades, and a patch of trees and a fountain on the map when one opens. **Not yet:** theater, festival, a little library; projects with their own art; letting the player choose where a project goes.
 - **Participatory budget events** that raise Purpose when residents choose.
 - A yearly festival (Twin City Days in real Festus) with a small Hope boost and a mayor's speech.
 

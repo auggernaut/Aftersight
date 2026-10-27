@@ -2,6 +2,32 @@
 
 A dated log, newest first. Each entry gives the decision and the reason for it. Commits are on `main` (developed on the former `festus` branch) unless a branch is named.
 
+## 2026-10-27 (playtest review, branch `playtest-review`)
+
+A headless playtest of 140 games found the rules arguing against the vision: the strategy that won most left half the town jobless with Purpose near 18, the town that refused every deal was the healthiest and lost, and ownership paid $80–190 a resident a year. These decisions answer that.
+
+- **Automation is a regional tide (Festus).** It rises with time and with each breakthrough, whoever makes it (the town, someone else after a pass, or the world by month 36 and 54). Only the town's own robot depots add to it.
+  *Why:* the thesis is that automation comes anyway and ownership decides who gains. Before, only compute hosted in Festus automated Festus jobs, so saying no protected jobs.
+- **Ownership pays.** A hall pays its owners $1.5M a month, three times that after a frontier model. The town's equity share, the deal's co-op hall and bonded town halls all go into the Festus Fund. Household income is wages, ownership (the Fund's dividend) and transfers; factions, Purpose and the dividend's "cover" read it.
+  *Why:* a 35% stake paid about $82 a resident a year while the model said dividends replaced all lost wages. The screen and the model now agree.
+- **A path readout.** City pulse names the path: early days, building a stake, thriving owners, rich few, checks without purpose, boom and strain, or no deal and decline. A change is news, and election night names the path with its numbers.
+  *Why:* the vision is about which path the town ends on, not keeping the job. This shows it without the on-hold Report Card or an ending screen.
+- **The ownership win needs a real dividend:** 25%+ of local compute and at least $1,000 a resident a year (Alaska's 2025 dividend), instead of any dividend at all. Winning three elections is unchanged.
+  *Why:* with the new scale, "any dividend" would have been a trivial early win.
+- **Town hall asks arrive in the ticker.** Everyday asks wait in the ticker (and in City pulse) without pausing the game or using a card slot; left alone for three months they lapse and come back later. Their stakes are half a card's. A furious faction and reopening a bad deal still get a card.
+  *Why:* factions almost never got to speak; breakthroughs, offers and campaigns filled every slot.
+- **New asks:** an apprenticeship guild (the Purpose programs policy, now a Festus decision), a co-op bond for a town-owned data center, and new river wells when water runs short. A published agreement stays public when it's re-signed, and a re-signed deal is judged on what changed.
+- **Town-owned data centers need a bond.** The co-op hall tool is locked in Festus until voters back a bond (at most two). A bonded hall pays its bond first (65% of revenue) and the rest into the Fund.
+  *Why:* three co-op halls from month 0 used to skip the negotiation and print money into the budget.
+- **Keystone leaves for good after the third walk.** It builds across the river; the tide still comes. The home-grown plan (twice at most) and bonded halls employ some people.
+  *Why:* the no-deal path was the same offer every year.
+- **Renewable projects on the map.** Eight projects, from a garden to The Lantern (which needs deep abundance). An opened project appears as trees and a fountain near Main Street, the river or the bluffs; a faded one can have another season for 30% of the cost.
+  *Why:* three one-off projects couldn't hold Purpose up.
+- **Festus shows real dollars.** One game dollar is $1,000 (`src/afterlight/money.js`): $20M in the bank, $200k a year, $1.5M for a lab. The budget window and tool tips follow.
+- **Readability:** every alert ends with "What you can do"; offer cards lead with money to the town, jobs, water and power, with the rest under "All terms"; City pulse leads with approval, household income and Purpose, with demand, mood, power and policies one tap away; the top bar shows the income mix instead of the engine's score.
+- **Starter-town leftovers are out of Festus:** the citizen-dividend switch, Hope and Backlash bars, riots and general strikes. Neighbors blockade the campus when Residents fall under 35.
+- **Balance** (`e2e/balance.cjs`, N=30): negotiate 30, firm 15, yes 15, no 11. In April 2032 negotiating towns are mostly building a stake or thriving owners (8% of income from ownership, $2,239 a resident), firm and yes towns are rich few, and no-deal towns are building a stake of their own.
+
 ## 2026-10-27
 
 - **`main` is the game.** The `festus` branch was fast-forwarded into `main` and deleted; the old story game moved to `legacy/story-game` and tag `legacy-story-game`.

@@ -1178,7 +1178,12 @@ export function installMayor(L) {
     var pathLine = this.festus() ? ' ' + this.pathLine(true) : '';
     if (won) m.won = {year: year, vote: Math.round(vote), share: Math.round(share * 100)};
     var pct = Math.round(share * 100), owns = share >= WIN_SHARE;
-    var headline = !won ? 'MAYOR RE-ELECTED' : owns ? 'A TOWN THAT OWNS ITS FUTURE' : 'THREE TERMS AND DONE';
+    // the headline says which town the mayor won in, not only that they won
+    var path = this.festus() ? s.path || 'early' : null;
+    var THREE = {owners: 'THREE TERMS, AND A TOWN OF OWNERS', building: 'THREE TERMS AND A STAKE TO BUILD ON', enclosure: 'THREE TERMS, AND KEYSTONE OWNS THE REST',
+                 checks: 'THREE TERMS, BUT THE DAYS FEEL EMPTY', strain: 'THREE TERMS IN A TOWN UNDER STRAIN', decline: 'THREE TERMS IN A SHRINKING TOWN'};
+    var headline = !won ? 'MAYOR RE-ELECTED' : owns ? (path && path !== 'owners' ? 'THE TOWN TAKES A STAKE' : 'A TOWN THAT OWNS ITS FUTURE') :
+                   (path && THREE[path]) || 'THREE TERMS AND DONE';
     this.news('good', 'MAYOR RE-ELECTED with ' + Math.round(vote) + '% of the vote.',
               {paper: true, tone: 'good', win: !!won, headline: headline,
                body: (!won ? 'The mayor won ' + Math.round(vote) + '% and a new term. Next election: April ' + (year + 2) + '.' :
