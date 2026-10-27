@@ -22,9 +22,15 @@ const out = await page.evaluate(async strat => {
       const tier = m.dev.offer ? m.dev.offer.tier : 0, firm=/Take it or leave/.test(card.title);
       if (strat==='yes') pick='accept';
       else if (strat==='no') pick='reject';
-      else if (strat==='negotiate') pick = tier>=2 ? 'accept' : firm ? 'reject' : 'counter';
+      // the negotiator holds out for closed-loop cooling and clean power, and takes a good firm offer rather than lose it
+      else if (strat==='negotiate') { const t=m.dev.offer?m.dev.offer.terms:{}, green=t.cooling==='closed'&&t.power==='clean';
+        pick = firm ? (tier>=2 ? 'accept' : 'reject') : tier>=2 && (green || !(card.asks||[]).some(a=>a.design)) ? 'accept' : 'counter'; }
       else pick = (tier>=2 || firm) ? 'accept' : 'counter';
-      if (pick==='counter') asks=(card.asks||[]).slice(0,2).map(a=>a.id);
+      // design: the negotiator always demands closed-loop cooling (then clean power); the firm player asks for closed-loop once.
+      // yes and no take whatever design is on the table.
+      if (pick==='counter') { const ids=(card.asks||[]).map(a=>a.id), money=ids.filter(id=>!['cooling','clean','gas'].includes(id));
+        const want = strat==='negotiate' ? ['cooling','clean'].filter(id=>ids.includes(id)).slice(0, tier>=2 ? 2 : 1) : strat==='firm' && m.dev.counters===0 ? ['cooling'] : [];
+        asks = want.filter(id=>ids.includes(id)).concat(money).slice(0,2); }
       if (!has(pick)) pick=o[0].id;
     } else if (card.type==='research') pick = has('invest') && __AL.funds() > 2500 ? 'invest' : 'pass';
     else if (card.type==='campaign') pick = has('tour') ? 'tour' : 'freeze';
@@ -35,9 +41,10 @@ const out = await page.evaluate(async strat => {
   if (L.s.card) L.autoDecide(L.s.card);
   let result='timeout';
   for (let i=0;i<84;i++){ __AL.fastForward(1); const m=__AL.mayor(); approvals.push(Math.round(m.approval));
-    if (i%6===0) rows.push([m.mi, Math.round(m.approval), Object.values(m.factions).map(f=>Math.round(f.v)).join('/'), __AL.funds(), g.simulation.evaluation.cityPop, m.halls, Math.round(m.townShare*100)+'%', m.dev.status, 'u'+__AL.state().unemployment.toFixed(2), 'a'+__AL.state().automation.toFixed(2), 'tier'+(L.s.deal?L._dealTier():'-')].join(' '));
+    if (i%6===0) rows.push([m.mi, Math.round(m.approval), Object.values(m.factions).map(f=>Math.round(f.v)).join('/'), __AL.funds(), g.simulation.evaluation.cityPop, m.halls, Math.round(m.townShare*100)+'%', m.dev.status, 'u'+__AL.state().unemployment.toFixed(2), 'a'+__AL.state().automation.toFixed(2), 'tier'+(L.s.deal?L._dealTier():'-'), L.s.deal?(L.s.deal.cooling+'/'+L.s.deal.power):'', 'w'+Math.round(100*L.s.water.use/L.s.water.cap)].join(' '));
     if (m.gameOver && !m.sandbox) { result='LOST '+m.gameOver.year+' '+m.gameOver.vote; break; }
     if (m.won) { result='WON '+m.won.year+' '+m.won.vote+' share'+m.won.share; break; } }
+  result += L.s.deal ? ' '+L.s.deal.cooling+'/'+L.s.deal.power : ' nodeal';
   return {cards, rows, result, last: __AL.mayor().mi};
 }, strat);
 (summary[strat]=summary[strat]||[]).push(out);

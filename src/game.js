@@ -561,7 +561,7 @@ Game.prototype.handleTool = function(data) {
     tool = this.inputStatus.gameTools.solarCheap;
   if (toolName === 'dcHelix' || toolName === 'depotHelix') {
     if (!layer.s.policies.helixExpansion) {
-      $('#toolOutput').text('The council has blocked new Helix construction');
+      $('#toolOutput').text('City Hall has blocked new Helix construction');
       return;
     }
   }

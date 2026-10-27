@@ -558,3 +558,7 @@ body:not(.inGame) #title .si { background: linear-gradient(180deg, #2f7fd1, #163
   .introCredit { display: none; }
 }
 #splashPlay.primary { background: linear-gradient(180deg, #3f92e6, var(--blueDark)) !important; color: #fff !important; }
+/* facility design asks: a small group under the money asks */
+#alCard .cardAsksDesign { margin-top: 8px; }
+#alCard .cardAsksSub { font: 700 11px var(--font); letter-spacing: 0.8px; text-transform: uppercase; color: #2f6db5; margin: 4px 0 5px; }
+#alCard .askRow.askDesign { background: #e3ecf4; }

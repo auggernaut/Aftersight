@@ -235,8 +235,8 @@ async function festus(browser, url, phone) {
   await fits();
   await shot('1-offer');
   await tapIn('#alCard .cardOption[data-option="counter"]');
-  await tapIn('#alCard .askRow:nth-child(2)');
-  await tapIn('#alCard .askRow:nth-child(4)');
+  await tapIn('#alCard .cardAsks > .askRow:nth-child(2)');
+  await tapIn('#alCard .cardAsks > .askRow:nth-child(4)');
   await tapIn('#alSendCounter');
   const st = await page.evaluate(() => ({ status: __AL.mayor().dev.status, asks: __AL.mayor().dev.asks, open: __AL.game.dialogOpen }));
   console.log(who, 'counter', JSON.stringify(st));

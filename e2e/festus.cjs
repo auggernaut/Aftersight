@@ -149,7 +149,7 @@ const months = async (page, n) => {
 
   // ---- a breakthrough card: invest ----
   let card = await page.evaluate(() => __AL.card());
-  for (let i = 0; i < 6 && !(card && card.type === 'research'); i++) {
+  for (let i = 0; i < 10 && !(card && card.type === 'research'); i++) {
     if (card) { console.log('clearing', card.type, card.title); await page.evaluate(c => __AL.decide(c.options[c.options.length - 1].id), card); }
     await months(page, 1);
     card = await page.evaluate(() => __AL.card());
@@ -256,7 +256,7 @@ const months = async (page, n) => {
   await p3.waitForSelector('#alCard[data-type="offer"]:not(.hidden)');
   const firstRows = (await p3.evaluate(() => __AL.card())).rows;
   if (!firstRows.some(r => r[0] === 'Campus' && /370 acres/.test(r[1]))) fail('first offer does not state its acreage');
-  if (!firstRows.some(r => r[0] === 'Power and water' && /300 MW/.test(r[1]))) fail('first offer does not state its MW');
+  if (!firstRows.some(r => r[0] === 'Power' && /300 MW/.test(r[1]))) fail('first offer does not state its MW');
   const marks0 = await siteMarks();
   if (!marks0.some(o => o.kind === 'site') || !marks0.some(o => o.kind === 'sitelabel')) fail('the proposed site is not marked at the start');
   await p3.click('#alCard .cardOption[data-option="reject"]');
@@ -277,9 +277,9 @@ const months = async (page, n) => {
     const c = __AL.card(); if (!c) return null; if (c.type === 'offer') return c; __AL.decide(c.options[c.options.length - 1].id); return null; });
   if (!ret) fail('Keystone never came back');
   else {
-    console.log('return offer', ret.title, JSON.stringify(ret.rows.slice(0, 1).concat(ret.rows.filter(r => r[0] === 'Power and water'))));
+    console.log('return offer', ret.title, JSON.stringify(ret.rows.slice(0, 1).concat(ret.rows.filter(r => r[0] === 'Power'))));
     if (!/is back/.test(ret.kicker) || !ret.rows.some(r => r[0] === 'Campus' && /4 halls on about 520 acres/.test(r[1]))) fail('return offer is not the bigger campus');
-    if (!ret.rows.some(r => r[0] === 'Power and water' && /600 MW/.test(r[1]))) fail('return offer does not state 600 MW');
+    if (!ret.rows.some(r => r[0] === 'Power' && /600 MW/.test(r[1]))) fail('return offer does not state 600 MW');
     const marks2 = await siteMarks();
     const area = marks2.filter(o => o.kind === 'site').reduce((n, o) => n + o.w * o.h, 0);
     console.log('return site rects', JSON.stringify(marks2.filter(o => o.kind === 'site')), 'area', area, 'label', (marks2.find(o => o.kind === 'sitelabel') || {}).text);
@@ -348,6 +348,56 @@ const months = async (page, n) => {
     if (i && a.month - al.log[i - 1].month < 4) fail('alerts closer than 4 months apart');
   });
   if (run3.errors.length) fail('console errors (walk run):\n' + run3.errors.join('\n'));
+
+  // ---- facility design: cooling and power are part of the offer, and stricter designs cost other benefits ----
+  // Two fresh games through the UI: closed-loop + gas (off the town grid, dirtier air), and an evaporative/grid control.
+  const design = async (asks) => {
+    const run = await startFestus(browser, url);
+    const pg = run.page;
+    await pg.click('#alCard .cardOption[data-option="go"]');
+    await pg.waitForSelector('#alCard[data-type="offer"]:not(.hidden)');
+    const card = await pg.evaluate(() => __AL.card());
+    const out = { rows: card.rows.filter(r => r[0] === 'Cooling' || r[0] === 'Power').map(r => r[0] + ': ' + r[1]),
+                  designAsks: card.asks.filter(a => a.design).map(a => a.id), body: card.body };
+    if (asks.length) {
+      await pg.click('#alCard .cardOption[data-option="counter"]');
+      if (!(await pg.isVisible('#alCard .cardAsksDesign'))) fail('counter list has no facility design group');
+      for (const a of asks) await pg.check('#alCard .askBox[value="' + a + '"]');
+      await pg.click('#alSendCounter');
+      await pg.evaluate(() => __AL.force('Counter', true));
+      await months(pg, 3);
+      await pg.waitForSelector('#alCard[data-type="offer"]:not(.hidden)', { timeout: 5000 });
+      const better = await pg.evaluate(() => __AL.card());
+      out.better = better.rows.filter(r => /Cooling|Power|lieu/.test(r[0])).map(r => r[0] + ': ' + r[1]);
+      out.trade = better.body;
+    }
+    await pg.click('#alCard .cardOption[data-option="accept"]');
+    Object.assign(out, await pg.evaluate(() => {
+      const L = __AL.layer; L.autoDecide = function(c) { this.decide(c.options[c.options.length - 1].id); };
+      if (L.s.card) L.autoDecide(L.s.card);
+      __AL.game.alNoPaper = true; __AL.fastForward(14);
+      return { deal: L.s.deal.cooling + '/' + L.s.deal.power, pilot: L.s.deal.pilot, online: L.hallsOnline(), gridShare: L.gridShare(),
+               fumes: (L.s.health || {}).fumes || 0, water: Math.round(100 * L.s.water.use / L.s.water.cap), bills: +(L.s.bills || 0).toFixed(3),
+               signNews: L.s.log.filter(e => /^You sign with/.test(e.text)).map(e => e.text)[0] || '' };
+    }));
+    if (run.errors.length) fail('console errors (design run):\n' + run.errors.join('\n'));
+    await pg.close();
+    return out;
+  };
+  const green = await design(['cooling', 'gas']);
+  const cheap = await design([]);
+  console.log('design closed+gas', JSON.stringify(green));
+  console.log('design evap+grid', JSON.stringify(cheap));
+  if (!green.rows.some(r => /^Cooling: Evaporative/.test(r)) || !green.rows.some(r => /^Power: Ameren grid: about 300 MW/.test(r))) fail('first offer should state evaporative cooling and grid power');
+  if (!/collector wells on the Mississippi/.test(green.body)) fail('first offer should name the river collector wells');
+  if (['cooling', 'clean', 'gas'].some(a => !green.designAsks.includes(a))) fail('design asks missing from the counter: ' + green.designAsks);
+  if (green.deal !== 'closed/gas') fail('counter did not win closed-loop cooling and gas power: ' + green.deal);
+  if (!/closed-loop cooling, but to pay for it takes/.test(green.trade)) fail('the better offer should say what closed-loop cost');
+  if (!(green.water < cheap.water)) fail('closed-loop should use less water than evaporative (' + green.water + ' vs ' + cheap.water + ')');
+  if (green.gridShare !== 0 || cheap.gridShare !== 1) fail('gas halls should be off the town grid');
+  if (!(green.fumes > 0) || cheap.fumes) fail('gas power should hurt health, grid should not');
+  if (!(cheap.bills > green.bills)) fail('grid power should raise bills more than on-site gas');
+  if (!/Cooling: closed-loop/.test(green.signNews)) fail('signing news should name the design');
 
   await browser.close();
   srv.close();

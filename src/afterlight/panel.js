@@ -166,7 +166,7 @@ AfterlightPanel.prototype.refresh = function(force) {
   var d = s.deal, dev = L.dev();
   var dealText = '';
   if (d) dealText = dev.short + ': ' + d.halls + ' halls' + (s.construction ? ' (building)' : '') + ' · abatement ' + d.abatePct + '% · PILOT $' + fmt(d.pilot) + '/yr' +
-                    ' · equity ' + (d.equity || 0) + '%' + (d.nda ? ' · NDA' : '') + (s.fund ? ' · fund $' + fmt(s.fund) : '');
+                    ' · equity ' + (d.equity || 0) + '%' + (d.nda ? ' · NDA' : '') + (L.festus() ? ' · ' + {evap: 'evaporative', hybrid: 'hybrid', closed: 'closed-loop'}[d.cooling || 'evap'] + ' · ' + {grid: 'grid power', gas: 'gas power', clean: 'clean power'}[d.power || 'grid'] : '') + (s.fund ? ' · fund $' + fmt(s.fund) : '');
   else if (s.dev.status === 'review') dealText = dev.short + ' is reviewing your counter.';
   else if (s.dev.status === 'away') dealText = dev.short + ' walked away. It may be back.';
   else if (s.dev.status === 'offer') dealText = dev.short + '\'s offer is on the table.';

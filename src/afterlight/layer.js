@@ -108,7 +108,7 @@ AfterlightLayer.prototype.setScenario = function(name) {
     this.makeOffer(0, 'first');
     s.card = {type: 'intro', kicker: 'Festus, Missouri · January 2026', title: 'You are the mayor',
       body: 'Festus is a river town of about 12,000 people, thirty minutes south of St. Louis. A developer wants to build a $6 billion data center campus on farmland by I-55, between homes. ' +
-            'The council has to answer tonight, and a council election follows in April. Your own seat is up in April 2028.',
+            'The decision is yours alone, and the town wants an answer tonight. Your seat is up in April 2028: the voters are the only check on you.',
       rows: [['Approval', 'Built from five factions: residents, farmers, workers, business, and schools. Each choice moves them.', 'neutral'],
              ['Elections', 'Every two years, from April 2028. Under 50% approval, you\'re out.', 'neutral'],
              ['Goal', 'Win 3 elections, or win one with the town owning 25%+ of local compute and paying a dividend.', 'good']],
@@ -166,7 +166,8 @@ AfterlightLayer.prototype.registerHandlers = function(mapScanner, powerManager) 
       c.alDCCount++;
       if (site('dc', owner, map, x, y, c)) {
         if (owner === 'helix') c.alDCHelixOn++; else c.alDCCoopOn++;
-        c.alPowerDraw += self.dcDraw();
+        // the developer's halls can run on their own gas turbines or solar and batteries instead of the town grid
+        c.alPowerDraw += self.dcDraw() * (owner === 'helix' && self.gridShare ? self.gridShare() : 1);
       }
     };
   };
@@ -282,8 +283,8 @@ AfterlightLayer.prototype.setPolicy = function(name, value) {
   if (!(name in this.s.policies)) return;
   this.s.policies[name] = !!value;
   var labels = {
-    helixExpansion: value ? 'The council lets Helix build data centers and depots wherever it can get power.' :
-                            'The council blocks new Helix construction. Only public and co-op projects may build.',
+    helixExpansion: value ? 'City Hall lets Helix build data centers and depots wherever it can get power.' :
+                            'City Hall blocks new Helix construction. Only public and co-op projects may build.',
     dividend: value ? 'Citizen dividend passed: 20% of Helix\'s automation income and half of co-op profits go to every resident.' :
                       'Citizen dividend repealed. Co-op profits return to the city treasury.',
     communityFirst: value ? 'Community-first zoning: every Helix site must give the town a 25% stake, and Helix builds more slowly.' :

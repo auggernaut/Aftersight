@@ -72,11 +72,15 @@ CardWindow.prototype.render = function() {
 
 CardWindow.prototype.showAsks = function() {
   var c = this.card;
-  var list = (c.asks || []).map(function(a) {
-    return '<label class="askRow"><input type="checkbox" class="askBox" value="' + a.id + '"><span>' + esc(a.label) + '</span></label>';
-  }).join('');
+  var row = function(a) {
+    return '<label class="askRow' + (a.design ? ' askDesign' : '') + '"><input type="checkbox" class="askBox" value="' + a.id + '"><span>' + esc(a.label) + '</span></label>';
+  };
+  var asks = c.asks || [];
+  var list = asks.filter(function(a) { return !a.design; }).map(row).join('');
+  var design = asks.filter(function(a) { return a.design; }).map(row).join('');
   $('#alCard .cardOptions').html(
     '<div class="cardAsks"><div class="cardAsksTitle">What do you ask for? (1 or 2)</div>' + list +
+    (design ? '<div class="cardAsksDesign"><div class="cardAsksSub">Facility design: how it\'s cooled and powered</div>' + design + '</div>' : '') +
     '<div class="cardAskButtons"><button id="alCounterBack" class="cardOption">Back</button>' +
     '<button id="alSendCounter" class="cardOption tone-good" disabled>Pick 1 or 2 asks</button></div></div>');
 };

@@ -6,7 +6,8 @@
  * Three kinds of decision card drive the drama, and every big event is either a card or the result of one:
  *  - Developer offers (Festus): tax abatement, PILOT, school fund, jobs, who pays for utility upgrades, an NDA and
  *    town equity, with post-labor terms (wealth fund, kids' trust, compute royalty, a town AI co-op) in the late
- *    tiers. Accept, counter with one or two asks, or reject.
+ *    tiers, plus a facility design: how the halls are cooled (water) and where their power comes from (bills, air).
+ *    Accept, counter with one or two asks, or reject. There is no council: the mayor decides, and elections are the check.
  *  - Breakthroughs: a cost in dollars and compute and a duration. Compute comes from the town's equity share of
  *    local data centers, plus whatever it buys at market price. Finished research unlocks a building the player
  *    still has to place, fund and keep running. Pass and someone else gets it.
@@ -22,6 +23,11 @@ import * as TF from '../tileFlags.ts';
 import * as B from './buildings.js';
 import { SITE, PLANS, plan as sitePlan, fieldAt, fieldTileCount } from './festus.js';
 
+var coolWater = function(c) { return COOLING[c || 'evap'].water; };
+var clamp = function(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); };
+var copy = function(o) { return JSON.parse(JSON.stringify(o)); };
+var money = function(n) { return '$' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
+
 export const FACTIONS = [
   {id: 'res', name: 'Residents & homeowners', short: 'Residents', w: 0.30},
   {id: 'farm', name: 'Farmers', short: 'Farmers', w: 0.12},
@@ -36,8 +42,8 @@ export const DEVELOPERS = {
   empty: {name: 'Helix', short: 'Helix'}
 };
 
-// Election calendar, in months since Jan 2026: a council race in Apr 2026, then the mayor's seat every 2 years
-export const COUNCIL_ELECTION = 3, COURT_HEARING = 11;
+// Election calendar, in months since Jan 2026: a town poll in Apr 2026, then the mayor's seat every 2 years
+export const SPRING_POLL = 3, COURT_HEARING = 11;
 export const ELECTIONS = [27, 51, 75];
 export const WIN_TERMS = 3, WIN_SHARE = 0.25;
 var CARD_GAP = 6;          // fewest months between two decision cards
@@ -46,13 +52,42 @@ var DRAMA_GAP = 8;         // most months without anything meaningful before the
 
 // ---- Developer offers ----
 // Each tier is a full set of terms. Tier 0 is the opening offer: bad for citizens, as first offers are.
+// cooling: evap | hybrid | closed; power: grid | gas | clean. The developer opens with the cheapest design.
 export const TIERS = [
-  {abatePct: 100, abateYears: 20, pilot: 200, school: 0, jobs: 25, utilities: 'town', nda: true, equity: 0},
-  {abatePct: 75, abateYears: 15, pilot: 500, school: 150, jobs: 40, utilities: 'split', nda: true, equity: 0},
-  {abatePct: 50, abateYears: 10, pilot: 900, school: 300, jobs: 55, utilities: 'developer', nda: false, equity: 5},
-  {abatePct: 40, abateYears: 10, pilot: 1100, school: 400, jobs: 60, utilities: 'developer', nda: false, equity: 10, fund: true, royalty: 40},
-  {abatePct: 25, abateYears: 10, pilot: 1400, school: 500, jobs: 70, utilities: 'developer', nda: false, equity: 20, fund: true, kids: 5, royalty: 80, coop: true}
+  {abatePct: 100, abateYears: 20, pilot: 200, school: 0, jobs: 25, utilities: 'town', nda: true, equity: 0, cooling: 'evap', power: 'grid'},
+  {abatePct: 75, abateYears: 15, pilot: 500, school: 150, jobs: 40, utilities: 'split', nda: true, equity: 0, cooling: 'evap', power: 'grid'},
+  {abatePct: 50, abateYears: 10, pilot: 900, school: 300, jobs: 55, utilities: 'developer', nda: false, equity: 5, cooling: 'hybrid', power: 'grid'},
+  {abatePct: 40, abateYears: 10, pilot: 1100, school: 400, jobs: 60, utilities: 'developer', nda: false, equity: 10, fund: true, royalty: 40, cooling: 'hybrid', power: 'grid'},
+  {abatePct: 25, abateYears: 10, pilot: 1400, school: 500, jobs: 70, utilities: 'developer', nda: false, equity: 20, fund: true, kids: 5, royalty: 80, coop: true, cooling: 'hybrid', power: 'grid'}
 ];
+
+// ---- Facility design ----
+// Festus buys its water from the Jefferson County Water Authority's collector wells on the Mississippi (a newer main
+// well, the original as backup; the city keeps its own wells for emergencies). How the halls are cooled sets how
+// much of it they take; where their power comes from sets the town's bills and its air.
+export const COOLING = {
+  evap: {name: 'Evaporative towers', water: 1, rank: 0},
+  hybrid: {name: 'Hybrid cooling', water: 0.5, rank: 1},
+  closed: {name: 'Closed-loop liquid cooling', water: 0.1, rank: 2}
+};
+export const POWER = {
+  grid: {name: 'Ameren grid', said: 'the Ameren grid', gridShare: 1},
+  gas: {name: 'On-site gas turbines', said: 'its own gas turbines', gridShare: 0},
+  clean: {name: 'Solar, batteries and a clean power contract', said: 'solar, batteries and a clean power contract', gridShare: 0.3}
+};
+var CLOSED_COST = 250, CLEAN_COST = 150, GAS_SAVING = 150;
+// A stricter design costs the developer money, so it takes it out of something else on the table
+// (first from one term, then the other, then from the jobs promised)
+var trim = function(t, amt, first) {
+  var order = first === 'school' ? ['school', 'pilot'] : ['pilot', 'school'], floor = {pilot: 100, school: 0};
+  var name = {pilot: 'the payment in lieu of taxes', school: 'the school fund'}, parts = [];
+  order.forEach(function(k) {
+    var cut = Math.min(amt, Math.max(0, t[k] - floor[k]));
+    if (cut > 0) { t[k] -= cut; amt -= cut; parts.push(money(cut) + ' a year off ' + name[k]); }
+  });
+  if (amt > 0) { var j = Math.min(t.jobs - 10, Math.ceil(amt / 25)); if (j > 0) { t.jobs -= j; parts.push(j + ' fewer permanent jobs'); } }
+  return parts.join(' and ') || 'nothing left to cut';
+};
 var UTIL_STEP = {town: 'split', split: 'developer', developer: 'developer'};
 export const ASKS = {
   abate: {label: 'Cut the tax abatement', apply: function(t) { t.abatePct = Math.max(0, t.abatePct - 25); t.abateYears = Math.max(5, t.abateYears - 5); }, ok: function(t) { return t.abatePct > 0; }},
@@ -65,12 +100,25 @@ export const ASKS = {
   fund: {label: 'PILOT goes into a town wealth fund that pays a dividend', late: true, hard: 1, apply: function(t) { t.fund = true; }, ok: function(t) { return !t.fund; }},
   kids: {label: 'A kids\' trust: a share of revenue for every child, vesting at 21', late: true, hard: 1, apply: function(t) { t.kids = (t.kids || 0) + 5; }, ok: function(t) { return (t.kids || 0) < 10; }},
   royalty: {label: 'A compute royalty for the town', late: true, hard: 1, apply: function(t) { t.royalty = (t.royalty || 0) + 40; }, ok: function(t) { return (t.royalty || 0) < 160; }},
-  coop: {label: 'One hall becomes a town-owned AI co-op', late: true, hard: 2, apply: function(t) { t.coop = true; }, ok: function(t) { return !t.coop; }}
+  coop: {label: 'One hall becomes a town-owned AI co-op', late: true, hard: 2, apply: function(t) { t.coop = true; }, ok: function(t) { return !t.coop; }},
+  // facility design: each one moves money off the table, or onto it
+  cooling: {design: true, label: 'Require closed-loop cooling: almost no river water (Keystone cuts about ' + money(CLOSED_COST) + '/yr from other benefits)',
+            apply: function(t) { t.cooling = 'closed'; return trim(t, CLOSED_COST, 'pilot'); },
+            ok: function(t) { return t.cooling !== 'closed'; }},
+  clean: {design: true, hard: 1, label: 'Require clean power: solar, batteries, a clean contract (Keystone cuts about ' + money(CLEAN_COST) + '/yr from other benefits)',
+          apply: function(t) { t.power = 'clean'; return trim(t, CLEAN_COST, 'school'); },
+          ok: function(t) { return t.power !== 'clean'; }},
+  gas: {design: true, label: 'Keep it off our grid: Keystone burns its own gas (+' + money(GAS_SAVING) + '/yr PILOT, dirtier air)',
+        apply: function(t) { t.power = 'gas'; t.pilot += GAS_SAVING; return money(GAS_SAVING) + ' a year to the payment in lieu of taxes'; },
+        ok: function(t) { return t.power === 'grid'; }}
 };
+var DESIGN_DONE = {cooling: 'closed-loop cooling', clean: 'clean power', gas: 'its own gas turbines'};
 export const UTIL_TEXT = {town: 'The town pays', split: 'Split 50/50', developer: 'Developer pays'};
 
 // Money per hall per month, in game dollars (a Festus-sized town collects roughly $400 a year in taxes)
 var HALL_TAX = 40, HALL_REVENUE = 120, WATER_UPGRADE = 400, HALL_WATER = 12;
+// The water authority adds capacity for the deal: it covers this share of an evaporative hall's draw
+var WELL_UPGRADE = 0.6, GRID_STRAIN = 0.02, FUMES_RES = 6, FUMES_SCHOOL = 5;
 
 // ---- Breakthroughs ----
 export const RESEARCH = {
@@ -118,7 +166,7 @@ var ASK_CARDS = {
     yes: {label: 'Pass the ordinance', d: {work: 8, biz: -3}, effect: function(L) { L.s.mayor.localHire = true; }},
     no: {label: 'Decline', d: {work: -6}}},
   publish_deal: {faction: 'res', when: function(L) { return L.s.deal && L.s.deal.nda; },
-    title: 'Publish the agreement?', body: 'Residents and the school board demand the council release the developer agreement and the minutes of its closed sessions.',
+    title: 'Publish the agreement?', body: 'Residents and the school board demand that City Hall release the developer agreement and the notes from its closed-door talks.',
     yes: {label: 'Publish it', d: {res: 7, school: 4, biz: -2}, effect: function(L) { L.s.deal.nda = false; L.s.dev.patience = Math.max(0, L.s.dev.patience - 1); }},
     no: {label: 'Keep it sealed', d: {res: -6, school: -3}}},
   tax_cut: {faction: 'biz', repeat: 24, when: function(L) { return L.s.months > 10 && L._sim.budget.cityTax > 4; },
@@ -135,10 +183,10 @@ var ASK_CARDS = {
     title: 'Grow it ourselves?', body: 'With no campus coming, the chamber and the trades pitch a plan: a community solar farm, Main Street grants and a training program at the high school.',
     yes: {label: 'Fund the plan ($1,000)', cost: 1000, d: {work: 6, biz: 5, res: 2, farm: 2}, effect: function(L) { L.s.mayor.homegrown = (L.s.mayor.homegrown || 0) + 1; }},
     no: {label: 'Not this year', d: {work: -3, biz: -3}}},
-  // a bad deal can be reopened: the new council pushes, the developer comes back to the table
+  // a bad deal can be reopened: residents push, the developer comes back to the table
   reopen: {faction: 'res', when: function(L) { return L.s.deal && L._dealTier() <= 1 && L.s.dev.status === 'signed' && !L.s.construction &&
                                                          L.s.months - L.s.deal.month >= 8 && !L.s.mayor.reopened; },
-    title: 'Reopen the deal?', body: 'The new council members say the agreement was signed too fast and too cheap. They want you to call the developer back to the table.',
+    title: 'Reopen the deal?', body: 'Residents who packed the spring town hall say the agreement was signed too fast and too cheap. They want you to call the developer back to the table.',
     yes: {label: 'Call them back', d: {res: 4, school: 2, biz: -2}, effect: function(L) { L.s.mayor.reopened = true; L.s.mayor.reopenDue = L.mi() + 1; }},
     no: {label: 'A deal is a deal', d: {res: -4, biz: 3}}},
   school_levy: {faction: 'school', repeat: 24, when: function(L) { return L.s.months > 14 && L._sim.budget.cityTax < 12; },
@@ -147,9 +195,7 @@ var ASK_CARDS = {
     no: {label: 'Decline', d: {school: -6}}}
 };
 
-var clamp = function(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); };
-var copy = function(o) { return JSON.parse(JSON.stringify(o)); };
-var money = function(n) { return '$' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
+
 var signed = function(n) { n = Math.round(n); return (n > 0 ? '+' : n < 0 ? '\u2212' : '\u00b1') + Math.abs(n); };
 
 export function freshMayor() {
@@ -178,9 +224,15 @@ export function installMayor(L) {
   P.maxHalls = function() { return this.sitePlan().spots.length; };
   // Power a campus pulls, in MW (a coal plant makes 700), and how much more water it needs than the whole town uses now
   P.campusMW = function(halls) { return halls * this.dcDraw(); };
-  P.campusWaterPct = function(halls) {
+  P.campusWaterPct = function(halls, cooling) {
     var town = Math.max(1, (this._sim.evaluation.cityPop || 0) / 150);
-    return Math.round(HALL_WATER * halls / town * 100);
+    return Math.round(HALL_WATER * coolWater(cooling) * halls / town * 100);
+  };
+  // Share of the campus's power that comes off the town grid (on-site gas: none; solar + batteries: some firming)
+  P.gridShare = function() { var d = this.s.deal; return d && this.festus() ? POWER[d.power || 'grid'].gridShare : 1; };
+  P._designNews = function(t) {
+    if (!t) return '';
+    return ' Cooling: ' + COOLING[t.cooling || 'evap'].name.toLowerCase() + '. Power: ' + POWER[t.power || 'grid'].said + '.';
   };
   P.nextElection = function() {
     var m = this.mi();
@@ -247,10 +299,19 @@ export function installMayor(L) {
     var shortage = pm && pm.lastShort ? 1 : 0;
     var online = this.hallsOnline();
     var utilBill = {town: 0.14, split: 0.08, developer: 0};
-    var bills = (deal ? utilBill[deal.utilities] * Math.min(2, online / 2) : 0) + shortage * 0.5 +
+    // facility design: grid power strains Ameren and the bills; gas turbines foul the air; clean power is light on both
+    var power = deal && this.festus() ? deal.power || 'grid' : null, cooling = deal && this.festus() ? deal.cooling || 'evap' : null;
+    var load = Math.min(1, online / 2);
+    var gridStrain = power === 'grid' ? GRID_STRAIN * Math.min(4, online) : power === 'clean' ? -0.02 * load : 0;
+    var fumes = power === 'gas' ? load * (1 + Math.min(1, Math.max(0, online - 2) / 4)) : 0;
+    var cleanAir = power === 'clean' ? load : 0;
+    s.health = {fumes: fumes};
+    // people watch the river: towers that drink from it worry farmers before any shortage; closed loops reassure them
+    var riverWorry = cooling ? load * {evap: 0.5, hybrid: 0.2, closed: -0.6}[cooling] : 0;
+    var bills = (deal ? utilBill[deal.utilities] * Math.min(2, online / 2) : 0) + shortage * 0.5 + gridStrain +
                 (s.dependence || 0) * 0.04 + (s.passedBills || 0) - (c.alFusionPop > 0 ? 0.15 : 0);
     var pop = this._sim.evaluation.cityPop || 0;
-    s.water.use = pop / 150 + online * HALL_WATER * (m.waterGuarantee ? 0.8 : 1);
+    s.water.use = pop / 150 + online * HALL_WATER * coolWater(cooling) * (m.waterGuarantee ? 0.8 : 1);
     var stress = Math.max(0, s.water.use / Math.max(1, s.water.cap) - 0.85) * 4;
     var noise = this.noise();
     var secrecy = deal && deal.nda ? 1 : 0;
@@ -271,11 +332,12 @@ export function installMayor(L) {
     var growth = clamp((this._sim._valves ? this._sim._valves.comValve : 0) / 150, -8, 8);
     s.bills = bills; s.waterStress = stress;
     return {
-      res: 51 + fair * 5 + free * 6 - bills * 40 - stress * 12 - noise * 5 - secrecy * 10 - taxPain - jobless * 40 + div * 8 + equity * 12 + clinics * 2,
-      farm: 53 + fair * 2 + free * 4 - stress * 20 - lost * 80 - bills * 25 - taxPain * 1.2 + div * 4 + equity * 6,
+      res: 51 + fair * 5 + free * 6 - bills * 40 - stress * 12 - noise * 5 - secrecy * 10 - taxPain - jobless * 40 + div * 8 + equity * 12 + clinics * 2 -
+           fumes * FUMES_RES + cleanAir * 2 - riverWorry * 2,
+      farm: 53 + fair * 2 + free * 4 - stress * 20 - lost * 80 - bills * 25 - taxPain * 1.2 + div * 4 + equity * 6 - fumes * 2 + cleanAir - riverWorry * 4,
       work: 47 + fair * 2 - jobless * 90 + building * 12 + jobs * 11 + home * 3 + div * 10 + equity * 8 - s.automation * 15 * (1 - s.cover),
       biz: 49 + growth - taxPain * 1.5 - bills * 30 + (online ? 7 : 0) + jobs * 4 + home * 3 - (s.dependence || 0) * 2,
-      school: 50 + fair * 4 + free * 5 + schoolScore * 10 - secrecy * 8 - taxPain * 0.6 + clinics * 2 + div * 4
+      school: 50 + fair * 4 + free * 5 + schoolScore * 10 - secrecy * 8 - taxPain * 0.6 + clinics * 2 + div * 4 - fumes * FUMES_SCHOOL + cleanAir
     };
   };
 
@@ -344,7 +406,9 @@ export function installMayor(L) {
     var clinics = c.alClinicOn || 0, cure = !!(s.research.done.the_cure || this.has('the_cure'));
     var cands = [];
     // health
-    if (cure && !clinics) cands.push(['health', 'bad', 'Health: the new therapies are licensed, but no clinic in town offers them. Residents drive an hour and pay out of pocket.']);
+    var dl = s.deal, online = this.hallsOnline(), hs = s.health || {};
+    if (hs.fumes > 0.4) cands.push(['health', 'bad', 'Health: asthma visits at the clinic are up since ' + this.dev().short + '\'s gas turbines started. Parents near the campus want them shut off.']);
+    else if (cure && !clinics) cands.push(['health', 'bad', 'Health: the new therapies are licensed, but no clinic in town offers them. Residents drive an hour and pay out of pocket.']);
     else if (clinics && !m.alertLast.health) cands.push(['health', 'good', 'Health: the healing clinic has a waiting list. Sick days at the plant are down.']);
     else if (now.jobless > 0.15) cands.push(['health', 'bad', 'Health: the free clinic is turning people away. Many of the ' + pct(now.jobless) + ' out of work lost their insurance with their jobs.']);
     // jobs
@@ -355,10 +419,15 @@ export function installMayor(L) {
     if (now.div > 1 && now.div > then.div * 1.3) cands.push(['wealth', 'good', 'Household wealth: the wealth fund\'s dividend to residents is up to about ' + money(now.div * 12) + ' a year.']);
     else if (now.auto > 0.25 && now.cover < 0.3) cands.push(['wealth', 'bad', 'Household wealth: automation does ' + pct(now.auto) + ' of the work now and nothing replaces the wages. Savings are draining.']);
     // water
-    if (now.use > 0.85) cands.push(['water', 'bad', 'Water: the town is drawing ' + pct(now.use) + ' of what its wells and plant can supply.' + (now.stress > 0.3 ? ' Lawn watering is banned.' : '')]);
+    var towers = dl && online && (dl.cooling || 'evap') === 'evap' && this.festus();
+    if (now.use > 0.85) cands.push(['water', 'bad', 'Water: the town is drawing ' + pct(now.use) + ' of what the water authority\'s river wells can supply.' + (now.stress > 0.3 ? ' Lawn watering is banned.' : '') +
+                                    (towers ? ' The campus cooling towers are the biggest user.' : '')]);
+    else if (dl && online && dl.cooling === 'closed' && !m.alertLast.water) cands.push(['water', 'good', 'Water: the campus runs closed-loop cooling and barely touches the county\'s river wells. Use is at ' + pct(now.use) + ' of supply.']);
     else if (now.use > 0.75 && now.use - then.use > 0.08) cands.push(['water', 'neutral', 'Water: use is up to ' + pct(now.use) + ' of supply, from ' + pct(then.use) + ' in the spring.']);
     // power bills
-    if (now.bills - then.bills > 0.06 || now.bills > 0.25) cands.push(['bills', 'bad', 'Power bills: households are paying noticeably more than last year' + (this._sim._powerManager && this._sim._powerManager.lastShort ? ', and the grid is short at peak.' : '.')]);
+    var onGrid = dl && online && (dl.power || 'grid') === 'grid' && this.festus();
+    if (now.bills - then.bills > 0.06 || now.bills > 0.25) cands.push(['bills', 'bad', 'Power bills: households are paying noticeably more than last year' + (this._sim._powerManager && this._sim._powerManager.lastShort ? ', and the grid is short at peak.' : '.') +
+                                    (onGrid ? ' Ameren is asking the state for a rate increase to cover the campus\'s grid upgrades.' : '')]);
     else if (then.bills - now.bills > 0.06) cands.push(['bills', 'good', 'Power bills: they\'re coming down for the first time in a while.']);
     // faction mood shifts
     var shift = FACTIONS.map(function(f) { return {f: f, d: now.f[f.id] - then.f[f.id]}; }).sort(function(a, b) { return Math.abs(b.d) - Math.abs(a.d); })[0];
@@ -406,12 +475,15 @@ export function installMayor(L) {
   P._reaction = function(t, choice, asks) {
     if (choice === 'accept') {
       var util = {town: -5, split: -2, developer: 2}[t.utilities];
+      var cool = {evap: -1, hybrid: 0, closed: 3}[t.cooling || 'evap'];
+      var pw = {grid: {res: 0, biz: 0, school: 0}, gas: {res: -3, biz: 2, school: -3}, clean: {res: 2, biz: 0, school: 1}}[t.power || 'grid'];
+      if (!this.festus()) { cool = 0; pw = {res: 0, biz: 0, school: 0}; }
       return {
-        res: -6 - (t.nda ? 4 : 0) + util + (t.fund ? 6 : 0) + (t.equity || 0) * 0.4 - t.abatePct / 100 * 3,
-        farm: -5 + util * 0.8 + t.pilot / 400,
+        res: -6 - (t.nda ? 4 : 0) + util + (t.fund ? 6 : 0) + (t.equity || 0) * 0.4 - t.abatePct / 100 * 3 + cool * 0.7 + pw.res,
+        farm: -5 + util * 0.8 + t.pilot / 400 + cool,
         work: 8 + t.jobs / 15 + (t.fund ? 4 : 0),
-        biz: 8 + t.pilot / 500,
-        school: -4 + t.school / 100 - t.abatePct / 100 * 6 + (t.kids || 0) * 1.2 - (t.nda ? 3 : 0)
+        biz: 8 + t.pilot / 500 + pw.biz,
+        school: -4 + t.school / 100 - t.abatePct / 100 * 6 + (t.kids || 0) * 1.2 - (t.nda ? 3 : 0) + pw.school
       };
     }
     if (choice === 'counter') {
@@ -422,6 +494,9 @@ export function installMayor(L) {
         if (a === 'nda' || a === 'abate') d.res += 2;
         if (a === 'utilities') { d.res += 1; d.farm += 2; }
         if (a === 'equity' || a === 'fund' || a === 'coop' || a === 'royalty') { d.res += 1; d.work += 1; }
+        if (a === 'cooling') { d.farm += 2; d.res += 1; }
+        if (a === 'clean') { d.res += 1; d.school += 1; }
+        if (a === 'gas') { d.biz += 1; d.res -= 1; }
       });
       return d;
     }
@@ -441,6 +516,10 @@ export function installMayor(L) {
     var s = this.s;
     tier = clamp(tier, 0, TIERS.length - 1);
     var terms = copy(TIERS[tier]);
+    if (s.deal) {   // a design already won stays won: the campus is built around it
+      if (COOLING[s.deal.cooling || 'evap'].rank > COOLING[terms.cooling].rank) terms.cooling = s.deal.cooling;
+      if (terms.power !== 'clean') terms.power = s.deal.power || 'grid';
+    }
     var pl = s.deal ? (s.deal.plan || 0) : (s.dev.plan || 0);
     var halls = kind === 'expansion' ? 2 : sitePlan(pl).halls;
     s.dev.offer = {tier: tier, terms: terms, halls: halls, kind: kind || 'first', plan: pl};
@@ -451,7 +530,8 @@ export function installMayor(L) {
 
   P.asksFor = function(terms) {
     var late = this.s.dev.offer && this.s.dev.offer.tier >= 2 || this.mi() >= 24;
-    return Object.keys(ASKS).filter(function(k) { return (!ASKS[k].late || late) && ASKS[k].ok(terms); });
+    var festus = this.festus();
+    return Object.keys(ASKS).filter(function(k) { return (!ASKS[k].late || late) && (!ASKS[k].design || festus) && ASKS[k].ok(terms); });
   };
 
   P.termRows = function(t, halls, o) {
@@ -463,17 +543,29 @@ export function installMayor(L) {
       ['Payment in lieu of taxes', money(t.pilot) + ' a year' + (t.fund ? ', into a town wealth fund' : ''), t.pilot >= 900 ? 'good' : t.pilot < 400 ? 'bad' : 'neutral'],
       ['School fund', t.school ? money(t.school) + ' a year' : 'None', t.school >= 300 ? 'good' : t.school ? 'neutral' : 'bad'],
       ['Jobs promised', t.jobs + ' permanent (plus construction crews)', t.jobs >= 55 ? 'good' : t.jobs < 35 ? 'bad' : 'neutral'],
-      ['Power and water', 'About ' + this.campusMW(halls) + ' MW (a coal plant makes 700) and ' + this.campusWaterPct(halls) + '% more water than the town uses now',
-       halls > 2 ? 'bad' : 'neutral'],
+      ['Cooling', this.coolingText(t, halls), {evap: 'bad', hybrid: 'neutral', closed: 'good'}[t.cooling || 'evap']],
+      ['Power', this.powerText(t, halls), {grid: 'bad', gas: 'bad', clean: 'good'}[t.power || 'grid']],
       ['Water and power upgrades', UTIL_TEXT[t.utilities] + (t.utilities !== 'developer' ? ' (' + money(self.utilityBill(t, halls)) + ' now, and higher bills)' : ''), t.utilities === 'developer' ? 'good' : t.utilities === 'town' ? 'bad' : 'neutral'],
       ['Secrecy', t.nda ? 'NDA: the tenant stays secret, sessions closed' : 'Open: terms and tenant public', t.nda ? 'bad' : 'good'],
       ['Town equity', (t.equity || 0) + '%' + ((t.equity || 0) ? ' of revenue and compute' : ''), (t.equity || 0) >= 10 ? 'good' : (t.equity || 0) ? 'neutral' : 'bad']
     ];
-    if (!halls) rows = rows.filter(function(r) { return r[0] !== 'Power and water'; });
     if (t.kids) rows.push(['Kids\' trust', t.kids + '% of revenue for every child, vesting at 21', 'good']);
     if (t.royalty) rows.push(['Compute royalty', t.royalty + ' compute a month for the town', 'good']);
     if (t.coop) rows.push(['Town AI co-op', 'One hall is owned by the town', 'good']);
     return rows;
+  };
+  // One line per design choice: what it is, what it costs the town, what it costs the developer
+  P.coolingText = function(t, halls) {
+    var c = t.cooling || 'evap', n = halls || (this.s.deal ? this.s.deal.halls : 2), w = this.campusWaterPct(n, c) + '% more water than the town uses now';
+    return c === 'evap' ? 'Evaporative towers: cheapest to run, but ' + w + ', from the county\'s river wells' :
+           c === 'hybrid' ? 'Hybrid: dry coolers, towers only on hot days. ' + w :
+           'Closed-loop liquid: ' + w + '. Costs ' + this.dev().short + ' more to build';
+  };
+  P.powerText = function(t, halls) {
+    var p = t.power || 'grid', mw = halls ? 'about ' + this.campusMW(halls) + ' MW (a coal plant makes 700)' : 'the whole campus';
+    return p === 'grid' ? 'Ameren grid: ' + mw + '. Strains the grid; household bills go up' :
+           p === 'gas' ? 'Its own gas turbines for ' + mw + ': off your grid, but exhaust near homes and schools' :
+           'Solar, batteries and a clean power contract for ' + mw + ': pricier for ' + this.dev().short + ', light on the grid, clean air';
   };
   P.utilityBill = function(t, halls) { return {town: 1, split: 0.5, developer: 0}[t.utilities] * WATER_UPGRADE * halls; };
 
@@ -496,13 +588,15 @@ export function installMayor(L) {
     var asks = this.asksFor(o.terms);
     var self = this;
     var body = o.kind === 'first' ?
-      dev.name + ', the data center arm of a St. Louis builder, wants about 370 acres between the west subdivisions and I-55. It won\'t name the tenant. The council meets in the high school gym tonight.' :
+      dev.name + ', the data center arm of a St. Louis builder, wants about 370 acres between the west subdivisions and I-55. It won\'t name the tenant. Festus buys its water from the county water authority\'s collector wells on the Mississippi, one main well and an older backup, and its power from Ameren Missouri. At full build the campus wants 1 GW. ' +
+      'The town packs the high school gym tonight to hear your answer.' :
       o.kind === 'expansion' ? 'The campus is full. ' + dev.short + ' wants two more halls on the site and offers to re-sign the whole agreement on these terms.' :
-      o.kind === 'reopen' ? 'The council asked, and ' + dev.short + ' would rather re-sign than fight. Same halls. Say no and the old agreement stands.' :
+      o.kind === 'reopen' ? 'You asked, and ' + dev.short + ' would rather re-sign than fight. Same halls. Say no and the old agreement stands.' :
       o.kind === 'return' ? 'The deal across the river fell through. ' + dev.short + ' wants more this time: ' + o.halls + ' halls on about ' + sitePlan(o.plan).acres +
         ' acres' + (o.plan ? ', the old site plus the fields south of the state road along I-55' : '') + '. Better terms, a bigger footprint, more power and water. ' +
         'Leverage ' + Math.round(this.leverage() * 100) + '%.' :
       o.kind === 'renegotiate' ? 'The judge threw out the old agreement. ' + dev.short + ' has a new one, and this time the terms are public.' :
+      (o.kind === 'better' && o.trades ? o.trades.join(' ') + ' ' : '') +
       'Leverage ' + Math.round(this.leverage() * 100) + '%: the longer you hold out and the more popular you are, the more they give.';
     this.showCard({
       type: 'offer', kicker: k[0], title: k[1], body: body, rows: this.termRows(o.terms, o.halls, o),
@@ -512,7 +606,7 @@ export function installMayor(L) {
          preview: this.preview(this._reaction(o.terms, 'counter', [])), note: 'Ask for 1 or 2 changes. ' + dev.short + ' answers in a couple of months.'},
         {id: 'reject', label: o.kind === 'expansion' ? 'Say no' : 'Reject', tone: 'bad', preview: this.preview(this._reaction(o.terms, 'reject'))}
       ],
-      asks: asks.map(function(a) { return {id: a, label: ASKS[a].label}; }), maxAsks: 2,
+      asks: asks.map(function(a) { return {id: a, label: ASKS[a].label, design: !!ASKS[a].design}; }), maxAsks: 2,
       leverage: Math.round(self.leverage() * 100)
     });
   };
@@ -542,7 +636,7 @@ export function installMayor(L) {
         this.news('neutral', 'Talks end. The old agreement with ' + dev.short + ' stands.');
       } else if (o.kind === 'expansion') {
         s.dev.status = 'signed'; s.dev.offer = null; s.dev.nextExpansion = mi + 14;
-        this.news('neutral', 'The council turns down ' + dev.short + '\'s expansion. The halls already built keep running.');
+        this.news('neutral', 'You turn down ' + dev.short + '\'s expansion. The halls already built keep running.');
       } else this.devWalks('rejected');
     }
   };
@@ -588,14 +682,14 @@ export function installMayor(L) {
     s.dev.nextExpansion = this.mi() + 16;
     if (!o.halls) {
       s.dev.nextExpansion = this.mi() + 16;
-      this.news('neutral', 'The council re-signs with ' + dev.short + ' in a public session. Same halls, new terms.');
+      this.news('neutral', 'You re-sign with ' + dev.short + ' in public. Same halls, new terms.' + this._designNews(s.deal));
       return;
     }
     var bill = this.utilityBill(o.terms, o.halls);
     if (bill) budget.spend(Math.min(bill, budget.totalFunds));
-    s.water.cap += HALL_WATER * o.halls * (pl ? 0.85 : 1);   // the bigger campus outruns the upgrades it pays for
+    s.water.cap += HALL_WATER * WELL_UPGRADE * o.halls * (pl ? 0.85 : 1);   // the authority adds part of it; the bigger campus outruns it
     s.construction = {until: s.months + 4, from: prevHalls, to: halls};
-    this.news('neutral', 'The council signs with ' + dev.short + '. Graders roll onto the site; ' + (halls - prevHalls) + ' halls go up over the next four months.' +
+    this.news('neutral', 'You sign with ' + dev.short + '. Graders roll onto the site; ' + (halls - prevHalls) + ' halls go up over the next four months.' + this._designNews(s.deal) +
               (bill ? ' The town pays ' + money(bill) + ' toward water and power upgrades.' : ''), {x: SITE.x + 5, y: SITE.y + 8, showable: true});
   };
 
@@ -653,10 +747,15 @@ export function installMayor(L) {
       var p = clamp(0.35 + 0.5 * this.leverage() - 0.12 * (asks.length - 1) - 0.08 * hard, 0.1, 0.9);
       if (this._forceCounter !== undefined) { p = this._forceCounter ? 1 : 0; this._forceCounter = undefined; }
       if (Random.getRandom(99) < p * 100) {
-        asks.forEach(function(a) { ASKS[a].apply(o.terms); });
+        var trades = [];
+        asks.forEach(function(a) {
+          var cost = ASKS[a].apply(o.terms);
+          if (ASKS[a].design && cost) trades.push(dev.short + ' agrees to ' + DESIGN_DONE[a] + (a === 'gas' ? ' and adds ' : ', but to pay for it takes ') + cost + '.');
+        });
         o.tier = Math.min(TIERS.length - 1, o.tier + (asks.length > 1 ? 1 : 0));
         o.kind = 'better';
         dv.status = 'offer';
+        if (trades.length) { o.trades = trades; this.news('neutral', trades.join(' ')); } else o.trades = null;
         this.bump({res: 2, school: 1}, dev.short + ' improved its offer');
         s.mayor.lastCard = -99;
         this._offerCard();
@@ -697,7 +796,9 @@ export function installMayor(L) {
   P._dealTier = function() {
     var d = this.s.deal;
     if (!d) return 0;
-    for (var i = TIERS.length - 1; i >= 0; i--) if ((d.equity || 0) >= (TIERS[i].equity || 0) && d.pilot >= TIERS[i].pilot) return i;
+    // money traded for a cleaner design still counts toward how good the deal is; money taken for a dirtier one doesn't
+    var pilot = d.pilot + (d.cooling === 'closed' ? CLOSED_COST : 0) + (d.power === 'clean' ? CLEAN_COST : 0) - (d.power === 'gas' ? GAS_SAVING : 0);
+    for (var i = TIERS.length - 1; i >= 0; i--) if ((d.equity || 0) >= (TIERS[i].equity || 0) && pilot >= TIERS[i].pilot) return i;
     return 0;
   };
 
@@ -705,19 +806,19 @@ export function installMayor(L) {
   P._scripted = function(mi) {
     var s = this.s, sc = s.mayor.scripted, dev = this.dev();
     if (!this.festus()) return;
-    if (!sc.council && mi >= COUNCIL_ELECTION) {
+    if (!sc.council && mi >= SPRING_POLL) {   // (the save key stays 'council' so old saves don't replay it)
       sc.council = true;
       if (s.deal) {
-        this.bump({res: -5, school: -2}, 'Council members who backed the deal were ousted');
-        this.news('bad', 'VOTERS OUST ALL FOUR COUNCIL MEMBERS UP FOR RE-ELECTION. The deal was signed in closed sessions; the new council wants answers. Your own seat is on the ballot in April 2028.',
-                  {paper: true, tone: 'bad', headline: 'VOTERS OUST ALL FOUR COUNCIL MEMBERS UP FOR RE-ELECTION',
-                   body: 'Days after the ' + dev.short + ' vote, every incumbent on the ballot lost. Challengers ran on one issue: the data center, and how it was approved.',
+        this.bump({res: -5, school: -2}, 'The April poll turned against the deal');
+        this.news('bad', 'APRIL POLL: THE TOWN TURNS ON THE DEAL. You signed in closed sessions; people want answers. Your own seat is on the ballot in April 2028.',
+                  {paper: true, tone: 'bad', headline: 'TOWN TURNS ON THE DATA CENTER DEAL',
+                   body: 'Weeks after you signed with ' + dev.short + ', the paper\'s spring poll has most voters against the deal and how it was made. Hundreds signed up to speak at the next town hall.',
                    helps: 'Nothing, for you. The message is clear.', strains: 'Residents and parents are angry. Your seat is up in April 2028; under 50% approval and you\'re out.'});
       } else {
-        this.bump({res: 3, school: 2}, 'Challengers who opposed the secret deal won');
-        this.news('good', 'Challengers who campaigned against the secret deal sweep the council races. They back your hard line with ' + dev.short + '.',
-                  {paper: true, tone: 'good', headline: 'CHALLENGERS SWEEP COUNCIL RACES ON DATA CENTER',
-                   body: 'Voters threw out the incumbents who wanted a quick yes. The new council says no deal without public terms.',
+        this.bump({res: 3, school: 2}, 'The April poll backed your hard line');
+        this.news('good', 'The paper\'s April poll backs your hard line with ' + dev.short + '.',
+                  {paper: true, tone: 'good', headline: 'TOWN BACKS MAYOR\'S HARD LINE ON DATA CENTER',
+                   body: 'Most voters in the spring poll say the same thing: no deal without public terms.',
                    helps: 'Residents trust you more, and you have leverage.', strains: 'The trades and the chamber want a deal soon. Your seat is up in April 2028.'});
       }
       this.drama();
@@ -730,7 +831,7 @@ export function installMayor(L) {
           this.bump({res: 5, school: 2, biz: -3}, 'A judge voided the closed-door agreement');
           this.news('bad', 'JUDGE VOIDS THE DATA CENTER AGREEMENT: the closed sessions broke the open-meetings law. ' + dev.short + ' must re-sign in public.',
                     {paper: true, tone: 'bad', headline: 'JUDGE VOIDS DATA CENTER AGREEMENT',
-                     body: 'At the December 10 hearing, the residents\' lawsuit won: the council approved the deal in sessions the public couldn\'t attend.',
+                     body: 'At the December 10 hearing, the residents\' lawsuit won: City Hall settled the deal in sessions the public couldn\'t attend.',
                      helps: 'Residents feel heard; the terms will be public.', strains: dev.short + ' wants a new agreement fast, and the trades worry about delays.'});
           this.makeOffer(Math.max(1, this._dealTier() + 1), 'renegotiate');
           s.dev.offer.halls = 0;
