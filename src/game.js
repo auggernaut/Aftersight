@@ -42,6 +42,7 @@ import { TouchWarnWindow } from './touchWarnWindow.js';
 import { AL_NEWS } from './afterlight/layer.js';
 import { AfterlightPanel } from './afterlight/panel.js';
 import { CardWindow } from './afterlight/cards.js';
+import { AlertWindow } from './afterlight/alertModal.js';
 import * as ALB from './afterlight/buildings.js';
 import { buildStarterTown, prewarm } from './afterlight/starterTown.js';
 import { festusTerrain, buildFestus, fieldAt, farmedFieldAt } from './afterlight/festus.js';
@@ -267,6 +268,8 @@ function Game(gameMap, tileSet, snowTileSet, spriteSheet, difficulty, name) {
   this.alPanel = new AfterlightPanel(this);
   this.alPaperWindow = this.alPanel.paperWindow;
   this.alCards = new CardWindow(this);
+  this.alAlert = new AlertWindow(this);
+  this._notificationBar.onOpen = this.alAlert.open.bind(this.alAlert);
   this.alUI = new AfterlightUI(this);
   if (this.starterTown)
     this.gameCanvas.centreOn(this.starterTown.x + 13, this.starterTown.y + 11);
@@ -651,7 +654,7 @@ Game.prototype.processFrontEndMessage = function(message) {
   // Afterlight news: notification bar, map link, and a newspaper page for big stories
   if (subject === AL_NEWS) {
     var al = message.data;
-    this._notificationBar.custom(al.tone, al.text, al.x, al.y);
+    this._notificationBar.custom(al.tone, al.text, al.x, al.y, al.ctx);
     if (al.paper && !this.dialogOpen && !this.alNoPaper) {
       this.dialogOpen = true;
       this._openWindow = 'alPaperWindow';

@@ -243,6 +243,20 @@ async function festus(browser, url, phone) {
   if (st.status !== 'review' || st.asks.length !== 2) fail(who, 'counter by touch did not go through');
   if (st.open) fail(who, 'card did not close after the counter');
   await shot('2-after-counter');
+  // the news ticker: readable, and a tap opens the full story
+  await page.evaluate(() => { __AL.layer.news('bad', 'Water: test alert with enough words to need two lines on a phone screen, so the clamp and the More link show.', {alert: 'water'}); });
+  await page.waitForTimeout(300);
+  const bubble = await page.evaluate(() => { const e = document.getElementById('notifications'), r = e.getBoundingClientRect(), c = getComputedStyle(e);
+    return { color: c.color, bg: c.backgroundColor, left: r.left, right: r.right, w: innerWidth }; });
+  if (bubble.color !== 'rgb(244, 247, 249)' || bubble.left < 0 || bubble.right > bubble.w) fail(who, 'ticker unreadable or off screen: ' + JSON.stringify(bubble));
+  await page.tap('#notifications');
+  await page.waitForSelector('#alAlert:not(.hidden)', { timeout: 3000 });
+  const am = await page.evaluate(() => { const r = document.getElementById('alAlert').getBoundingClientRect(); return { top: r.top, bottom: r.bottom, h: innerHeight, why: !!document.querySelector('#alAlert .alAlertWhy'), paused: __AL.game.dialogOpen }; });
+  if (!am.why || !am.paused || am.top < 0 || am.bottom > am.h + 1) fail(who, 'alert window wrong: ' + JSON.stringify(am));
+  await shot('3-alert-modal');
+  await page.tap('#alAlertClose');
+  await page.waitForTimeout(200);
+  if (await page.isVisible('#alAlert')) fail(who, 'alert window did not close on X');
   if (errors.length) fail(who, 'console errors:\n' + errors.join('\n'));
   await ctx.close();
 }

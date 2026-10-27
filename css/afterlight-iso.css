@@ -428,11 +428,11 @@ button, input, label, a, .toolButton { touch-action: manipulation; }
 body.inGame #alPoster { display: none; }
 
 /* ---- intro: splash and town picker, bright like the poster ---- */
-:root { --sky1: #dff1ff; --sky2: #f4faff; --warm: #fff0d9; --ink: #1d2a36; --ink2: #4f5f6d; --blue: #2f7fd1; --blueDark: #1f63ab; --sun: #f5b545; }
+:root { --sky1: #dff1ff; --sky2: #f4faff; --warm: #fff0d9; --introInk: #1d2a36; --ink2: #4f5f6d; --blue: #2f7fd1; --blueDark: #1f63ab; --sun: #f5b545; }
 body:not(.inGame) main#canvasContainer { background: linear-gradient(165deg, var(--sky1) 0%, var(--sky2) 48%, var(--warm) 100%); }
 body:not(.inGame) header#header { background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(246, 251, 255, 0.95)); border-bottom: 1px solid rgba(29, 42, 54, 0.08);
   box-shadow: 0 2px 16px rgba(60, 110, 160, 0.12); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
-body:not(.inGame) #title { color: var(--ink); }
+body:not(.inGame) #title { color: var(--introInk); }
 body:not(.inGame) #brand .alSub, body:not(.inGame) #headerLinks a { color: var(--ink2) !important; }
 body:not(.inGame) footer#footer { background: #f3f8fc; color: var(--ink2); border-top: 1px solid rgba(29, 42, 54, 0.08); }
 body:not(.inGame) footer#footer a { color: var(--blueDark); }
@@ -442,12 +442,12 @@ body:not(.inGame) #title .si { background: linear-gradient(180deg, #2f7fd1, #163
 #alPoster { box-shadow: 8px 0 40px rgba(40, 90, 140, 0.18); }
 #alPoster::after { background: none; }
 
-#splash.intro, #start.intro { position: absolute; border: none !important; border-radius: 24px; background: rgba(255, 255, 255, 0.94) !important; color: var(--ink);
+#splash.intro, #start.intro { position: absolute; border: none !important; border-radius: 24px; background: rgba(255, 255, 255, 0.94) !important; color: var(--introInk);
   box-shadow: 0 30px 70px rgba(40, 90, 140, 0.22), 0 4px 14px rgba(40, 90, 140, 0.1); font-family: var(--font); box-sizing: border-box;
   height: auto !important; max-height: calc(100% - 32px); overflow-y: auto; padding: 26px 28px !important; text-align: left; }
 #splash.intro { width: min(820px, calc(100% - 32px)); }
 #start.intro { width: min(560px, calc(100% - 32px)); font-size: 15px; }
-.intro h2 { margin: 0 0 4px; font-size: 28px; font-weight: 800; letter-spacing: -0.3px; color: var(--ink); text-align: left; }
+.intro h2 { margin: 0 0 4px; font-size: 28px; font-weight: 800; letter-spacing: -0.3px; color: var(--introInk); text-align: left; }
 .introHead p { margin: 0 0 18px; color: var(--ink2); font-size: 15px; line-height: 1.45; }
 .townCards { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
 .townCard { display: flex; flex-direction: column; border-radius: 18px; overflow: hidden; background: #fff; border: 1px solid #e3ecf4;
@@ -462,7 +462,7 @@ body:not(.inGame) #title .si { background: linear-gradient(180deg, #2f7fd1, #163
 .townBody { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
 .townTag { align-self: flex-start; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--blueDark);
   background: #e6f1fc; padding: 3px 9px; border-radius: 999px; }
-.townBody h3 { margin: 2px 0 0; font-size: 19px; font-weight: 800; color: var(--ink); }
+.townBody h3 { margin: 2px 0 0; font-size: 19px; font-weight: 800; color: var(--introInk); }
 .townBody p { margin: 0; font-size: 14px; line-height: 1.45; color: var(--ink2); flex: 1; }
 .townBtns { display: flex; gap: 8px; margin-top: 8px; }
 .intro .splashButton, #playit { font-family: var(--font); font-size: 15px; font-weight: 700; border: none; border-radius: 12px; height: 44px !important;
@@ -483,7 +483,7 @@ body:not(.inGame) #title .si { background: linear-gradient(180deg, #2f7fd1, #163
 .formRow { display: flex; flex-direction: column; gap: 6px; margin: 14px 0 0; }
 .formLabel, .formRow > label { font-size: 12px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--ink2); }
 #start #nameForm { font-family: var(--font); font-size: 16px; height: 44px; width: 100%; box-sizing: border-box; margin: 0; padding: 0 14px;
-  border: 1px solid #d3e0ec; border-radius: 12px; background: #f7fbff; color: var(--ink); outline: none; }
+  border: 1px solid #d3e0ec; border-radius: 12px; background: #f7fbff; color: var(--introInk); outline: none; }
 #start #nameForm:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(47, 127, 209, 0.18); background: #fff; }
 .segmented { display: flex; background: #eef4fa; border-radius: 12px; padding: 4px; gap: 4px; }
 .segmented input { position: absolute; opacity: 0; pointer-events: none; }
@@ -501,7 +501,7 @@ body:not(.inGame) #title .si { background: linear-gradient(180deg, #2f7fd1, #163
 .scenThumb { width: 88px; height: 58px; flex: none; object-fit: cover; border-radius: 10px; background: linear-gradient(160deg, #cfe8fb, #e9f6e0); image-rendering: pixelated; }
 .scenThumb:not([src]) { visibility: visible; }
 .scenThumb.scenEmpty { filter: saturate(0.75) brightness(1.06); }
-#alScenarios .alScen b { font-size: 15px; color: var(--ink); }
+#alScenarios .alScen b { font-size: 15px; color: var(--introInk); }
 #alScenarios .alScen small { display: block; color: var(--ink2); font-size: 13px; margin-top: 2px; line-height: 1.35; }
 #playSubmitDiv { margin-top: 16px; display: flex; }
 #playit { height: 48px !important; font-size: 16px; }
@@ -580,3 +580,56 @@ body:not(.inGame) #title .si { background: linear-gradient(180deg, #2f7fd1, #163
 #alPanel .alProjInfo { font-weight: 500; color: var(--muted); font-size: 11px; text-align: right; }
 #alCard[data-type="project"] .cardKicker { color: #2d7a45; }
 #alPanel .alFundGrid b, #alPanel .alProjName { color: #eef2f4; }
+/* ---- news ticker, readable: solid, bigger, two lines, always clickable for the full story ---- */
+#notifications {
+  background: #111a22 !important; color: #f4f7f9 !important; border: 1px solid rgba(255,255,255,0.18) !important;
+  font-size: 14px; font-weight: 550; line-height: 1.35; max-width: min(680px, 56vw); border-radius: 14px;
+  padding: 8px 40px 8px 34px !important; white-space: normal; text-align: left; cursor: pointer;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+#notifications[style*="display: none"] { display: none !important; }
+#notifications::after { content: "More \203A"; position: absolute; right: 10px; bottom: 7px; font-size: 11px; font-weight: 700; color: var(--accent); }
+#notifications:hover { background: #1a2631 !important; }
+#notifications.bad { border-color: rgba(240,96,84,0.65) !important; }
+#notifications.good { border-color: rgba(70,200,110,0.55) !important; }
+@media (max-width: 760px), (max-height: 500px) {
+  #notifications { max-width: 94vw; font-size: 13px; padding: 7px 38px 7px 28px !important; }
+}
+
+/* ---- alert detail window ---- */
+#alAlertBack { position: absolute; inset: 0; z-index: 40; background: rgba(8,12,16,0.55); }
+#alAlert { position: absolute; z-index: 41; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(560px, 94vw); max-height: calc(100% - 40px);
+  overflow-y: auto; box-sizing: border-box; padding: 20px 22px 18px; border-radius: 18px; background: #f7f4ec; color: #1f2a30; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+#alAlert.hidden, #alAlertBack.hidden { display: none; }
+#alAlertClose { position: absolute; right: 10px; top: 10px; width: 36px; height: 36px; border: none; border-radius: 10px; background: #e4e0d6; color: #1f2a30; font-size: 22px; line-height: 1; cursor: pointer; }
+#alAlert .alAlertKicker { font: 700 11px var(--font); letter-spacing: 1.1px; text-transform: uppercase; color: #8a5a12; margin-right: 40px; }
+#alAlert .alAlertKicker.t-bad { color: #b0352b; }
+#alAlert .alAlertKicker.t-good { color: #227a3d; }
+#alAlert .alAlertText { margin: 8px 0 6px; font: 700 18px/1.35 var(--font); color: #161d22; }
+#alAlert h3 { margin: 14px 0 6px; font: 700 12px var(--font); text-transform: uppercase; letter-spacing: 0.8px; color: #4a555d; }
+#alAlert .alAlertWhy { margin: 0; font-size: 14px; line-height: 1.5; color: #2c3a43; }
+#alAlert .alAlertFactions { display: flex; flex-wrap: wrap; gap: 6px; }
+#alAlert .alAF { font-size: 13px; padding: 4px 9px; border-radius: 99px; background: #ece7dc; }
+#alAlert .alAF i { font-style: normal; font-weight: 700; }
+#alAlert .alAF i.up { color: #1e6b33; }
+#alAlert .alAF i.down { color: #9a2d23; }
+#alAlert .alAlertStats { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+#alAlert .alAlertStats th { text-align: left; font-weight: 600; color: #4a555d; padding: 5px 10px 5px 0; width: 40%; border-top: 1px solid #e3ddd0; }
+#alAlert .alAlertStats td { padding: 5px 0; border-top: 1px solid #e3ddd0; }
+#alAlert .alAlertStats tr.t-bad td { color: #b0352b; }
+#alAlert .alAlertStats tr.t-good td { color: #227a3d; }
+#alAlert .alAlertActions { display: flex; gap: 10px; margin-top: 16px; }
+#alAlert .cardOption { flex: 1; min-height: 42px; border-radius: 10px; font: 750 14px var(--font); background: #e4e0d6; color: #1f2a30; border: none; cursor: pointer; }
+#alAlert .cardOption.tone-good { background: var(--accent); color: #1b1406; }
+#alPanel #alNews li { cursor: pointer; }
+#alPanel #alNews li:hover { background: rgba(255,255,255,0.06); }
+/* clip the ticker at exactly two lines: the vertical padding is a transparent border, so overflow can't show in it */
+#notifications { padding-top: 0 !important; padding-bottom: 0 !important; border: 0 !important; border-top: 8px solid transparent !important; border-bottom: 8px solid transparent !important;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.18), 0 6px 20px rgba(0,0,0,0.35); }
+#notifications.bad { box-shadow: 0 0 0 1px rgba(240,96,84,0.7), 0 6px 20px rgba(0,0,0,0.35); }
+#notifications.good { box-shadow: 0 0 0 1px rgba(70,200,110,0.6), 0 6px 20px rgba(0,0,0,0.35); }
+#notifications::after { bottom: 0; }
+@media (max-width: 760px), (max-height: 500px) {
+  #notifications { width: calc(100vw - 24px) !important; max-width: calc(100vw - 24px); box-sizing: border-box; top: 52px !important; }
+}
+body:not(.inGame) #notifications, #notifications:empty { display: none !important; }

@@ -1073,6 +1073,47 @@ export function installMayor(L) {
     return true;
   };
 
+  // ---- context for a news line: what caused it, who it moved, and the numbers behind it ----
+  var TOPIC_WORDS = [['water', /water|well|drought|cooling/i], ['bills', /bill|ameren|rate increase|grid/i], ['health', /health|asthma|clinic|therap/i],
+                     ['jobs', /unemploy|jobs|layoff|hiring/i], ['fund', /festus fund|dividend/i], ['project', /garden|mural|riverfront|project/i],
+                     ['election', /elect|vote|poll|campaign/i], ['deal', /keystone|campus|halls|offer|agreement|counter/i], ['research', /research|breakthrough/i]];
+  P.newsContext = function(tone, text, extra) {
+    var s = this.s, m = s.mayor, now = this.dateString(), pct = function(v) { return Math.round(v * 100) + '%'; };
+    var topic = extra.alert || null;
+    if (!topic) for (var i = 0; i < TOPIC_WORDS.length; i++) if (TOPIC_WORDS[i][1].test(text)) { topic = TOPIC_WORDS[i][0]; break; }
+    var h = m.history && m.history[0] && m.history[0].date === now ? m.history[0] : null;
+    var d = s.deal, festus = this.festus(), dev = this.dev().short;
+    var use = s.water ? s.water.use / Math.max(1, s.water.cap) : 0;
+    var why = '';
+    if (topic === 'water') why = 'Water use is ' + pct(use) + ' of what the town can supply' + (festus ? ' from the county water authority\'s river wells' : '') + '. ' +
+      (d && festus ? dev + '\'s halls use ' + COOLING[d.cooling || 'evap'].name.toLowerCase() + (d.cooling === 'closed' ? ', which needs very little water.' : (d.cooling || 'evap') === 'evap' ? ', the thirstiest design.' : '.') : 'Most of it is homes and businesses.') +
+      (use > 0.85 ? ' Above 85% of supply, farmers and residents start to lose patience.' : '');
+    else if (topic === 'bills') why = 'Household power bills move with the campus\'s power source' + (d && festus ? ' (' + POWER[d.power || 'grid'].said + ')' : '') +
+      (d ? ' and on who pays for the grid and water upgrades (' + UTIL_TEXT[d.utilities].toLowerCase() + ')' : '') +
+      (this._sim._powerManager && this._sim._powerManager.lastShort ? ', and the grid running short at peak' : '') + '. Bills weigh most on residents, farmers and business.';
+    else if (topic === 'health') why = (s.health && s.health.fumes ? dev + '\'s gas turbines are running near homes and schools. ' : '') +
+      'Unemployment is ' + pct(s.unemployment) + '; people who lose jobs often lose insurance. Clinics in town: ' + (this._sim._census.alClinicOn || 0) + '.';
+    else if (topic === 'jobs') why = 'Unemployment is ' + pct(s.unemployment) + ' and machines now do ' + pct(s.automation || 0) + ' of the work. ' +
+      (d ? dev + ' promised ' + d.jobs + ' permanent jobs.' : 'No campus jobs yet.');
+    else if (topic === 'wealth' || topic === 'fund') why = (festus ? 'The Festus Fund holds ' + money(s.fund || 0) + ' and pays out ' + Math.round(this.fundShare() * 100) +
+      '% each January (the Reinvest / Pay out slider in City pulse). Keystone\'s payments and the town\'s equity revenue flow in.' : 'Dividends replace ' + pct(s.cover || 0) + ' of lost wages.');
+    else if (topic === 'mood') why = 'Each faction drifts toward how the town treats it: bills, water, noise, jobs, schools, secrecy, purpose and dividends. Big drifts show up here.';
+    else if (topic === 'project') why = 'Town projects earn nothing; they raise Purpose (now ' + Math.round(s.purpose) + '), which feeds approval. Neighbors building alongside robots make more of it.';
+    else if (topic === 'election') why = 'Elections come every two years. Under 50% approval and you\'re out. Your approval is ' + Math.round(m.approval) + '%.';
+    if (h) why = (why ? why + ' ' : '') + 'It follows your decision: ' + h.why.charAt(0).toLowerCase() + h.why.slice(1) + '.';
+    var ne = this.nextElection();
+    var stats = [['Approval', Math.round(m.approval) + '%', m.approval >= 50 ? 'good' : 'bad'],
+                 ['Purpose', Math.round(s.purpose), s.purpose >= 60 ? 'good' : s.purpose >= 45 ? 'neutral' : 'bad'],
+                 ['Unemployment', pct(s.unemployment), s.unemployment > 0.12 ? 'bad' : 'neutral'],
+                 ['Water use', pct(use) + ' of supply', use > 0.85 ? 'bad' : 'neutral'],
+                 ['Bills pressure', (s.bills || 0) > 0.25 ? 'High' : (s.bills || 0) > 0.1 ? 'Rising' : 'Low', (s.bills || 0) > 0.25 ? 'bad' : 'neutral'],
+                 ['City funds', money(this._sim.budget.totalFunds), 'neutral']];
+    if (festus) stats.push(['Festus Fund', money(s.fund || 0) + (s.dividendPerRes ? ' · last dividend ' + money(s.dividendPerRes) + '/person' : ''), 'neutral']);
+    if (ne >= 0) stats.push(['Next election', this.monthName(ne) + ' (' + (ne - this.mi()) + ' months)', 'neutral']);
+    var factions = FACTIONS.map(function(f) { return {name: f.short, v: Math.round(m.factions[f.id].v), d: h && h.d[f.id] ? Math.round(h.d[f.id]) : 0}; });
+    return {date: now, topic: topic, why: why, decision: h ? h.why : null, stats: stats, factions: factions};
+  };
+
   // ---- the Festus Fund ----
   // Keystone's payments and the town's equity dividends flow in every month and the fund earns about 5% a year.
   // Each January it pays every resident a dividend: the payout slider sets how much of the fund goes out

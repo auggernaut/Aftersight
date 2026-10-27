@@ -190,8 +190,9 @@ Simulation.prototype._simFrame = function() {
   if (this.budget.awaitingValues)
     return;
 
-  // Default to slow speed
-  var threshold = 100;
+  // Default to slow speed. Aftersight: paced like SimCity, a game month (64 frames) takes about 20 s at Slow,
+  // 12 s at Normal and 3 s at Fast.
+  var threshold = 310;
 
   switch (this._speed) {
     case Simulation.SPEED_PAUSED:
@@ -202,11 +203,11 @@ Simulation.prototype._simFrame = function() {
       break;
 
     case Simulation.SPEED_MED:
-      threshold = 50;
+      threshold = 185;
       break;
 
     case Simulation.SPEED_FAST:
-      threshold = 10;
+      threshold = 45;
       break;
 
     default:

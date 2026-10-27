@@ -74,7 +74,6 @@ Notification.prototype._displayText = function(text, x, y) {
     this._timeout = null;
   }
 
-  this._element.removeClass('pointer');
   this._element.text(text);
   this._x = -1;
   this._y = -1;
@@ -88,6 +87,14 @@ Notification.prototype._displayText = function(text, x, y) {
 
 var handleClick = function(e) {
   e.preventDefault();
+
+  // Aftersight: a click opens the full story in a larger window
+  if (this.onOpen) {
+    this.onOpen(this._detail && this._detail.text === this._element.text() ? this._detail :
+                {tone: this._element.hasClass('bad') ? 'bad' : this._element.hasClass('good') ? 'good' : 'neutral', text: this._element.text(),
+                 x: this._x === -1 ? undefined : this._x, y: this._y === -1 ? undefined : this._y});
+    return;
+  }
 
   if (this._x === -1 || this._y === -1)
     return;
@@ -108,7 +115,8 @@ Notification.prototype.createMessage = function(message) {
 
 
 // Afterlight: free-text news with an optional map link
-Notification.prototype.custom = function(tone, text, x, y) {
+Notification.prototype.custom = function(tone, text, x, y, ctx) {
+  this._detail = {tone: tone, text: text, x: x, y: y, ctx: ctx};
   this._element.removeClass('neutral good bad');
   this._element.addClass(tone === 'good' ? 'good' : tone === 'bad' ? 'bad' : 'neutral');
   if (x !== undefined && y !== undefined)

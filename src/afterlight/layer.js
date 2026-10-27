@@ -222,7 +222,9 @@ AfterlightLayer.prototype.dateString = function() {
 AfterlightLayer.prototype.news = function(tone, text, extra) {
   var data = {tone: tone, text: text};
   if (extra) for (var k in extra) data[k] = extra[k];
-  this.s.log.unshift({date: this.dateString(), tone: tone, text: text});
+  // the context behind the headline (why, who it moved, the numbers now), for the alert detail window
+  try { data.ctx = this.newsContext ? this.newsContext(tone, text, extra || {}) : null; } catch (e) { data.ctx = null; }
+  this.s.log.unshift({date: this.dateString(), tone: tone, text: text, ctx: data.ctx, x: data.x, y: data.y});
   if (this.s.log.length > 40) this.s.log.length = 40;
   this._sim._emitEvent(FRONT_END_MESSAGE, {subject: AL_NEWS, data: data});
 };

@@ -443,6 +443,28 @@ const months = async (page, n) => {
     console.log('project after', JSON.stringify(after));
     if (!after.built || after.who !== 'neighbors' || !(after.boost > before.boost)) fail('the neighbor-built garden did not open and lift purpose');
     if (!(after.costAbundant < after.costNow)) fail('project costs should fall as abundance rises');
+    // ---- the news ticker opens a detail window; the sim waits while it's open; Esc and a click outside close it ----
+    await pg.evaluate(() => { const g = __AL.game; g.alNoPaper = false; __AL.layer.autoDecide = null; __AL.layer.s.card = null; if (g._openWindow === 'alCard') g.alCards.close();
+      __AL.game.alUI.setSpeed(3); __AL.layer.news('bad', 'Power bills: households are paying noticeably more than last year.', {alert: 'bills'}); });
+    await pg.waitForTimeout(300);
+    const tick = await pg.evaluate(() => { const c = getComputedStyle(document.getElementById('notifications')); return { color: c.color, bg: c.backgroundColor, fs: c.fontSize }; });
+    if (tick.color !== 'rgb(244, 247, 249)' || !/rgb\(17, 26, 34\)/.test(tick.bg)) fail('ticker is not light-on-solid: ' + JSON.stringify(tick));
+    await pg.click('#notifications');
+    await pg.waitForSelector('#alAlert:not(.hidden)', { timeout: 3000 });
+    const modal = await pg.evaluate(() => ({ text: document.getElementById('alAlertText').textContent, why: document.querySelector('#alAlert .alAlertWhy').textContent,
+      stats: document.querySelectorAll('#alAlert .alAlertStats tr').length, factions: document.querySelectorAll('#alAlert .alAF').length, t0: __AL.game.simulation._cityTime }));
+    console.log('alert modal', JSON.stringify(modal));
+    if (!/Power bills/.test(modal.text) || !/power source/.test(modal.why) || modal.stats < 5 || modal.factions !== 5) fail('alert window is missing its context');
+    await pg.waitForTimeout(1500);
+    if (await pg.evaluate(() => __AL.game.simulation._cityTime) !== modal.t0) fail('the sim kept running behind the alert window');
+    await pg.keyboard.press('Escape');
+    await pg.waitForTimeout(200);
+    if (await pg.isVisible('#alAlert')) fail('Esc did not close the alert window');
+    await pg.click('#alNews li');
+    await pg.waitForSelector('#alAlert:not(.hidden)', { timeout: 3000 });
+    await pg.mouse.click(15, 450);
+    await pg.waitForTimeout(200);
+    if (await pg.isVisible('#alAlert')) fail('a click outside did not close the alert window');
     if (run.errors.length) fail('console errors (fund run):\n' + run.errors.join('\n'));
     await pg.close();
   }

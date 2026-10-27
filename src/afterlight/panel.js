@@ -116,6 +116,11 @@ function AfterlightPanel(game) {
     $('#alPol_helixExpansion, #alPol_communityFirst').closest('.alPolicy').hide();
   }
   $('#alHelixLabel').text(this.layer.dev().short + ' owns');
+  // a news line opens the same detail window as the ticker
+  $('#alPanel').on('click', '#alNews li', function() {
+    var e = self.layer.s.log[+$(this).attr('data-log')];
+    if (e && game.alAlert) game.alAlert.open({tone: e.tone, text: e.text, x: e.x, y: e.y, ctx: e.ctx, date: e.date});
+  });
 
   this.paperWindow = {
     open: function(data) {
@@ -221,8 +226,8 @@ AfterlightPanel.prototype.refresh = function(force) {
   var known = Object.keys(s.discovered).length;
   $('#alMini').text('Approval ' + Math.round(m.approval) + '% · Jobless ' + pct(s.unemployment));
   $('#alEra').text(['· The Before', '· Cheap Power', '· Thinking Machines', '· Self-Building', '· The Cure', '· Abundance'][Math.min(5, known)]);
-  var items = s.log.slice(0, 5).map(function(e) {
-    return '<li class="al_' + e.tone + '"><span class="alDate">' + e.date + '</span> ' + $('<div>').text(e.text).html() + '</li>';
+  var items = s.log.slice(0, 5).map(function(e, i) {
+    return '<li class="al_' + e.tone + '" data-log="' + i + '" role="button" tabindex="0"><span class="alDate">' + e.date + '</span> ' + $('<div>').text(e.text).html() + '</li>';
   });
   $('#alNews').html(items.join(''));
   for (var name in s.policies) $('#alPol_' + name).prop('checked', !!s.policies[name]);
