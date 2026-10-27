@@ -6,3 +6,6 @@ node_modules/
 TODO
 .DS_Store
 shots/
+.vercel/
+.env*
+*.log

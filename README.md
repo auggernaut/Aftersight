@@ -1,16 +1,44 @@
-# AfterSight (micropolis-iso branch)
+# AfterSight
 
-AfterSight (formerly Afterlight) is a city builder about living through the singularity: a present-day town meets AI, robots and abundance. The central question is still who owns the economic engine (energy, compute, robots), and what that does to jobs, purpose and peace.
+AfterSight is a city-builder sim about living through the arrival of AI, robots and abundance. You are the mayor of a real, contested town in 2026, and a developer wants a $6B AI data center campus there. Your choices decide **who owns the engine** (compute, robots, energy) and whether the town ends up thriving, enclosed, idle, strained or shrinking.
 
-This branch is built on **[micropolisJS](https://github.com/graememcc/micropolisJS)**, Graeme McCutcheon's HTML5 port of Micropolis, the open-source release of the 1989 SimCity engine. AfterSight is a **modified version** of micropolisJS. It is not SimCity and is not affiliated with Electronic Arts. The upstream README is kept as [README.micropolisJS.md](README.micropolisJS.md).
+- **Play:** https://aftersight-zeta.vercel.app (unlisted, noindex)
+- **Start here:** [docs/README.md](docs/README.md) (run, test, deploy, branch map), [AGENTS.md](AGENTS.md) for AI agents
+- **Docs:** [Vision](docs/VISION.md) · [Architecture](docs/ARCHITECTURE.md) · [Decisions](docs/DECISIONS.md) · [Ideas](docs/IDEAS.md) · [Open questions](docs/OPEN_QUESTIONS.md) · [Research](docs/RESEARCH.md)
 
-This branch (`micropolis-iso`) keeps the Micropolis engine and the Afterlight layer from `micropolis` and replaces the presentation: an isometric city view and a modern interface (see below). Other branches: `micropolis` has the same game with the original 1989 top-down tiles; `sim` holds the earlier agent-based valley sim (Yuka agents); `main` holds the retired cozy story build.
+It is built on **[micropolisJS](https://github.com/graememcc/micropolisJS)**, Graeme McCutcheon's HTML5 port of Micropolis, the open-source release of the 1989 SimCity engine. AfterSight is a **modified version** of micropolisJS. It is not SimCity and is not affiliated with Electronic Arts. The upstream README is kept as [README.micropolisJS.md](README.micropolisJS.md). `festus` is the working branch and contains every other branch.
+
+## Quick start
+
+```
+npm install
+npm run build                                            # webpack -> dist/
+npm run dev                                              # or serve dist/ and open index.html
+NODE_PATH=<playwright>/node_modules OUT=shots node e2e/festus.cjs   # main end-to-end test
+```
+
+More tests and tools: [docs/README.md](docs/README.md#tests) and [tools/README.md](tools/README.md).
 
 ## License
 
 micropolisJS is GPL-3.0 with additional terms (see [LICENSE](LICENSE) and [COPYING](COPYING)); the name "Micropolis" is covered by the [Micropolis Public Name License](MicropolisPublicNameLicense.md). Everything in this branch, including the Afterlight layer, is therefore GPL-3.0: a released version must ship its source under the same terms. The repo itself is private, which the GPL allows.
 
-## What Afterlight adds
+## Festus, Missouri (2026)
+
+The main scenario, picked from the splash ("Play Festus, MO") or the new-game Town list. A river town on the Mississippi with I-55, a Main Street and farmland, and an empty site by the interstate that a fictional developer, Keystone Compute Partners, wants for a $6B data center campus. You are the mayor:
+
+- **Approval** (top bar) is a weighted mix of five factions: residents, farmers, workers, business and schools. They react to power bills, water, noise, taxes, jobs, school money and secrecy.
+- **Elections** in April 2028, 2030 and 2032. Under 50% and the voters oust you. Win three, or win one with the town owning 25%+ of the compute it hosts and paying a dividend.
+- **Offers** come as cards: accept, reject, or counter with one or two asks. Keystone answers months later with better terms, a firm "take it or leave it", or walks to a neighboring town and comes back later with a better tier. Later tiers add equity, a wealth fund, a kids' trust, compute royalties and a town AI co-op.
+- **Breakthroughs** are decisions, and they only come while a **Research Lab** runs: each card shows the cost in dollars and compute. Compute comes from the town's equity in the data centers; the rest is bought on the market. Finished research unlocks a building (Healing Clinic, Fusion Plant) that you then place, pay for and keep up. Passing hands it to someone else.
+- **Festus Fund and Purpose.** Keystone's payments and the town's equity revenue go into a fund that pays every resident a dividend each January (payout slider in City pulse). Purpose (top bar) drains as automation takes jobs and rises with ownership and town projects (garden, murals, riverfront park) built by robots or by neighbors with robots.
+- **Alerts.** The news ticker carries short status alerts (health, jobs, wealth, water, bills, mood); click one for why it happened, faction changes and the numbers.
+- Between those, factions come to City Hall with asks (a sound wall, a water guarantee, local hiring, publishing the deal, a tax cut, a school levy, spending the surplus, growing the town without a campus, reopening a bad deal). A declined ask comes back louder; the yearly ones repeat. A furious faction gets the floor first, and each election opens with a campaign choice.
+- Pacing: at most one decision card every 6 game months (about 70 s at Normal speed), unless it answers something you just did. All four offer strategies can win; negotiating wins most (see `e2e/balance.cjs`).
+
+Code: `src/afterlight/festus.js` (map), `src/afterlight/mayor.js` (factions, offers, research, elections, pacing), `src/afterlight/cards.js` (decision card UI). Hooks for tests: `__AL.mayor()`, `__AL.card()`, `__AL.decide(option, asks)`, `__AL.force('Counter'|'Court'|'Vote', v)`, `__AL.election(i, vote)`, `__AL.bump(deltas)`.
+
+## The starter town (original Afterlight layer)
 
 The Micropolis core (zoning, growth, traffic, power, land value, crime, pollution, fire, budget) is untouched in spirit; the Afterlight layer lives in `src/afterlight/` and reads the census once a game month.
 
@@ -31,37 +59,3 @@ The map is drawn as a 2:1 dimetric city in the spirit of late-90s isometric city
 - `art.js` holds the primitives (projector, lit boxes, roofs, cylinders, trees, shadows).
 
 The interface (`src/afterlight/ui.js`, `css/afterlight-iso.css`) is a top bar (city, date, funds, population, score, speed), a bottom toolbar with rendered iso icons and tooltips, the City pulse panel (RCI demand, mood, stats, policies, Valley news), restyled dialogs, a Valley Ledger page with a photo of the scene, and an About panel plus a footer with the micropolisJS credits and licenses. The engine's simulation code is not changed; the only core edits are small hooks (a drag-picking hook in `inputStatus.js`, the canvas swap in `game.js`).
-
-## Build and run
-
-```
-npm install
-npm run build          # webpack -> dist/
-npx webpack serve      # or serve dist/ with any static server and open index.html
-```
-
-## Tests
-
-```
-NODE_PATH=/path/to/playwright/node_modules OUT=shots node e2e/smoke.cjs     # ~4 game years, fails on console errors
-NODE_PATH=/path/to/playwright/node_modules OUT=shots node e2e/mobile.cjs    # emulated phones: tap, pan, pinch, sheet, paper, Festus cards
-NODE_PATH=/path/to/playwright/node_modules OUT=shots node e2e/festus.cjs    # Festus: offer, counter, accept, breakthrough, election win and loss
-NODE_PATH=/path/to/playwright/node_modules N=10 node e2e/balance.cjs        # Festus win rates per offer strategy, headless
-NODE_PATH=/path/to/playwright/node_modules RUNS=3 node e2e/compare.cjs      # hands-off vs community ownership
-npm test                                                                     # upstream jest unit tests
-```
-
-The smoke test starts a game and plays it through the iso interface: it picks tools from the toolbar and clicks or drags on iso tiles to build a solar farm, a co-op data center, a co-op depot and a road, bulldozes and queries, zooms with the wheel, pans, uses the speed buttons and opens the About panel. It then passes policies through the panel, fast-forwards four years, checks that at least one negative and one positive event fire, forces a protest, a riot and a discovery page for screenshots, builds a fusion plant and checks the save includes Afterlight state. In the browser, `window.__AL` exposes test hooks (`fastForward(months)`, `discover(id)`, `protest()`, `riot()`, `strike()`, `state()`).
-
-## Festus, Missouri (2026)
-
-A scenario on the `festus` branch, picked from the splash ("Play Festus, MO") or the new-game Town list. A river town on the Mississippi with I-55, a Main Street and farmland, and an empty site by the interstate that a fictional developer, Keystone Compute Partners, wants for a $6B data center campus. You are the mayor:
-
-- **Approval** (top bar) is a weighted mix of five factions: residents, farmers, workers, business and schools. They react to power bills, water, noise, taxes, jobs, school money and secrecy.
-- **Elections** in April 2028, 2030 and 2032. Under 50% and the voters oust you. Win three, or win one with the town owning 25%+ of the compute it hosts and paying a dividend.
-- **Offers** come as cards: accept, reject, or counter with one or two asks. Keystone answers months later with better terms, a firm "take it or leave it", or walks to a neighboring town and comes back later with a better tier. Later tiers add equity, a wealth fund, a kids' trust, compute royalties and a town AI co-op.
-- **Breakthroughs** are decisions: each card shows the cost in dollars and compute. Compute comes from the town's equity in the data centers; the rest is bought on the market. Finished research unlocks a building (Healing Clinic, Fusion Plant) that you then place, pay for and keep up. Passing hands it to someone else.
-- Between those, factions come to City Hall with asks (a sound wall, a water guarantee, local hiring, publishing the deal, a tax cut, a school levy, spending the surplus, growing the town without a campus, reopening a bad deal). A declined ask comes back louder; the yearly ones repeat. A furious faction gets the floor first, and each election opens with a campaign choice.
-- Pacing: at most one decision card every 6 game months (about 25 s at Normal speed), unless it answers something you just did. All four offer strategies can win; negotiating wins most (see `e2e/balance.cjs`).
-
-Code: `src/afterlight/festus.js` (map), `src/afterlight/mayor.js` (factions, offers, research, elections, pacing), `src/afterlight/cards.js` (decision card UI). Hooks for tests: `__AL.mayor()`, `__AL.card()`, `__AL.decide(option, asks)`, `__AL.force('Counter'|'Court'|'Vote', v)`, `__AL.election(i, vote)`, `__AL.bump(deltas)`.
