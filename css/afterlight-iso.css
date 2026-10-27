@@ -414,3 +414,4 @@ button, input, label, a, .toolButton { touch-action: manipulation; }
 @media (max-width: 430px) {
   .hudPop { display: none; }
 }
+#alCard[data-type="campaign"] .cardKicker { color: #7a3fa8; }

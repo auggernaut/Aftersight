@@ -456,7 +456,7 @@ AfterlightLayer.prototype._helixExpansion = function(simData) {
   var kind = depotTurn ? B.DEPOT_HELIX : B.DC_HELIX;
   this.placeBuilding(kind, site.x, site.y);
   s.helixBuilt++;
-  this.news('neutral', 'Helix opens a new ' + (depotTurn ? 'robot depot' : 'data center') + ' on the edge of town.',
+  this.news('neutral', this.dev().short + ' opens a new ' + (depotTurn ? 'robot depot' : 'data center') + ' on the edge of town.',
             {x: site.x + 1, y: site.y + 1});
 };
 
@@ -523,7 +523,7 @@ AfterlightLayer.prototype.startProtest = function(dcs) {
   });
   this.s.protest = {x: best.x, y: best.y, months: 0, owner: best.owner};
   this.s.cooldowns.protest = 6;
-  var whose = best.owner === 'helix' ? 'Helix' : 'the co-op';
+  var whose = best.owner === 'helix' ? this.dev().short : 'the co-op';
   this.news('bad', 'PROTEST at ' + whose + '\'s data center! Residents blockade the gates over noise, power bills and lost jobs.',
             {x: best.x, y: best.y, showable: true});
   return true;

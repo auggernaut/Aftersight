@@ -273,6 +273,7 @@ export function installMayor(L) {
     card.date = this.dateString();
     this.s.card = card;
     this.s.mayor.lastCard = this.s.months;
+    this.s.mayor.lastType = card.type;
     this.drama();
     if (this.autoDecide) this.autoDecide(card);
   };
@@ -287,6 +288,7 @@ export function installMayor(L) {
     if (card.type === 'offer') this._decideOffer(card, option, asks || []);
     else if (card.type === 'research') this._decideResearch(card, option);
     else if (card.type === 'ask') this._decideAsk(card, option);
+    else if (card.type === 'campaign') this._decideCampaign(card, option);
     else if (card.type === 'intro' && this.s.dev.offer) this._offerCard();
     return true;
   };
@@ -591,8 +593,33 @@ export function installMayor(L) {
         m['warned' + i] = true;
         this.news(m.approval < 50 ? 'bad' : 'neutral', 'Election in April: your approval is ' + Math.round(m.approval) + '%. Under 50 and the voters send you home.');
       }
+      // the campaign is a choice too: shown as soon as no other card is open in the three months before the vote
+      if (mi >= e - 3 && mi < e && !m['camp' + i] && !s.card) { m['camp' + i] = true; this._campaignCard(i); }
       if (mi >= e && !m['held' + i]) { m['held' + i] = true; this.election(i); }
     }, this);
+  };
+
+  var CAMPAIGN_COST = 600;
+  P._campaignCard = function(i) {
+    var m = this.s.mayor, self = this;
+    var order = FACTIONS.slice().sort(function(a, b) { return m.factions[a.id].v - m.factions[b.id].v; });
+    var tour = {}; tour[order[0].id] = 9; tour[order[1].id] = 4;
+    this.campaign = {tour: tour, freeze: {res: 5, farm: 4, school: -6, biz: 1}};
+    this.showCard({type: 'campaign', id: 'campaign' + i, kicker: 'Election ' + (2028 + 2 * i) + ' · the campaign',
+      title: 'April is coming. How do you run?',
+      body: 'You are at ' + Math.round(m.approval) + '%. You need 50. ' + order[0].name + ' (' + Math.round(m.factions[order[0].id].v) + ') and ' +
+            order[1].name + ' (' + Math.round(m.factions[order[1].id].v) + ') are the least happy with City Hall.',
+      rows: [],
+      options: [{id: 'tour', label: 'Town hall tour ($' + CAMPAIGN_COST + ')', tone: 'good', disabled: this._sim.budget.totalFunds < CAMPAIGN_COST,
+                 preview: this.preview(tour), note: 'Sit down with the angriest groups in the high school gym.'},
+                {id: 'freeze', label: 'Promise a property tax freeze', tone: 'neutral', preview: this.preview(this.campaign.freeze),
+                 note: 'Homeowners love it. The school budget doesn\'t.'},
+                {id: 'record', label: 'Run on your record', tone: 'bad', preview: [], note: 'Spend nothing. Hope it holds.'}]});
+  };
+  P._decideCampaign = function(card, option) {
+    var c = this.campaign || {tour: {res: 9}, freeze: {res: 5, farm: 4, school: -6, biz: 1}};
+    if (option === 'tour') { this._sim.budget.spend(CAMPAIGN_COST); this.bump(c.tour, 'Town hall tour'); }
+    else if (option === 'freeze') this.bump(c.freeze, 'Promised a property tax freeze');
   };
 
   P.election = function(i) {
@@ -602,7 +629,7 @@ export function installMayor(L) {
     var year = 2028 + 2 * i;
     m.lastVote = Math.round(vote);
     this.drama();
-    if (vote < 50) {
+    if (Math.round(vote) < 50) {
       m.gameOver = {year: year, vote: Math.round(vote)};
       var worst = FACTIONS.slice().sort(function(a, b) { return m.factions[a.id].v - m.factions[b.id].v; })[0];
       this.news('bad', 'VOTERS OUST MAYOR: you get ' + Math.round(vote) + '% in the ' + year + ' election.',
@@ -728,12 +755,16 @@ export function installMayor(L) {
 
   // ---- the director: research cards on a schedule, and something every few months, never two cards at once ----
   P._director = function(mi) {
+    // Something to decide every few months: a breakthrough when one is due, otherwise whichever faction is
+    // angriest comes to City Hall with an ask, otherwise the developer comes back early.
     var s = this.s, R = s.research, m = s.mayor;
     if (!this.canCard()) return;
-    var quiet = s.months - m.lastDrama >= DRAMA_GAP;
+    var since = s.months - m.lastCard, quiet = s.months - m.lastDrama >= DRAMA_GAP;
     var nextR = !R.active && this.nextResearch();
-    if (nextR && (mi >= R.next || quiet)) { this._researchCard(nextR); return; }
-    if (!quiet) return;
+    if (nextR && mi >= R.next) { this._researchCard(nextR); return; }
+    if (since < CARD_GAP + 1 && !quiet) return;
+    if (m.lastType !== 'ask' && this._askCard()) return;
+    if (nextR) { this._researchCard(nextR); return; }
     if (this.festus() && s.dev.status === 'away') { s.dev.due = mi; return; }
     this._askCard();
   };
