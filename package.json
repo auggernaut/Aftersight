@@ -1,7 +1,7 @@
 {
   "name": "afterlight",
   "version": "0.0.1",
-  "description": "Aftersight: a city builder about living through the shift to a post-labor economy. A modified version of micropolisJS (GPL-3.0).",
+  "description": "AfterSight: a city builder about living through the shift to a post-labor economy. A modified version of micropolisJS (GPL-3.0).",
   "repository": {
     "type": "git",
     "url": "https://github.com/graememcc/micropolisJS.git"

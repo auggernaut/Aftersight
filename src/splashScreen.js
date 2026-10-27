@@ -76,7 +76,8 @@ function SplashScreen(tileSet, snowTileSet, spriteSheet) {
 
   // Let's get some bits on screen!
   $('.awaitGeneration').toggle();
-  $('#splashPlay').focus();
+  // Aftersight: focus without scrolling the card on small screens
+  if ($('#splashPlay')[0]) $('#splashPlay')[0].focus({preventScroll: true});
 }
 
 
@@ -126,6 +127,12 @@ var acquireNameAndDifficulty = function(e) {
   // Get rid of the initial splash screen
   $('#splash').toggle();
 
+  // Aftersight: the town picker shows this map as the thumbnail for the starter town and the empty valley
+  if (this.splashCanvas && this.splashCanvas._canvas) {
+    var thumb = this.splashCanvas._canvas.toDataURL();
+    $('#alStarterThumb, #alEmptyThumb').attr('src', thumb);
+  }
+
   // As a convenience, the city name is not mandatory in debug mode
   if (Config.debug)
     $('#nameForm').removeAttr('required');
@@ -135,7 +142,7 @@ var acquireNameAndDifficulty = function(e) {
 
   // Display the name and difficulty form
   $('#start').toggle();
-  $('#nameForm').focus();
+  if ($('#nameForm')[0]) $('#nameForm')[0].focus({preventScroll: true});
 };
 
 

@@ -78,10 +78,16 @@ function SplashCanvas(parentID, tileSet, id) {
 }
 
 
-// Paint an individual tile at the given map coordinates, with the tile scaled down to 3x3
+// Aftersight: the minimap is painted in the iso view's palette (grass, woods, water) instead of the 1989 tiles
+var SPLASH_COLOURS = {water: '#62b6ea', shore: '#8fd0f2', woods: '#4f9a52', woodsLight: '#68b064', land: '#a8d68a', other: '#d9d3c3'};
 SplashCanvas.prototype._paintTile = function(tileVal, x, y, ctx) {
-  var src = this._tileSet[tileVal];
-  ctx.drawImage(src, x * 3, y * 3, 3, 3);
+  var c = SPLASH_COLOURS;
+  var col = tileVal === 0 ? c.land :
+            tileVal >= 2 && tileVal <= 4 ? c.water :
+            tileVal >= 5 && tileVal <= 20 ? c.shore :
+            tileVal >= 21 && tileVal <= 43 ? ((x * 7 + y * 13) % 5 ? c.woods : c.woodsLight) : c.other;
+  ctx.fillStyle = col;
+  ctx.fillRect(x * 3, y * 3, 3, 3);
 };
 
 

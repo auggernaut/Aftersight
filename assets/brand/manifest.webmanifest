@@ -1,6 +1,6 @@
 {
-  "name": "Aftersight",
-  "short_name": "Aftersight",
+  "name": "AfterSight",
+  "short_name": "AfterSight",
   "start_url": "../../index.html",
   "display": "fullscreen",
   "orientation": "any",

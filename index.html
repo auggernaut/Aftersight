@@ -21,21 +21,21 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#141c22">
-    <meta name="description" content="Aftersight: a city builder about living through the shift to a post-labor economy. A modified version of micropolisJS, the HTML5 port of Micropolis.">
+    <meta name="description" content="AfterSight: a city builder about living through the shift to a post-labor economy. A modified version of micropolisJS, the HTML5 port of Micropolis.">
     <link rel="icon" href="assets/brand/favicon.ico" sizes="any">
     <link rel="icon" type="image/png" sizes="32x32" href="assets/brand/si-32.png">
     <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
     <link rel="manifest" href="assets/brand/manifest.webmanifest">
     <link rel="stylesheet" media="screen" type="text/css" href="css/style.css">
     <link rel="stylesheet" media="screen" type="text/css" href="css/afterlight-iso.css">
-    <title>Aftersight</title>
+    <title>AfterSight</title>
   </head>
   <body>
     <img id="tiles" class="imageData" src="images/tiles.png" alt="These are the game's principal tiles">
     <img id="snowtiles" class="imageData" src="images/tilessnow.png" alt="These are the game's alternate tiles">
     <img id="sprites" class="imageData" src="images/sprites.png" alt="These are the game's sprites">
     <header id="header">
-      <div id="brand"><span id="brandMark"></span><h1 id="title" aria-label="Aftersight">After<span class="si">SI</span>ght</h1><span class="alSub">a modified micropolisJS</span></div>
+      <div id="brand"><span id="brandMark"></span><h1 id="title" aria-label="AfterSight">After<span class="si">S</span>ight</h1><span class="alSub">a modified micropolisJS</span></div>
       <div id="hud" class="initialHidden">
         <div class="hudItem hudCity"><span id="name">Your Name Here</span><span id="cclass" class="hudSub">VILLAGE</span></div>
         <div class="hudItem"><label>Date</label><span id="date">Jan 1900</span></div>
@@ -71,35 +71,58 @@
         <div id="alPoster" aria-hidden="true"></div>
         <div class="hidden" id="opaque"></div>
         <div data-hasscript="false" id="loadingBanner" class="alignCenter padding10 mintcream chunk shadow centred">Loading</div>
-        <div id="splash" class="mintcream awaitGeneration open shadow padding10 centred">
-          <h2 class="chunk alignCenter">Welcome!</h2>
-          <p><b>Aftersight</b>: run a present-day town through the arrival of AI, robots and abundance. Built on micropolisJS, a Javascript port of the open-source city simulator <cite>Micropolis</cite>.</p>
-          <div id="splashContainer"></div>
-          <div id="splashButtonContainer">
-            <div id="splashButtons">
-              <button id="splashLoad" class="width140 block loadSave splashButton" disabled>Load game</button>
-              <button id="splashFestus" class="width140 block margin10 splashButton">Play Festus, MO</button>
-              <button id="splashPlay" class="width140 block margin10 splashButton">Play this map</button>
-              <button id="splashGenerate" class="width140 block margin10 splashButton">Generate another</button>
+        <div id="splash" class="awaitGeneration open centred intro">
+          <div class="introHead">
+            <h2>Welcome to After<span class="si">S</span>ight</h2>
+            <p>Run a present-day town through the arrival of AI, robots and abundance. Pick a town to start.</p>
+          </div>
+          <div class="townCards">
+            <div class="townCard" id="townFestus">
+              <div class="townThumb"><img src="assets/brand/festus-thumb.webp" width="480" height="316" alt="Festus, Missouri: I-55, Main Street and the empty data center site"></div>
+              <div class="townBody">
+                <span class="townTag">Real town &middot; 2026</span>
+                <h3>Festus, Missouri</h3>
+                <p>A river town of 12,000 south of St. Louis. A developer wants a $6 billion data center by the interstate, and you're the mayor.</p>
+                <div class="townBtns"><button id="splashFestus" class="splashButton primary">Play Festus, MO</button></div>
+              </div>
+            </div>
+            <div class="townCard" id="townStarter">
+              <div class="townThumb"><div id="splashContainer"></div></div>
+              <div class="townBody">
+                <span class="townTag">Random map</span>
+                <h3>A present-day town</h3>
+                <p>An ordinary valley town on a fresh map. Helix already runs a data center here, and the robots are coming.</p>
+                <div class="townBtns"><button id="splashPlay" class="splashButton primary">Play this map</button><button id="splashGenerate" class="splashButton secondary">New map</button></div>
+              </div>
             </div>
           </div>
+          <div id="splashButtonContainer">
+            <div id="splashButtons"><button id="splashLoad" class="loadSave splashButton ghost" disabled>Load saved game</button></div>
+            <p class="introCredit">Built on micropolisJS, a JavaScript port of the open-source city simulator <cite>Micropolis</cite>.</p>
+          </div>
         </div>
-        <div id="start" class="mintcream open shadow padding10 centred">
-          <h2 class="chunk alignCenter">New Game</h2>
+        <div id="start" class="open centred intro">
+          <h2>New game</h2>
           <form id="playForm">
-            <label for="nameForm">City name (max 15 letters)</label>
-            <input id="nameForm" autofocus required class="margin10" type="text" maxlength="15">
-            Difficulty
-            <input type="radio" class="difficulty" name="difficulty" id="difficultyEasy" value="0" checked="checked"><label for="difficultyEasy">Easy</label>
-            <input type="radio" class="difficulty" name="difficulty" id="difficultyMed" value="1"><label for="difficultyMed">Medium</label>
-            <input type="radio" class="difficulty" name="difficulty" id="difficultyHard" value="2"><label for="difficultyHard">Hard</label>
-            <fieldset id="alScenarios" class="margin10"><legend>Town</legend>
-              <label class="alScen"><input type="radio" name="alScenario" id="alScenFestus" value="festus"><span><b>Festus, Missouri (2026)</b><small>A real river town, a $6B data center offer, and an election coming</small></span></label>
-              <label class="alScen"><input type="radio" name="alScenario" id="alStarter" value="starter" checked="checked"><span><b>A present-day town on this map</b><small>Helix already runs a data center here</small></span></label>
-              <label class="alScen"><input type="radio" name="alScenario" id="alScenEmpty" value="empty"><span><b>An empty valley</b><small>Classic Micropolis start</small></span></label>
+            <div class="formRow">
+              <label for="nameForm">Town name</label>
+              <input id="nameForm" autofocus required type="text" maxlength="15" placeholder="Up to 15 letters" autocomplete="off">
+            </div>
+            <div class="formRow">
+              <span class="formLabel" id="difficultyLabel">Difficulty</span>
+              <div class="segmented" role="radiogroup" aria-labelledby="difficultyLabel">
+                <input type="radio" class="difficulty" name="difficulty" id="difficultyEasy" value="0" checked="checked"><label for="difficultyEasy">Easy</label>
+                <input type="radio" class="difficulty" name="difficulty" id="difficultyMed" value="1"><label for="difficultyMed">Medium</label>
+                <input type="radio" class="difficulty" name="difficulty" id="difficultyHard" value="2"><label for="difficultyHard">Hard</label>
+              </div>
+            </div>
+            <fieldset id="alScenarios"><legend class="formLabel">Town</legend>
+              <label class="alScen"><input type="radio" name="alScenario" id="alScenFestus" value="festus"><img class="scenThumb" src="assets/brand/festus-thumb.webp" alt=""><span><b>Festus, Missouri (2026)</b><small>A real river town, a $6B data center offer, and an election coming</small></span></label>
+              <label class="alScen"><input type="radio" name="alScenario" id="alStarter" value="starter" checked="checked"><img class="scenThumb" id="alStarterThumb" alt=""><span><b>A present-day town on this map</b><small>Helix already runs a data center here</small></span></label>
+              <label class="alScen"><input type="radio" name="alScenario" id="alScenEmpty" value="empty"><img class="scenThumb scenEmpty" id="alEmptyThumb" alt=""><span><b>An empty valley</b><small>The classic Micropolis start: just the land</small></span></label>
             </fieldset>
             <div id="playSubmitDiv">
-              <input id="playit" type="submit" value="Play!">
+              <input id="playit" type="submit" value="Start">
             </div>
           </form>
         </div>
@@ -135,7 +158,7 @@
             <button id="solarButton" data-size="3" data-tool="solar" data-colour="#3c59a8" class="toolButton unselected alTool" data-tip="Solar farm · $1,500"><span class="tbIcon" data-icon="solar"></span><span class="tbLabel">Solar</span></button>
             <button id="fusionButton" data-size="3" data-tool="fusion" data-colour="#5fe3ff" class="toolButton unselected alTool alLocked" data-tip="Fusion plant · $8,000. Unlocked by the Fusion discovery"><span class="tbIcon" data-icon="fusion"></span><span class="tbLabel">Fusion</span></button>
           </div>
-          <div class="toolGroup" data-group="Afterlight"><div class="toolGroupLabel">Aftersight</div>
+          <div class="toolGroup" data-group="Afterlight"><div class="toolGroupLabel">AfterSight</div>
             <button id="dcHelixButton" data-size="3" data-tool="dcHelix" data-colour="#a23bd6" class="toolButton unselected alTool" data-tip="Helix data center · $100. Helix pays to build it and keeps the profits; the town gets a small fee"><span class="tbIcon" data-icon="dcHelix"></span><span class="tbLabel">Helix DC</span></button>
             <button id="dcCoopButton" data-size="3" data-tool="dcCoop" data-colour="#2fbf4a" class="toolButton unselected alTool" data-tip="Co-op data center · $4,000. The town owns it: profits go to the treasury or the dividend"><span class="tbIcon" data-icon="dcCoop"></span><span class="tbLabel">Co-op DC</span></button>
             <button id="depotHelixButton" data-size="3" data-tool="depotHelix" data-colour="#a23bd6" class="toolButton unselected alTool" data-tip="Helix robot depot · $100. Robots owned by Helix"><span class="tbIcon" data-icon="depotHelix"></span><span class="tbLabel">Helix robots</span></button>
@@ -172,7 +195,7 @@
         </noscript>
       </main>
       <footer id="footer" class="alignCenter chunk white padding10">
-        Aftersight is a modified version of <a href="https://github.com/graememcc/micropolisJS">micropolisJS</a>, released under the GNU GPL v3 with additional terms (see LICENSE and COPYING). It is not SimCity and is not affiliated with Electronic Arts.
+        AfterSight is a modified version of <a href="https://github.com/graememcc/micropolisJS">micropolisJS</a>, released under the GNU GPL v3 with additional terms (see LICENSE and COPYING). It is not SimCity and is not affiliated with Electronic Arts.
         <div id="author" class="open">micropolisJS brought to you by <a rel="author" href="http://www.graememcc.co.uk" target="_blank">Graeme McCutcheon</a><i><a rel="author" href="https://twitter.com/graememcc" target="_blank">(@graememcc)</a></i> and <a rel="author" href="https://github.com/graememcc/micropolisJS/graphs/contributors" target="_blank">contributors</a>
           <div id="build">Build: <%= htmlWebpackPlugin.options.gitHash %></div>
         </div>
@@ -181,12 +204,12 @@
         </div>
       </footer>
       <div class="hidden modal shadow" id="aboutWindow">
-        <header class="padding10 chunk alignCenter">About Aftersight</header>
+        <header class="padding10 chunk alignCenter">About AfterSight</header>
         <div class="padding10 open aboutBody">
-          <p><b>Aftersight</b> is a city builder about living through the shift to a post-labor economy: who owns the energy, the compute and the robots, and what happens to work, purpose and hope when machines can do most jobs.</p>
-          <p>It is a modified version of <a href="https://github.com/graememcc/micropolisJS" target="_blank">micropolisJS</a> by Graeme McCutcheon and contributors, the HTML5 port of Micropolis, which is based on the original city simulator by Will Wright and Maxis, open-sourced by Electronic Arts. The simulation engine is micropolisJS; the isometric view, the interface and the Aftersight layer (compute, robots, ownership, mood and events) are new and drawn procedurally in code.</p>
-          <p>Aftersight and micropolisJS are free software released under the <a href="LICENSE" target="_blank">GNU General Public License v3</a> with additional terms; see <a href="LICENSE" target="_blank">LICENSE</a> and <a href="COPYING" target="_blank">COPYING</a>. You are entitled to the source code of this modified version.</p>
-          <p>Micropolis is a registered trademark of <a href="https://www.micropolis.com" target="_blank">Micropolis Corporation (Micropolis GmbH)</a> and is licensed here as a courtesy of the owner under the <a href="name_license.html" target="_blank">Micropolis Public Name License</a>. Aftersight is not SimCity and is not affiliated with or endorsed by Electronic Arts or Maxis.</p>
+          <p><b>AfterSight</b> is a city builder about living through the shift to a post-labor economy: who owns the energy, the compute and the robots, and what happens to work, purpose and hope when machines can do most jobs.</p>
+          <p>It is a modified version of <a href="https://github.com/graememcc/micropolisJS" target="_blank">micropolisJS</a> by Graeme McCutcheon and contributors, the HTML5 port of Micropolis, which is based on the original city simulator by Will Wright and Maxis, open-sourced by Electronic Arts. The simulation engine is micropolisJS; the isometric view, the interface and the AfterSight layer (compute, robots, ownership, mood and events) are new and drawn procedurally in code.</p>
+          <p>AfterSight and micropolisJS are free software released under the <a href="LICENSE" target="_blank">GNU General Public License v3</a> with additional terms; see <a href="LICENSE" target="_blank">LICENSE</a> and <a href="COPYING" target="_blank">COPYING</a>. You are entitled to the source code of this modified version.</p>
+          <p>Micropolis is a registered trademark of <a href="https://www.micropolis.com" target="_blank">Micropolis Corporation (Micropolis GmbH)</a> and is licensed here as a courtesy of the owner under the <a href="name_license.html" target="_blank">Micropolis Public Name License</a>. AfterSight is not SimCity and is not affiliated with or endorsed by Electronic Arts or Maxis.</p>
           <p class="aboutMore"><a href="about.html" target="_blank">The original micropolisJS about page</a></p>
           <form id="aboutForm" class="alignCenter margin10"><input type="submit" id="aboutOK" class="dialogOK" value="Close"></form>
         </div>
