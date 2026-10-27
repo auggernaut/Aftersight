@@ -49,6 +49,7 @@ export const ELECTIONS = [27, 51, 75];
 export const WIN_TERMS = 3, WIN_SHARE = 0.25;
 var CARD_GAP = 6;          // fewest months between two decision cards
 var GONE_AFTER = 3;        // walks after which the developer builds elsewhere for good
+var FREE_FADE = 30;        // months over which voters stop crediting a mayor for saying no
 var CITY_POP = 13000, CITY_MONTHS = 6;   // the town-to-city milestone: this many people, held this many months
 var DRAMA_GAP = 8;         // most months without anything meaningful before the director steps in
 
@@ -289,7 +290,7 @@ var ASK_CARDS = {
     title: 'Reopen the deal?', body: 'Residents who packed the spring town hall say the agreement was signed too fast and too cheap. They want you to call the developer back to the table.',
     yes: {label: 'Call them back', d: {res: 4, school: 2, biz: -2}, effect: function(L) { L.s.mayor.reopened = true; L.s.mayor.reopenDue = L.mi() + 1; }},
     no: {label: 'A deal is a deal', d: {res: -4, biz: 3}}},
-  school_levy: {faction: 'school', repeat: 30, when: function(L) { return L.s.months > 14 && L._sim.budget.cityTax < 12; },
+  school_levy: {faction: 'school', repeat: 30, when: function(L) { return L.s.months > 30 && L._sim.budget.cityTax < 12; },
     title: 'The school board wants a levy', body: 'Classrooms are packed. The board asks you to back a one-point tax increase for the schools.',
     yes: {label: 'Back the levy', d: {school: 9, res: -3, biz: -3}, effect: function(L) { L._sim.budget.cityTax++; L.s.mayor.levy = (L.s.mayor.levy || 0) + 1; }},
     no: {label: 'Decline', d: {school: -6}}}
@@ -437,12 +438,12 @@ export function installMayor(L) {
     var s = this.s, d = s.deal, mix = this.incomeMix(), use = s.water.use / Math.max(1, s.water.cap);
     var share = this.townShare();
     if (s.months < 15 && !d && !s.dev.walks) return 'early';
-    if (mix.ownShare >= 0.12 && s.purpose >= 45) return 'owners';
+    if (mix.ownShare >= 0.08 && s.purpose >= 45) return 'owners';
     if (d && (use > 0.95 || (s.bills || 0) > 0.3 || (s.health && s.health.fumes > 0.5))) return 'strain';
-    if (!d && s.dev.walks > 0 && mix.ownShare < 0.06 && share < 0.2) return 'decline';
+    if (!d && s.dev.walks > 0 && mix.ownShare < 0.04 && share < 0.2) return 'decline';
     if (s.purpose < 40) return 'checks';
     // a real stake: dividends already a visible part of income, or the town owns a fifth of the engine and they're on the way
-    if (mix.ownShare >= 0.06 || share >= 0.2) return 'building';
+    if (mix.ownShare >= 0.04 || share >= 0.2) return 'building';
     if (d) return 'enclosure';
     return 'early';
   };
@@ -511,7 +512,7 @@ export function installMayor(L) {
     schoolScore = Math.min(2.5, schoolScore);   // a well-funded school can only get so much happier
     // Festus: what ownership adds to household income (the Fund's dividend as a share of income); elsewhere the old fund
     var mix = this.festus() ? this.incomeMix() : null;
-    var div = mix ? clamp(mix.ownShare / 0.1, 0, 1.5) : clamp((s.fundDividend || 0) / 25, 0, 1.5);
+    var div = mix ? clamp(mix.ownShare / 0.15, 0, 1.2) : clamp((s.fundDividend || 0) / 25, 0, 1.5);
     var equity = this.townShare();
     var building = s.construction ? 1 : 0;
     var jobs = deal && online ? clamp(deal.jobs / 50, 0, 1.5) * (m.localHire ? 1.3 : 1) : 0;
@@ -523,7 +524,8 @@ export function installMayor(L) {
     // a dividend that replaces lost wages takes some of the sting out of a lost job (not all of it: see Purpose)
     var jobless = m.jobless * (mix ? 1 - 0.5 * mix.cover : 1);
     var fair = deal ? this._dealTier() - 1 : 0;
-    var free = !deal && s.dev.walks > 0 ? 1 : 0, home = Math.min(2, m.homegrown || 0);   // said no, and grew its own way
+    // said no: people credit you for it at first, less as the months go by; and the town that grew its own way
+    var free = !deal && s.dev.walks > 0 ? clamp(1 - (s.months - (s.dev.lastWalk || 0)) / FREE_FADE, 0, 1) : 0, home = Math.min(2, m.homegrown || 0);
     var growth = clamp((this._sim._valves ? this._sim._valves.comValve : 0) / 150, -8, 8);
     // purpose feeds approval (it already lags), and the fund's dividends add up to real household wealth
     var purp = this.festus() ? clamp((s.purpose - 60) / 10, -4, 3) : 0;
@@ -884,6 +886,7 @@ export function installMayor(L) {
     s.dev.farmed = left.rects.map(function(r) { return {x: r.x, y: r.y, w: r.w, h: r.h}; });
     s.dev.plan = Math.min(PLANS.length - 1, (s.dev.plan || 0) + 1);   // next time it asks for more
     s.dev.walks++;
+    s.dev.lastWalk = s.months;
     s.dev.status = 'away';
     s.dev.due = mi + 8 + Random.getRandom(4);
     s.dev.returnTier = Math.min(TIERS.length - 1, (s.dev.offer ? s.dev.offer.tier : 0) + 1);
@@ -1051,7 +1054,8 @@ export function installMayor(L) {
       return;
     }
     if (dv.status === 'signed' && dv.nextExpansion >= 0 && mi >= dv.nextExpansion && s.deal.halls < this.maxHalls() && !s.construction && this.canCard()) {
-      var tier = Math.min(TIERS.length - 1, this._dealTier() + 1);
+      // a mayor who has pushed back gets better terms for the whole campus; one who never has gets the same again
+      var tier = Math.min(TIERS.length - 1, this._dealTier() + (s.dev.counters > 0 || s.mayor.reopened ? 1 : 0));
       this.makeOffer(tier, 'expansion');
       this._offerCard();
     }

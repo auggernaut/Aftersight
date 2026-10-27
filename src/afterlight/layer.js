@@ -372,6 +372,8 @@ AfterlightLayer.prototype.monthly = function(simData) {
   }
   // Aftersight: the developer's promised jobs (and construction crews while the campus goes up)
   var dealJobs = (s.construction ? 25 : 0) + (s.deal && s.hallsBuilt ? s.deal.jobs * 0.4 * (s.mayor.localHire ? 1.3 : 1) : 0);
+  // Festus: the home-grown plan (community solar, Main Street grants, training) and the town's own halls employ people too
+  if (festus) dealJobs += (!s.deal ? Math.min(2, s.mayor.homegrown || 0) * 6 : 0) + this.bondedBuilt() * 5;
   var employed = Math.min(workers, jobs * (1 - s.automation) + dealJobs);
   var unempTarget = clamp(1 - employed / workers, 0, 1);
   if (s.strike > 0) unempTarget = Math.min(1, unempTarget + 0.05);

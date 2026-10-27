@@ -2,7 +2,9 @@
 // desktop browser through the real UI: the intro card, the developer's first offer, a counter with two asks, the
 // better offer, accepting it, the campus going up, a breakthrough card, investing, placing the unlocked building,
 // and both election outcomes (win and loss); then a third game where the developer walks (the site clears and goes
-// back to hay) and returns with a bigger campus, the one-time town-to-city milestone, and the sparse status alerts.
+// back to hay) and returns with a bigger campus, the one-time town-to-city milestone, and the sparse status alerts;
+// then real dollars on screen, the automation tide in a town that says no, the developer leaving for good after three
+// walks, a town hall ask decided from the ticker, a co-op bond paying into the Festus Fund, and a project on the map.
 // Fails on console errors. Screenshots go to $OUT. BASE_URL=https://... tests a deployed build instead of dist/.
 //
 //   NODE_PATH=/path/to/playwright/node_modules OUT=/tmp/shots node e2e/festus.cjs
@@ -502,6 +504,81 @@ const months = async (page, n) => {
     await pg.waitForTimeout(200);
     if (await pg.isVisible('#alAlert')) fail('a click outside did not close the alert window');
     if (run.errors.length) fail('console errors (fund run):\n' + run.errors.join('\n'));
+    await pg.close();
+  }
+
+  // ---- real dollars, the automation tide, the developer leaving for good, ticker asks, co-op bonds, paths, projects on the map ----
+  {
+    const run = await startFestus(browser, url);
+    const pg = run.page;
+    await pg.click('#alCard .cardOption[data-option="go"]');
+    await pg.waitForSelector('#alCard[data-type="offer"]:not(.hidden)');
+    const top = await pg.evaluate(() => ({ funds: document.getElementById('fundsShown').textContent, income: getComputedStyle(document.querySelector('.hudIncome')).display,
+      score: getComputedStyle(document.querySelector('.hudScore')).display,
+      hidden: [...document.querySelectorAll('#alCard .cardTerms tr')].filter(r => getComputedStyle(r).display === 'none').length,
+      first: __AL.card().rows[0][0] + ': ' + __AL.card().rows[0][1] }));
+    console.log('top bar and offer', JSON.stringify(top));
+    if (!/^\$\d+(\.\d)?M$/.test(top.funds)) fail('Festus funds should read in real dollars: ' + top.funds);
+    if (top.income === 'none' || top.score !== 'none') fail('the top bar should show household income, not the score, in Festus');
+    if (!(top.hidden > 0) || !/^Money to the town: \$\d+k a year/.test(top.first)) fail('the offer should lead with money to the town, in real dollars, and fold the minor terms');
+    await pg.click('#alAllTerms');
+    if (await pg.evaluate(() => [...document.querySelectorAll('#alCard .cardTerms tr')].some(r => getComputedStyle(r).display === 'none'))) fail('All terms did not open every term');
+    // say no three times: the developer leaves for good, and the tide reaches the town anyway
+    await pg.click('#alCard .cardOption[data-option="reject"]');
+    const no = await pg.evaluate(() => { const L = __AL.layer, g = __AL.game; g.alNoPaper = true;
+      L.autoDecide = c => { if (!c.quick) L.decide(c.type === 'offer' ? 'reject' : c.options[c.options.length - 1].id); };
+      const a0 = L.s.automation;
+      L._forceVote = 60;   // keep this mayor in office: the test is about the developer and the tide, not the vote
+      for (let i = 0; i < 84 && L.s.dev.status !== 'gone'; i++) __AL.fastForward(1);
+      __AL.fastForward(12);
+      L._forceVote = undefined;
+      return { status: L.s.dev.status, walks: L.s.dev.walks, due: L.s.dev.due, mi: L.mi(), card: L.s.card && L.s.card.type, last: L.s.mayor.lastCard, a0: a0, auto: +L.s.automation.toFixed(3), path: L.s.path, gone: L.s.log.some(e => /won't be back/.test(e.text)),
+               income: L.incomeMix() }; });
+    console.log('no deal', JSON.stringify(no));
+    if (no.status !== 'gone' || !no.gone) fail('Keystone should leave for good after three walks');
+    if (!(no.auto > no.a0 + 0.15)) fail('the automation tide should reach a town with no campus (' + no.a0 + ' -> ' + no.auto + ')');
+    if (!(no.income.transfers > 0) || !(no.income.wages > 0)) fail('household income should split into wages and transfers');
+    // a town hall ask arrives in the ticker and is decided in the alert window, without a card
+    const qid = await pg.evaluate(() => { const L = __AL.layer, g = __AL.game; L.autoDecide = null; L.s.card = null;
+      if (g._openWindow === 'alCard') g.alCards.close(); if (g._openWindow === 'alPaperWindow') g.alPaperWindow.close();
+      g.alNoPaper = true; g.alUI.setSpeed(0);
+      L.s.mayor.askLog = {}; L.s.mayor.lastQuick = -99; L.s.quickAsk = null; L.s.mayor.lastCard = L.s.months - 1;
+      g.simulation.budget.setFunds(20000); L._quickAskLane(); g.alPanel.refresh(true); return L.s.quickAsk && L.s.quickAsk.id; });
+    if (!qid) fail('no town hall ask reached the ticker');
+    else {
+      await pg.click('#notifications');
+      await pg.waitForSelector('#alAlert.alQuickAsk:not(.hidden)', { timeout: 3000 });
+      const opts = await pg.evaluate(() => [...document.querySelectorAll('#alAlert .alQuickOpt')].map(b => b.getAttribute('data-option')));
+      if (opts.join() !== 'yes,no') fail('the ticker ask should offer two answers: ' + opts);
+      await pg.click('#alAlert .alQuickOpt[data-option="yes"]');
+      const done = await pg.evaluate(id => ({ pending: !!__AL.layer.s.quickAsk, log: (__AL.layer.s.mayor.askLog[id] || {}).times || 0, card: !!__AL.card() }), qid);
+      console.log('ticker ask', qid, JSON.stringify(done));
+      if (done.pending || done.log !== 1 || done.card) fail('the ticker ask was not decided in place');
+    }
+    // a co-op bond unlocks a town-owned hall; its revenue (after the bond) goes into the Festus Fund
+    const bond = await pg.evaluate(() => { const L = __AL.layer, g = __AL.game; g.alNoPaper = true; g.alUI.setSpeed(2);
+      const locked = L.isUnlocked('dcCoop'); L.s.mayor.coopBonds = (L.s.mayor.coopBonds || 0) + 1;
+      let site = null; for (let k = 0; k < 40 && !site; k++) { const s = __AL.findSite(); if (s && !(s.x >= 33 && s.x <= 55 && s.y >= 25 && s.y <= 63)) site = s; }
+      const built = site ? __AL.build('dcCoop', site.x + 1, site.y + 1) : 'no site';
+      __AL.fastForward(14);
+      return { locked: locked, built: built, bonded: L.bondedBuilt(), fundIn: Math.round((L.s.fundParts || {}).bonded || 0), share: +L.townShare().toFixed(2), div: L.s.dividendPerRes, path: L.s.path,
+               after: L.isUnlocked('dcCoop') }; });
+    console.log('co-op bond', JSON.stringify(bond));
+    if (bond.built !== 'ok' || bond.bonded !== 1 || !(bond.fundIn > 0)) fail('a bonded town hall should build and pay into the Festus Fund');
+    if (bond.after) fail('one bond should allow one hall');
+    if (!(bond.share > 0.9) || bond.path === 'early') fail('a town owning its only hall should be building a stake, not ' + bond.path);
+    // a project opens on the map, then fades and can get another season
+    const proj = await pg.evaluate(() => { const L = __AL.layer, g = __AL.game; L.autoDecide = c => L.decide(c.options[c.options.length - 1].id);
+      L.s.projects = L.s.projects || {}; L.s.projects.park = {who: 'neighbors', cost: 1, start: L.s.months, done: L.s.months, purpose: 15, d: {res: 1}};
+      __AL.fastForward(1);
+      const pr = L.s.projects.park, tile = pr.at ? g.gameMap.getTileValue(pr.at.x, pr.at.y) : -1;
+      pr.built -= 30; const fade = L.projectFade('park'), renew = L.canRenew('park');
+      L.autoDecide = null; L.s.card = null; const opened = L.projectCard('park'); const card = __AL.card();
+      return { at: pr.at, tile: tile, fade: fade, renew: renew, opened: opened, title: card && card.title }; });
+    console.log('project on the map', JSON.stringify(proj));
+    if (!proj.at || !(proj.tile === 840 || (proj.tile >= 40 && proj.tile <= 43))) fail('an opened project should appear on the map');
+    if (!proj.renew || !proj.opened || !/^Another season/.test(proj.title || '')) fail('a faded project should offer another season');
+    if (run.errors.length) fail('console errors (tide run):\n' + run.errors.join('\n'));
     await pg.close();
   }
 

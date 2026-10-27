@@ -294,7 +294,9 @@ AfterlightPanel.prototype.refresh = function(force) {
   var items = s.log.slice(0, 5).map(function(e, i) {
     return '<li class="al_' + e.tone + '" data-log="' + i + '" role="button" tabindex="0"><span class="alDate">' + e.date + '</span> ' + $('<div>').text(e.text).html() + '</li>';
   });
-  $('#alNews').html(items.join(''));
+  // only rebuild the news list when it changes, so a line stays put long enough to click
+  var newsHtml = items.join('');
+  if (newsHtml !== this._newsHtml) { this._newsHtml = newsHtml; $('#alNews').html(newsHtml); }
   for (var name in s.policies) $('#alPol_' + name).prop('checked', !!s.policies[name]);
   $('#alComputeChip').text(L.townCompute() + '/mo · ' + Math.round(L.townShare() * 100) + '% own');
   $('#labButton').toggleClass('alLabIdle', !labs).attr('data-tip', 'Research Lab · ' + money(1500) + '. ' + (labs ? labs + ' running' + (s.labBill ? ', ' + money(s.labBill) + '/mo for upkeep and compute' : '') + '. ' :
