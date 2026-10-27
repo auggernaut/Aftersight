@@ -132,9 +132,13 @@ Valves.prototype.setValves = function(gameLevel, census, budget) {
   comRatio = (comRatio - 1) * taxTableScale + taxTable[z];
   indRatio = (indRatio - 1) * taxTableScale + taxTable[z];
 
-  this.resValve = MiscUtils.clamp(this.resValve + Math.round(resRatio), -RES_VALVE_RANGE, RES_VALVE_RANGE);
-  this.comValve = MiscUtils.clamp(this.comValve + Math.round(comRatio), -COM_VALVE_RANGE, COM_VALVE_RANGE);
-  this.indValve = MiscUtils.clamp(this.indValve + Math.round(indRatio), -IND_VALVE_RANGE, IND_VALVE_RANGE);
+  // Aftersight: the valves integrate demand with no decay, and zones answer them months later, so a town with far
+  // more houses than jobs overshoots and crashes in a cycle of a year or so (Festus swung between roughly 6,500 and
+  // 14,000 people). A leak (alValveLeak < 1) lets old demand fade, which damps the swing into steady growth.
+  var leak = census.alValveLeak === undefined ? 1 : census.alValveLeak;
+  this.resValve = MiscUtils.clamp(Math.round(this.resValve * leak + resRatio), -RES_VALVE_RANGE, RES_VALVE_RANGE);
+  this.comValve = MiscUtils.clamp(Math.round(this.comValve * leak + comRatio), -COM_VALVE_RANGE, COM_VALVE_RANGE);
+  this.indValve = MiscUtils.clamp(Math.round(this.indValve * leak + indRatio), -IND_VALVE_RANGE, IND_VALVE_RANGE);
 
   if (this.resCap && this.resValve > 0)
     this.resValve = 0;

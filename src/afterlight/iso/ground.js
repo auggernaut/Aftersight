@@ -68,7 +68,11 @@ var E = 0.012;   // overdraw so neighbouring diamonds don't leave hairline seams
 
 // Farm fields on open ground (the Festus scenario sets this; null means plain grass everywhere)
 var fieldFn = null;
-export const setFields = function(fn) { fieldFn = fn; };
+var fieldKeyFn = null;
+// fn(x, y) gives the field on an open tile (or null); keyFn() changes whenever fn's answers do, so cached
+// ground chunks get repainted (a parcel going back to hay, say)
+export const setFields = function(fn, keyFn) { fieldFn = fn; fieldKeyFn = keyFn || null; };
+export const fieldsKey = function() { return fieldKeyFn ? fieldKeyFn() : ''; };
 var CROPS = [['#c9b25a', '#b39a45'], ['#7fa64a', '#6a9140'], ['#9b7b55', '#86684a'], ['#a9b860', '#93a34f']];
 function field(ctx, P, u, v, f) {
   var c = CROPS[f.crop % CROPS.length];

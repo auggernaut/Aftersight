@@ -23,6 +23,7 @@ var DEPOT_DRAW = 60;
 var CLINIC_DRAW = 40;
 var SOLAR_STRENGTH = 300;
 var FUSION_STRENGTH = 6000;
+var VALVE_LEAK = 0.8;       // Festus: demand valves forget 20% a step, so population grows instead of cycling
 var DC_COMPUTE = 100;       // compute units per powered data center
 var DEPOT_CAPACITY = 150;   // robots a depot can house and maintain
 
@@ -368,6 +369,7 @@ AfterlightLayer.prototype.monthly = function(simData) {
 
   // Feed the jobs shock back into Micropolis's demand valves (see valves.js)
   c.alJobFactor = 1 - s.automation;
+  c.alValveLeak = s.scenario === 'festus' ? VALVE_LEAK : 1;   // damp the census boom-and-bust (see valves.js)
   c.alIncomeSupport = (c.comPop + c.indPop) * s.automation * s.cover;
   var coopShare = 1 - s.helixShare;
 
@@ -440,7 +442,9 @@ AfterlightLayer.prototype.discover = function(id, simData) {
     s.hope = clamp(s.hope + 8, 0, 100);
   }
 
-  this.news('good', d.headline, {paper: true, headline: d.headline, body: d.body, helps: d.helps, strains: d.strains,
+  // the developer in the story is whoever is courting this town (Keystone in Festus)
+  var who = this.dev().short, name = function(t) { return t.replace(/Helix/g, who); };
+  this.news('good', d.headline, {paper: true, headline: d.headline, body: name(d.body), helps: name(d.helps), strains: name(d.strains),
                                  discovery: id});
 };
 

@@ -6,7 +6,7 @@
 import $ from "jquery";
 
 import { FACTIONS, ELECTIONS, WIN_TERMS, WIN_SHARE, RESEARCH, UTIL_TEXT } from './mayor.js';
-import { LABELS, SITE } from './festus.js';
+import { LABELS } from './festus.js';
 
 var bar = function(id, label, colour) {
   return '<div class="alRow"><span class="alLabel">' + label + '</span>' +
@@ -199,11 +199,14 @@ AfterlightPanel.prototype.overlays = function() {
   var list = [];
   if (s.protest) list.push({x: s.protest.x - 2, y: s.protest.y - 2, w: 5, h: 5, kind: 'protest'});
   if (s.scenario === 'festus') {
+    var L = this.layer, shown = L.siteShown(), pl = L.sitePlan();
+    var site = shown && (!s.hallsBuilt || s.construction);   // gone while the developer is away, and once it's built
     LABELS.forEach(function(l) {
-      if (l.kind === 'site' && s.hallsBuilt) return;
-      list.push({kind: l.kind === 'site' ? 'sitelabel' : 'label', x: l.x, y: l.y, text: l.kind === 'site' && s.construction ? 'Under construction' : l.text});
+      if (l.kind === 'site' && !site) return;
+      list.push({kind: l.kind === 'site' ? 'sitelabel' : 'label', x: l.x, y: l.y,
+                 text: l.kind !== 'site' ? l.text : s.construction ? 'Under construction' : l.text + ' \u00b7 ' + pl.acres + ' acres'});
     });
-    if (!s.hallsBuilt || s.construction) list.push({kind: s.construction ? 'build' : 'site', x: SITE.x, y: SITE.y, w: SITE.w, h: SITE.h});
+    if (site) pl.rects.forEach(function(r) { list.push({kind: s.construction ? 'build' : 'site', x: r.x, y: r.y, w: r.w, h: r.h}); });
   }
   return list;
 };

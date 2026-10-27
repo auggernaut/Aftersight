@@ -19,6 +19,19 @@ export const W = 120, H = 100;
 export const SITE = {x: 44, y: 28, w: 10, h: 18};
 // Where the developer's halls go, in order (top-left of each 3x3). The first touches the feeder line at (43,35)
 export const HALL_SPOTS = [{x: 44, y: 34}, {x: 47, y: 34}, {x: 44, y: 37}, {x: 47, y: 37}, {x: 50, y: 34}, {x: 50, y: 37}];
+// The fields south of the state road along I-55, which a bigger campus takes too. Halls there pick up power from
+// the interchange strip next door (x 52) and from each other.
+var SOUTH = [{x: 49, y: 48}, {x: 46, y: 48}, {x: 49, y: 51}, {x: 46, y: 51}, {x: 43, y: 48}, {x: 43, y: 51}];
+// Each time the developer walks and comes back, it asks for more: more land, more halls, more power and water.
+// plan 0 is the first offer; the return offers use plans 1 and 2. `spots` is the order halls go up in.
+export const PLANS = [
+  {acres: 370, halls: 2, rects: [SITE], spots: HALL_SPOTS},
+  {acres: 520, halls: 4, rects: [SITE, {x: 42, y: 48, w: 10, h: 7}],
+   spots: [HALL_SPOTS[0], HALL_SPOTS[1], SOUTH[0], SOUTH[1], HALL_SPOTS[2], HALL_SPOTS[3], SOUTH[2], SOUTH[3]]},
+  {acres: 700, halls: 6, rects: [SITE, {x: 36, y: 48, w: 16, h: 14}],
+   spots: [HALL_SPOTS[0], HALL_SPOTS[1], SOUTH[0], SOUTH[1], SOUTH[2], SOUTH[3], HALL_SPOTS[2], HALL_SPOTS[3], HALL_SPOTS[4], HALL_SPOTS[5], SOUTH[4], SOUTH[5]]}
+];
+export const plan = function(i) { return PLANS[Math.max(0, Math.min(PLANS.length - 1, i || 0))]; };
 export const DOWNTOWN = {x: 83, y: 47};
 
 // Small seeded PRNG so the map is identical every game
@@ -65,6 +78,14 @@ export const fieldAt = function(x, y) {
   for (var i = 0; i < FIELDS.length; i++) {
     var f = FIELDS[i];
     if (x >= f.x && x < f.x + f.w && y >= f.y && y < f.y + f.h) return f;
+  }
+  return null;
+};
+// A parcel the developer gave up goes back to hay (drawn as fields; the land itself was never built on)
+export const farmedFieldAt = function(rects, x, y) {
+  for (var i = 0; rects && i < rects.length; i++) {
+    var r = rects[i];
+    if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) return {x: r.x, y: r.y, w: r.w, h: r.h, crop: i % 2 ? 2 : 0};
   }
   return null;
 };
@@ -217,6 +238,7 @@ export function buildFestus(simulation, map) {
   wireH(24, 50, 59);                // across I-55 to the north-west subdivision
   wireV(40, 26, 33);                // down to the west subdivision
   wireH(35, 42, 43);                // feeder to the site's west edge
+  wireH(49, 55, 58);                // under I-55 to the shops on the west side of the interchange
 
   return {x: downtown.x, y: downtown.y, w: downtown.w, h: downtown.h, site: SITE, festus: true};
 }

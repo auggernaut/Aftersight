@@ -249,7 +249,7 @@ async function festus(browser, url, phone) {
 
 (async () => {
   const srv = await serve();
-  const url = `http://localhost:${srv.address().port}/index.html`;
+  const url = process.env.BASE_URL || `http://localhost:${srv.address().port}/index.html`;   // BASE_URL tests a deployed build
   const browser = await chromium.launch();
   for (const phone of PHONES) {
     try { await play(browser, url, phone); } catch (e) { fail(phone.name, e.stack || e.message); }

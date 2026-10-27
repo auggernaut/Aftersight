@@ -44,7 +44,7 @@ import { AfterlightPanel } from './afterlight/panel.js';
 import { CardWindow } from './afterlight/cards.js';
 import * as ALB from './afterlight/buildings.js';
 import { buildStarterTown, prewarm } from './afterlight/starterTown.js';
-import { festusTerrain, buildFestus, fieldAt } from './afterlight/festus.js';
+import { festusTerrain, buildFestus, fieldAt, farmedFieldAt } from './afterlight/festus.js';
 import { setFields } from './afterlight/iso/ground.js';
 
 var disasterTimeout = 20 * 1000;
@@ -81,9 +81,13 @@ function Game(gameMap, tileSet, snowTileSet, spriteSheet, difficulty, name) {
   } else if (!savedGame) {
     this.simulation.afterlight.setScenario('empty');
   }
-  setFields(this.simulation.afterlight.s.scenario === 'festus' ? function(x, y) { return fieldAt(x, y); } : null);
+  var alLayer = this.simulation.afterlight;
+  // a site the developer walked away from is drawn as hay fields until it comes back
+  setFields(alLayer.s.scenario === 'festus' ? function(x, y) { return farmedFieldAt(alLayer.farmedRects(), x, y) || fieldAt(x, y); } : null,
+            function() { return JSON.stringify(alLayer.farmedRects()); });
 
   this.name = name || 'MyTown';
+  this.simulation.afterlight.townName = this.name;
   this.everClicked = false;
 
   if (savedGame)
@@ -239,6 +243,11 @@ function Game(gameMap, tileSet, snowTileSet, spriteSheet, difficulty, name) {
     name: this.name
   };
   this.infoBar(this.simulation, initialValues);
+  // the badge shows the layer's status (TOWN until the city milestone), not the engine's raw class
+  var self = this, badge = function() { $('#cclass').text(self.simulation.afterlight.s.cityStatus === 'city' ? 'CITY' : 'TOWN'); };
+  this.simulation.addEventListener(Messages.CLASSIFICATION_UPDATED, badge);
+  this._alBadge = badge;
+  badge();
 
   this._notificationBar = new Notification('#notifications', this.gameCanvas, Text.messageText[Messages.WELCOME]);
 
@@ -650,8 +659,15 @@ Game.prototype.processFrontEndMessage = function(message) {
     }
     if (this.alPanel)
       this.alPanel.refresh(true);
+    if (this._alBadge) this._alBadge();
     return;
   }
+
+  // Aftersight: no population milestones from the engine (they flip back and forth as the census swings).
+  // The layer announces one, town to city, after sustained growth, and the badge never goes back down.
+  if ([Messages.REACHED_TOWN, Messages.REACHED_CITY, Messages.REACHED_CAPITAL, Messages.REACHED_METROPOLIS,
+       Messages.REACHED_MEGALOPOLIS].indexOf(subject) !== -1)
+    return;
 
   if (Text.goodMessages[subject] !== undefined) {
     var cMessage = this.name + ' is now a ';

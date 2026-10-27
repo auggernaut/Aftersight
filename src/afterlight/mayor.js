@@ -18,8 +18,9 @@
 
 import { Random } from '../random.ts';
 import * as TV from '../tileValues.ts';
+import * as TF from '../tileFlags.ts';
 import * as B from './buildings.js';
-import { SITE, HALL_SPOTS, fieldAt, fieldTileCount } from './festus.js';
+import { SITE, PLANS, plan as sitePlan, fieldAt, fieldTileCount } from './festus.js';
 
 export const FACTIONS = [
   {id: 'res', name: 'Residents & homeowners', short: 'Residents', w: 0.30},
@@ -40,6 +41,7 @@ export const COUNCIL_ELECTION = 3, COURT_HEARING = 11;
 export const ELECTIONS = [27, 51, 75];
 export const WIN_TERMS = 3, WIN_SHARE = 0.25;
 var CARD_GAP = 6;          // fewest months between two decision cards
+var CITY_POP = 13000, CITY_MONTHS = 6;   // the town-to-city milestone: this many people, held this many months
 var DRAMA_GAP = 8;         // most months without anything meaningful before the director steps in
 
 // ---- Developer offers ----
@@ -156,7 +158,7 @@ export function freshMayor() {
   return {approval: 55, factions: f, electionsWon: 0, lastDrama: 0, lastCard: -99, history: [], asked: {},
           gameOver: null, won: null, sandbox: false, scripted: {}};
 }
-export function freshDev() { return {status: 'none', offer: null, due: -1, patience: 2, walks: 0, counters: 0, nextExpansion: -1}; }
+export function freshDev() { return {status: 'none', offer: null, due: -1, patience: 2, walks: 0, counters: 0, nextExpansion: -1, plan: 0, farmed: null}; }
 export function freshResearch() { return {active: null, done: {}, passed: {}, next: 6}; }
 
 export function installMayor(L) {
@@ -165,6 +167,21 @@ export function installMayor(L) {
   P.mi = function() { var d = this._sim.getDate(); return (d.year - 2026) * 12 + d.month; };
   P.dev = function() { return DEVELOPERS[this.s.scenario] || DEVELOPERS.starter; };
   P.festus = function() { return this.s.scenario === 'festus'; };
+  // The campus parcel: the signed deal's, else the one on the table, else the one the developer wants next
+  P.sitePlan = function() {
+    var s = this.s, d = s.dev;
+    return sitePlan(s.deal ? s.deal.plan : d.offer && d.offer.plan !== undefined ? d.offer.plan : d.plan);
+  };
+  // No proposed site on the map while the developer is away; that land is farmed again
+  P.siteShown = function() { return this.festus() && (!!this.s.deal || this.s.dev.status !== 'away'); };
+  P.farmedRects = function() { return this.s.dev && this.s.dev.status === 'away' ? this.s.dev.farmed || null : null; };
+  P.maxHalls = function() { return this.sitePlan().spots.length; };
+  // Power a campus pulls, in MW (a coal plant makes 700), and how much more water it needs than the whole town uses now
+  P.campusMW = function(halls) { return halls * this.dcDraw(); };
+  P.campusWaterPct = function(halls) {
+    var town = Math.max(1, (this._sim.evaluation.cityPop || 0) / 150);
+    return Math.round(HALL_WATER * halls / town * 100);
+  };
   P.nextElection = function() {
     var m = this.mi();
     for (var i = 0; i < ELECTIONS.length; i++) if (ELECTIONS[i] >= m) return ELECTIONS[i];
@@ -254,11 +271,11 @@ export function installMayor(L) {
     var growth = clamp((this._sim._valves ? this._sim._valves.comValve : 0) / 150, -8, 8);
     s.bills = bills; s.waterStress = stress;
     return {
-      res: 56 + fair * 4 + free * 1 - bills * 40 - stress * 12 - noise * 5 - secrecy * 10 - taxPain - jobless * 40 + div * 8 + equity * 12 + clinics * 2,
-      farm: 58 + fair + free * 2 - stress * 20 - lost * 80 - bills * 25 - taxPain * 1.2 + div * 4 + equity * 6,
-      work: 52 - jobless * 90 + building * 12 + jobs * 11 + home * 3 + div * 10 + equity * 8 - s.automation * 15 * (1 - s.cover),
-      biz: 54 + growth - taxPain * 1.5 - bills * 30 + (online ? 7 : 0) + jobs * 4 + home * 3 - (s.dependence || 0) * 2,
-      school: 55 + fair * 3 + schoolScore * 10 - secrecy * 8 - taxPain * 0.6 + clinics * 2 + div * 4
+      res: 51 + fair * 5 + free * 6 - bills * 40 - stress * 12 - noise * 5 - secrecy * 10 - taxPain - jobless * 40 + div * 8 + equity * 12 + clinics * 2,
+      farm: 53 + fair * 2 + free * 4 - stress * 20 - lost * 80 - bills * 25 - taxPain * 1.2 + div * 4 + equity * 6,
+      work: 47 + fair * 2 - jobless * 90 + building * 12 + jobs * 11 + home * 3 + div * 10 + equity * 8 - s.automation * 15 * (1 - s.cover),
+      biz: 49 + growth - taxPain * 1.5 - bills * 30 + (online ? 7 : 0) + jobs * 4 + home * 3 - (s.dependence || 0) * 2,
+      school: 50 + fair * 4 + free * 5 + schoolScore * 10 - secrecy * 8 - taxPain * 0.6 + clinics * 2 + div * 4
     };
   };
 
@@ -282,11 +299,81 @@ export function installMayor(L) {
     });
     this._approval();
     this._researchMonthly(simData);
+    this._cityMilestone();
     if (m.gameOver && !m.sandbox) return;
     this._scripted(mi);
     this._elections(mi);
     this._developer(mi);
     this._director(mi);
+    this._alerts();   // last, so it can see whether a card went up this month
+  };
+
+  // ---- town to city: once, after the town has held its growth, and never announced the other way ----
+  P._cityMilestone = function() {
+    var s = this.s, m = s.mayor, pop = this._sim.evaluation.cityPop || 0;
+    if (s.cityStatus === 'city') return;
+    m.cityMonths = pop >= CITY_POP ? (m.cityMonths || 0) + 1 : 0;
+    if (m.cityMonths < CITY_MONTHS || s.card) return;
+    s.cityStatus = 'city';
+    var name = this.festus() ? 'Festus' : (this.townName || 'The town');
+    this.news('good', name + ' is now a city: ' + Math.round(pop).toLocaleString() + ' people, and it has held there for half a year.',
+              {paper: true, tone: 'good', headline: name.toUpperCase() + ' IS NOW A CITY',
+               body: 'The census has had the town above ' + CITY_POP.toLocaleString() + ' people for ' + m.cityMonths + ' months running. The state reclassifies it, and the welcome signs get repainted.',
+               helps: 'More pull in the state capital, and businesses take the place seriously.',
+               strains: 'City problems come with it: traffic, water, and higher expectations of City Hall.'});
+  };
+
+  // ---- status alerts: short ticker notes when something real moves, at most one per topic a year ----
+  // Never while a decision card is open or was just shown, and never more than one a month or two in a row.
+  var ALERT_GAP = 12, ALERT_SPACING = 4;
+  var MOOD_NAMES = {res: 'Residents', farm: 'Farmers', work: 'Workers', biz: 'Business owners', school: 'Parents and teachers'};
+  P._alerts = function() {
+    var s = this.s, m = s.mayor, c = this._sim._census;
+    m.trend = m.trend || [];
+    var snap = {jobless: m.jobless || 0, bills: s.bills || 0, stress: s.waterStress || 0, use: s.water.use / Math.max(1, s.water.cap),
+                div: s.fundDividend || 0, auto: s.automation || 0, cover: s.cover || 0, f: {}};
+    FACTIONS.forEach(function(f) { snap.f[f.id] = m.factions[f.id].v; });
+    m.trend.push(snap);
+    if (m.trend.length > 7) m.trend.shift();
+    if (m.trend.length < 7 || s.card || m.lastCard === s.months || (m.gameOver && !m.sandbox)) return;
+    m.alertLog = m.alertLog || [];
+    m.alertLast = m.alertLast || {};
+    var last = m.alertLog.length ? m.alertLog[m.alertLog.length - 1].month : -99;
+    if (s.months - last < ALERT_SPACING) return;
+    var then = m.trend[0], now = snap, self = this, pct = function(v) { return Math.round(v * 100) + '%'; };
+    var clinics = c.alClinicOn || 0, cure = !!(s.research.done.the_cure || this.has('the_cure'));
+    var cands = [];
+    // health
+    if (cure && !clinics) cands.push(['health', 'bad', 'Health: the new therapies are licensed, but no clinic in town offers them. Residents drive an hour and pay out of pocket.']);
+    else if (clinics && !m.alertLast.health) cands.push(['health', 'good', 'Health: the healing clinic has a waiting list. Sick days at the plant are down.']);
+    else if (now.jobless > 0.15) cands.push(['health', 'bad', 'Health: the free clinic is turning people away. Many of the ' + pct(now.jobless) + ' out of work lost their insurance with their jobs.']);
+    // jobs
+    var dj = now.jobless - then.jobless;
+    if (dj > 0.04) cands.push(['jobs', 'bad', 'Jobs: unemployment is up to ' + pct(now.jobless) + ', from ' + pct(then.jobless) + ' six months ago.']);
+    else if (dj < -0.04) cands.push(['jobs', 'good', 'Jobs: unemployment is down to ' + pct(now.jobless) + ', from ' + pct(then.jobless) + ' six months ago.']);
+    // household wealth
+    if (now.div > 1 && now.div > then.div * 1.3) cands.push(['wealth', 'good', 'Household wealth: the wealth fund\'s dividend to residents is up to about ' + money(now.div * 12) + ' a year.']);
+    else if (now.auto > 0.25 && now.cover < 0.3) cands.push(['wealth', 'bad', 'Household wealth: automation does ' + pct(now.auto) + ' of the work now and nothing replaces the wages. Savings are draining.']);
+    // water
+    if (now.use > 0.85) cands.push(['water', 'bad', 'Water: the town is drawing ' + pct(now.use) + ' of what its wells and plant can supply.' + (now.stress > 0.3 ? ' Lawn watering is banned.' : '')]);
+    else if (now.use > 0.75 && now.use - then.use > 0.08) cands.push(['water', 'neutral', 'Water: use is up to ' + pct(now.use) + ' of supply, from ' + pct(then.use) + ' in the spring.']);
+    // power bills
+    if (now.bills - then.bills > 0.06 || now.bills > 0.25) cands.push(['bills', 'bad', 'Power bills: households are paying noticeably more than last year' + (this._sim._powerManager && this._sim._powerManager.lastShort ? ', and the grid is short at peak.' : '.')]);
+    else if (then.bills - now.bills > 0.06) cands.push(['bills', 'good', 'Power bills: they\'re coming down for the first time in a while.']);
+    // faction mood shifts
+    var shift = FACTIONS.map(function(f) { return {f: f, d: now.f[f.id] - then.f[f.id]}; }).sort(function(a, b) { return Math.abs(b.d) - Math.abs(a.d); })[0];
+    if (Math.abs(shift.d) >= 12)
+      cands.push(['mood', shift.d > 0 ? 'good' : 'bad', 'Mood: ' + MOOD_NAMES[shift.f.id] + (shift.d > 0 ? ' have warmed to City Hall' : ' have soured on City Hall') +
+                  ', ' + Math.round(then.f[shift.f.id]) + ' to ' + Math.round(now.f[shift.f.id]) + ' in six months.']);
+    cands = cands.filter(function(a) { return s.months - (m.alertLast[a[0]] === undefined ? -99 : m.alertLast[a[0]]) >= ALERT_GAP; });
+    if (!cands.length) return;
+    // the topic heard from least recently goes first
+    cands.sort(function(a, b) { return (m.alertLast[a[0]] || -99) - (m.alertLast[b[0]] || -99); });
+    var a = cands[0];
+    m.alertLast[a[0]] = s.months;
+    m.alertLog.push({type: a[0], month: s.months, text: a[2]});
+    if (m.alertLog.length > 30) m.alertLog.shift();
+    this.news(a[1], a[2], {alert: a[0]});
   };
 
   // ---- cards ----
@@ -354,8 +441,10 @@ export function installMayor(L) {
     var s = this.s;
     tier = clamp(tier, 0, TIERS.length - 1);
     var terms = copy(TIERS[tier]);
-    var halls = kind === 'expansion' ? 2 : 2;
-    s.dev.offer = {tier: tier, terms: terms, halls: halls, kind: kind || 'first'};
+    var pl = s.deal ? (s.deal.plan || 0) : (s.dev.plan || 0);
+    var halls = kind === 'expansion' ? 2 : sitePlan(pl).halls;
+    s.dev.offer = {tier: tier, terms: terms, halls: halls, kind: kind || 'first', plan: pl};
+    if (!s.deal) s.dev.farmed = null;   // the site is back on the map
     s.dev.status = 'offer';
     return s.dev.offer;
   };
@@ -365,18 +454,22 @@ export function installMayor(L) {
     return Object.keys(ASKS).filter(function(k) { return (!ASKS[k].late || late) && ASKS[k].ok(terms); });
   };
 
-  P.termRows = function(t, halls) {
-    var self = this;
+  P.termRows = function(t, halls, o) {
+    var self = this, pl = sitePlan(o && o.plan !== undefined ? o.plan : this.s.dev.plan);
     var rows = [
-      ['Campus', halls + ' halls on the site' + (this.s.deal ? ' (more)' : '') + ', about ' + money(halls * HALL_REVENUE) + '/mo in revenue', 'neutral'],
+      ['Campus', !halls && this.s.deal ? 'The same ' + this.s.deal.halls + ' halls on ' + pl.acres + ' acres, new terms' :
+                 halls + ' halls' + (this.s.deal ? ' more' : '') + ' on about ' + pl.acres + ' acres by I-55, about ' + money(halls * HALL_REVENUE) + '/mo in revenue', 'neutral'],
       ['Tax abatement', t.abatePct ? t.abatePct + '% for ' + t.abateYears + ' years' : 'None', t.abatePct >= 75 ? 'bad' : t.abatePct <= 25 ? 'good' : 'neutral'],
       ['Payment in lieu of taxes', money(t.pilot) + ' a year' + (t.fund ? ', into a town wealth fund' : ''), t.pilot >= 900 ? 'good' : t.pilot < 400 ? 'bad' : 'neutral'],
       ['School fund', t.school ? money(t.school) + ' a year' : 'None', t.school >= 300 ? 'good' : t.school ? 'neutral' : 'bad'],
       ['Jobs promised', t.jobs + ' permanent (plus construction crews)', t.jobs >= 55 ? 'good' : t.jobs < 35 ? 'bad' : 'neutral'],
+      ['Power and water', 'About ' + this.campusMW(halls) + ' MW (a coal plant makes 700) and ' + this.campusWaterPct(halls) + '% more water than the town uses now',
+       halls > 2 ? 'bad' : 'neutral'],
       ['Water and power upgrades', UTIL_TEXT[t.utilities] + (t.utilities !== 'developer' ? ' (' + money(self.utilityBill(t, halls)) + ' now, and higher bills)' : ''), t.utilities === 'developer' ? 'good' : t.utilities === 'town' ? 'bad' : 'neutral'],
       ['Secrecy', t.nda ? 'NDA: the tenant stays secret, sessions closed' : 'Open: terms and tenant public', t.nda ? 'bad' : 'good'],
       ['Town equity', (t.equity || 0) + '%' + ((t.equity || 0) ? ' of revenue and compute' : ''), (t.equity || 0) >= 10 ? 'good' : (t.equity || 0) ? 'neutral' : 'bad']
     ];
+    if (!halls) rows = rows.filter(function(r) { return r[0] !== 'Power and water'; });
     if (t.kids) rows.push(['Kids\' trust', t.kids + '% of revenue for every child, vesting at 21', 'good']);
     if (t.royalty) rows.push(['Compute royalty', t.royalty + ' compute a month for the town', 'good']);
     if (t.coop) rows.push(['Town AI co-op', 'One hall is owned by the town', 'good']);
@@ -394,7 +487,7 @@ export function installMayor(L) {
       first: ['Offer from ' + dev.name, 'A $6 billion data center campus by the interstate'],
       better: [dev.short + ' comes back', 'A better offer, after your counter'],
       firm: [dev.short + ' holds firm', 'Same terms. Take it or leave it'],
-      'return': [dev.short + ' is back', 'A new offer, after the deal fell through elsewhere'],
+      'return': [dev.short + ' is back', 'A bigger campus this time: ' + o.halls + ' halls on ' + sitePlan(o.plan).acres + ' acres'],
       expansion: [dev.short + ' wants to expand', 'Two more halls, and new terms for the whole campus'],
       renegotiate: ['Court orders a new agreement', dev.short + ' wants to re-sign fast, in the open'],
       reopen: [dev.short + ' comes back to the table', 'New terms for the campus you already have']
@@ -406,10 +499,13 @@ export function installMayor(L) {
       dev.name + ', the data center arm of a St. Louis builder, wants about 370 acres between the west subdivisions and I-55. It won\'t name the tenant. The council meets in the high school gym tonight.' :
       o.kind === 'expansion' ? 'The campus is full. ' + dev.short + ' wants two more halls on the site and offers to re-sign the whole agreement on these terms.' :
       o.kind === 'reopen' ? 'The council asked, and ' + dev.short + ' would rather re-sign than fight. Same halls. Say no and the old agreement stands.' :
+      o.kind === 'return' ? 'The deal across the river fell through. ' + dev.short + ' wants more this time: ' + o.halls + ' halls on about ' + sitePlan(o.plan).acres +
+        ' acres' + (o.plan ? ', the old site plus the fields south of the state road along I-55' : '') + '. Better terms, a bigger footprint, more power and water. ' +
+        'Leverage ' + Math.round(this.leverage() * 100) + '%.' :
       o.kind === 'renegotiate' ? 'The judge threw out the old agreement. ' + dev.short + ' has a new one, and this time the terms are public.' :
       'Leverage ' + Math.round(this.leverage() * 100) + '%: the longer you hold out and the more popular you are, the more they give.';
     this.showCard({
-      type: 'offer', kicker: k[0], title: k[1], body: body, rows: this.termRows(o.terms, o.halls),
+      type: 'offer', kicker: k[0], title: k[1], body: body, rows: this.termRows(o.terms, o.halls, o),
       options: [
         {id: 'accept', label: o.kind === 'expansion' ? 'Approve the expansion' : 'Accept', tone: 'good', preview: this.preview(this._reaction(o.terms, 'accept'))},
         {id: 'counter', label: 'Counter', tone: 'neutral', disabled: o.kind === 'firm' && s.dev.patience <= 0 || !asks.length,
@@ -429,7 +525,7 @@ export function installMayor(L) {
     if (option === 'accept') {
       var r = this._reaction(o.terms, 'accept');
       // terms the town fought for go down better than terms it was handed
-      if (s.dev.counters > 0 && o.kind !== 'expansion') { r.res += 2; r.school += 2; r.farm += 1; }
+      if (s.dev.counters > 0 && o.kind !== 'expansion') { r.res += 4; r.school += 3; r.farm += 2; r.work += 2; }
       this.bump(r, 'Accepted ' + dev.short + '\'s offer');
       this.signDeal(o);
     } else if (option === 'counter') {
@@ -453,6 +549,14 @@ export function installMayor(L) {
 
   P.devWalks = function(why) {
     var s = this.s, dev = this.dev(), mi = this.mi();
+    if (s.deal) {         // talks on an expansion or new terms broke down; the campus that's built stays
+      s.dev.status = 'signed'; s.dev.offer = null; s.dev.nextExpansion = mi + 14;
+      this.news('neutral', 'Talks with ' + dev.short + ' break down. The agreement already signed stands.');
+      return;
+    }
+    var left = this.sitePlan();
+    s.dev.farmed = left.rects.map(function(r) { return {x: r.x, y: r.y, w: r.w, h: r.h}; });
+    s.dev.plan = Math.min(PLANS.length - 1, (s.dev.plan || 0) + 1);   // next time it asks for more
     s.dev.walks++;
     s.dev.status = 'away';
     s.dev.due = mi + 8 + Random.getRandom(4);
@@ -462,7 +566,8 @@ export function installMayor(L) {
     this.bump({work: -5 / s.dev.walks, biz: -6 / s.dev.walks, res: 2, farm: 2}, dev.short + ' walked away');
     this.news('bad', (why === 'rejected' ? 'You said no. ' : 'Talks collapse. ') + dev.short + ' takes its campus across the river to a neighboring town. The trades and the chamber are furious.',
               {paper: true, tone: 'bad', headline: dev.short.toUpperCase() + ' WALKS: CAMPUS HEADS ACROSS THE RIVER',
-               body: 'Construction crews, and the money, go to a neighboring town. ' + dev.short + ' says it may be back if the terms are right.',
+               body: 'Construction crews, and the money, go to a neighboring town. The survey stakes come out and the ' + left.acres + ' acres by I-55 go back to hay. ' +
+                     dev.short + ' says it may be back, and that next time it will want more land: ' + sitePlan(s.dev.plan).acres + ' acres and ' + sitePlan(s.dev.plan).halls + ' halls.',
                helps: 'Neighbors and farmers are relieved. Your leverage grows: they know you\'ll say no.',
                strains: 'Workers and businesses lose the jobs they were counting on.'});
     this.drama();
@@ -471,9 +576,12 @@ export function installMayor(L) {
   P.signDeal = function(o) {
     var s = this.s, dev = this.dev(), budget = this._sim.budget;
     var prevHalls = s.deal ? s.deal.halls : 0;
-    var halls = Math.min(HALL_SPOTS.length, prevHalls + o.halls);
+    var pl = s.deal ? (s.deal.plan || 0) : (o.plan || 0);
+    var halls = Math.min(sitePlan(pl).spots.length, prevHalls + o.halls);
     s.deal = copy(o.terms);
     s.deal.halls = halls;
+    s.deal.plan = pl;
+    s.dev.farmed = null;
     s.deal.month = s.months;
     s.dev.status = 'signed';
     s.dev.offer = null;
@@ -485,7 +593,7 @@ export function installMayor(L) {
     }
     var bill = this.utilityBill(o.terms, o.halls);
     if (bill) budget.spend(Math.min(bill, budget.totalFunds));
-    s.water.cap += HALL_WATER * o.halls;
+    s.water.cap += HALL_WATER * o.halls * (pl ? 0.85 : 1);   // the bigger campus outruns the upgrades it pays for
     s.construction = {until: s.months + 4, from: prevHalls, to: halls};
     this.news('neutral', 'The council signs with ' + dev.short + '. Graders roll onto the site; ' + (halls - prevHalls) + ' halls go up over the next four months.' +
               (bill ? ' The town pays ' + money(bill) + ' toward water and power upgrades.' : ''), {x: SITE.x + 5, y: SITE.y + 8, showable: true});
@@ -495,16 +603,27 @@ export function installMayor(L) {
     var s = this.s, c = s.construction;
     if (!c || s.months < c.until) return;
     s.construction = null;
+    var spots = this.sitePlan().spots;
+    if (spots.slice(c.from, c.to).some(function(p) { return p.y >= 48; })) this._campusFeeder();
     for (var i = c.from; i < c.to; i++) {
-      var spot = HALL_SPOTS[i];
+      var spot = spots[i];
       var coop = s.deal.coop && i === 0 ? B.DC_COOP : B.DC_HELIX;
       this.placeBuilding(coop, spot.x, spot.y);
     }
-    if (s.deal.coop && c.from > 0) this.placeBuilding(B.DC_COOP, HALL_SPOTS[0].x, HALL_SPOTS[0].y);
+    if (s.deal.coop && c.from > 0) this.placeBuilding(B.DC_COOP, spots[0].x, spots[0].y);
     s.hallsBuilt = c.to;
     this.news('good', 'The ' + this.dev().short + ' campus switches on: ' + c.to + ' halls humming by the interstate. Power demand jumps.',
               {x: SITE.x + 5, y: SITE.y + 8, showable: true});
     this.drama();
+  };
+
+  // A bigger campus spills south of the state road; a feeder line carries power down from the first halls
+  // (x 48, from the hall row at y 36 across the road at y 47 to the south parcel at y 48)
+  P._campusFeeder = function() {
+    var map = this._map, flags = TF.BLBNCNBIT;
+    for (var y = 37; y <= 46; y++) if (map.getTileValue(48, y) === TV.DIRT) map.setTile(48, y, TV.LVPOWER, flags);
+    var r = map.getTileValue(48, 47);
+    if (r >= TV.ROADBASE && r <= TV.LASTROAD) map.setTile(48, 47, TV.HROADPOWER, flags);
   };
 
   // Monthly money from the deal: abated property tax, PILOT (or the wealth fund), equity, kids' trust
@@ -562,10 +681,14 @@ export function installMayor(L) {
     if (dv.status === 'away' && mi >= dv.due && this.canCard()) {
       dv.patience = 2;
       this.makeOffer(dv.returnTier, 'return');
+      // a bigger campus comes with better terms: a tier up, and it carries more of the upgrade bill it causes
+      var rt = dv.offer.terms;
+      rt.utilities = UTIL_STEP[rt.utilities];
+      rt.pilot += 200;
       this._offerCard();
       return;
     }
-    if (dv.status === 'signed' && dv.nextExpansion >= 0 && mi >= dv.nextExpansion && s.deal.halls < HALL_SPOTS.length && !s.construction && this.canCard()) {
+    if (dv.status === 'signed' && dv.nextExpansion >= 0 && mi >= dv.nextExpansion && s.deal.halls < this.maxHalls() && !s.construction && this.canCard()) {
       var tier = Math.min(TIERS.length - 1, this._dealTier() + 1);
       this.makeOffer(tier, 'expansion');
       this._offerCard();

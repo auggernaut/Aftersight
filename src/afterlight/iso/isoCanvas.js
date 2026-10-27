@@ -14,7 +14,7 @@ import { AnimationManager } from '../../animationManager.js';
 import * as ALB from '../buildings.js';
 import { makeP, collectShadows, drawShadows, hash, box, poly, line, cylinder } from './art.js';
 import * as B from './buildings.js';
-import { paintGroundTile, paintCars, groundSig, trafficLevel, LOT } from './ground.js';
+import { paintGroundTile, paintCars, groundSig, trafficLevel, LOT, fieldsKey } from './ground.js';
 
 export const LEVELS = [0.25, 0.35, 0.5, 0.7, 1.0, 1.4];
 var CHUNK = 16, PADTOP = 64;
@@ -339,6 +339,11 @@ IsoCanvas.prototype._scan = function(force) {
   for (i = 0; i < W * H; i++) {
     v = data[i].getValue();
     if (v !== raw[i]) { raw[i] = v; changed = true; }
+  }
+  var fk = fieldsKey();
+  if (fk !== this._fieldsKey) {      // farm fields changed: repaint every ground chunk
+    this._fieldsKey = fk;
+    for (i = 0; i < this._chunkVer.length; i++) this._chunkVer[i]++;
   }
   if (!changed) return;
   var own = this._own;
@@ -765,7 +770,7 @@ IsoCanvas.prototype._paintMarks = function(ctx, P, list, t, L) {
       ctx.strokeStyle = item.kind === 'build' ? 'rgba(240,150,40,0.95)' : 'rgba(255,214,90,0.9)';
       ctx.lineWidth = 2; ctx.setLineDash([8, 6]); ctx.lineDashOffset = -t / 80; ctx.stroke(); ctx.setLineDash([]);
       if (item.kind === 'build') {          // tower cranes over the graded site
-        [[item.x + 3, item.y + 7], [item.x + 7, item.y + 10]].forEach(function(q, k) {
+        [[item.x + item.w * 0.3, item.y + item.h * 0.4], [item.x + item.w * 0.7, item.y + item.h * 0.6]].forEach(function(q, k) {
           var b = P(q[0], q[1], 0), top = P(q[0], q[1], 9);
           ctx.strokeStyle = '#e8b52c'; ctx.lineWidth = Math.max(1.5, 3 * L);
           ctx.beginPath(); ctx.moveTo(b[0], b[1]); ctx.lineTo(top[0], top[1]); ctx.stroke();

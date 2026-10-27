@@ -1,7 +1,9 @@
 // Aftersight Festus scenario test. Run `npm run build` first. Serves dist/ and plays the Festus, MO scenario on a
 // desktop browser through the real UI: the intro card, the developer's first offer, a counter with two asks, the
 // better offer, accepting it, the campus going up, a breakthrough card, investing, placing the unlocked building,
-// and both election outcomes (win and loss). Fails on console errors. Screenshots go to $OUT.
+// and both election outcomes (win and loss); then a third game where the developer walks (the site clears and goes
+// back to hay) and returns with a bigger campus, the one-time town-to-city milestone, and the sparse status alerts.
+// Fails on console errors. Screenshots go to $OUT. BASE_URL=https://... tests a deployed build instead of dist/.
 //
 //   NODE_PATH=/path/to/playwright/node_modules OUT=/tmp/shots node e2e/festus.cjs
 
@@ -61,7 +63,7 @@ const months = async (page, n) => {
 
 (async () => {
   const srv = await serve();
-  const url = `http://localhost:${srv.address().port}/index.html`;
+  const url = process.env.BASE_URL || `http://localhost:${srv.address().port}/index.html`;
   const browser = await chromium.launch();
   const { page, errors } = await startFestus(browser, url);
   const shot = async (name, opts) => { const f = path.join(OUT, name); await page.screenshot({ path: f, ...opts }); console.log('screenshot', f); };
@@ -240,6 +242,112 @@ const months = async (page, n) => {
   const lost = await mayor(p2);
   if (!lost.gameOver) fail('no game over after losing');
   if (run2.errors.length) fail('console errors (loss run):\n' + run2.errors.join('\n'));
+
+  // ---- Keystone walks: the site clears and goes back to hay; it comes back bigger ----
+  const run3 = await startFestus(browser, url);
+  const p3 = run3.page;
+  const shot3 = async name => { await p3.evaluate(() => { ['alCard', 'opaque'].forEach(i => { const e = document.getElementById(i); if (e) e.style.visibility = 'hidden'; });
+    const g = __AL.game.gameCanvas; g.setZoomNow(1); g.centreOn(46, 44); });
+    await p3.waitForTimeout(700); const f = path.join(OUT, name); await p3.screenshot({ path: f }); console.log('screenshot', f);
+    await p3.evaluate(() => { ['alCard', 'opaque'].forEach(i => { const e = document.getElementById(i); if (e) e.style.visibility = ''; }); }); };
+  const siteMarks = () => p3.evaluate(() => __AL.game.alPanel.overlays().filter(o => o.kind === 'site' || o.kind === 'sitelabel' || o.kind === 'build'));
+  await p3.waitForSelector('#alCard:not(.hidden)', { timeout: 5000 });
+  await p3.click('#alCard .cardOption[data-option="go"]');
+  await p3.waitForSelector('#alCard[data-type="offer"]:not(.hidden)');
+  const firstRows = (await p3.evaluate(() => __AL.card())).rows;
+  if (!firstRows.some(r => r[0] === 'Campus' && /370 acres/.test(r[1]))) fail('first offer does not state its acreage');
+  if (!firstRows.some(r => r[0] === 'Power and water' && /300 MW/.test(r[1]))) fail('first offer does not state its MW');
+  const marks0 = await siteMarks();
+  if (!marks0.some(o => o.kind === 'site') || !marks0.some(o => o.kind === 'sitelabel')) fail('the proposed site is not marked at the start');
+  await p3.click('#alCard .cardOption[data-option="reject"]');
+  await p3.waitForSelector('#alPaper:not(.hidden)', { timeout: 5000 });
+  const walkHead = await p3.textContent('#alPaperHeadline'), walkBody = await p3.textContent('#alPaperBody');
+  console.log('walk paper:', walkHead, '|', walkBody);
+  if (!/WALKS/.test(walkHead) || !/back to hay/.test(walkBody) || !/520 acres/.test(walkBody)) fail('walk paper should say the land goes back to hay and the next plan is bigger');
+  await p3.click('#alPaperOK');
+  const marks1 = await siteMarks();
+  const hay = await p3.evaluate(() => __AL.layer.farmedRects());
+  console.log('after the walk: site marks', marks1.length, 'farmed', JSON.stringify(hay));
+  if (marks1.length) fail('the site marker and label stay on the map after Keystone walks');
+  if (!hay || !hay.length) fail('the site did not go back to farmland');
+  await shot3('07-walk-site-cleared.png');
+  // fast-forward to the return offer, clearing anything else
+  let ret = null;
+  for (let i = 0; i < 30 && !ret; i++) ret = await p3.evaluate(() => { __AL.game.alNoPaper = true; __AL.fastForward(1); __AL.game.alNoPaper = false;
+    const c = __AL.card(); if (!c) return null; if (c.type === 'offer') return c; __AL.decide(c.options[c.options.length - 1].id); return null; });
+  if (!ret) fail('Keystone never came back');
+  else {
+    console.log('return offer', ret.title, JSON.stringify(ret.rows.slice(0, 1).concat(ret.rows.filter(r => r[0] === 'Power and water'))));
+    if (!/is back/.test(ret.kicker) || !ret.rows.some(r => r[0] === 'Campus' && /4 halls on about 520 acres/.test(r[1]))) fail('return offer is not the bigger campus');
+    if (!ret.rows.some(r => r[0] === 'Power and water' && /600 MW/.test(r[1]))) fail('return offer does not state 600 MW');
+    const marks2 = await siteMarks();
+    const area = marks2.filter(o => o.kind === 'site').reduce((n, o) => n + o.w * o.h, 0);
+    console.log('return site rects', JSON.stringify(marks2.filter(o => o.kind === 'site')), 'area', area, 'label', (marks2.find(o => o.kind === 'sitelabel') || {}).text);
+    if (area <= 180 || !marks2.some(o => o.kind === 'site' && o.y >= 48)) fail('the returning site is not visibly larger');
+    if (await p3.evaluate(() => __AL.layer.farmedRects())) fail('the farmland overlay should clear when the site returns');
+    await p3.evaluate(() => __AL.game.alUI.frame(true));
+    await p3.waitForSelector('#alCard[data-type="offer"]:not(.hidden)', { timeout: 5000 });
+    await p3.mouse.move(10, 10);
+    await p3.screenshot({ path: path.join(OUT, '08-return-offer.png') });
+    await shot3('09-return-bigger-site.png');
+    await p3.click('#alCard .cardOption[data-option="accept"]');
+    await p3.evaluate(() => { __AL.game.alNoPaper = true; __AL.fastForward(6); __AL.game.alNoPaper = false; });
+    const built = await p3.evaluate(() => { const m = __AL.game.gameMap; let north = 0, south = 0;
+      for (let y = 26; y < 62; y++) for (let x = 34; x < 56; x++) { const v = m.getTileValue(x, y); if (v === 960 || v === 969) { if (y >= 48) south++; else north++; } }
+      return { north, south, halls: __AL.layer.s.hallsBuilt, online: __AL.layer.hallsOnline() }; });
+    console.log('bigger campus built', JSON.stringify(built));
+    if (built.halls !== 4 || !built.south || !built.north) fail('the bigger campus did not build 4 halls across both parcels');
+    if (built.online < 4) fail('not every hall on the bigger campus is powered (' + built.online + ')');
+  }
+
+  // ---- town to city: once, after sustained growth, never announced the other way ----
+  const ms = await p3.evaluate(() => {
+    const g = __AL.game, L = __AL.layer, ev = g.simulation.evaluation;
+    ['Town', 'City', 'Capital', 'Metropolis', 'Megalopolis'].forEach(k => { g['_reached' + k] = false; });   // let the engine try
+    L.autoDecide = function(c) { this.decide(c.options[c.options.length - 1].id); };
+    if (L.s.card) L.autoDecide(L.s.card);
+    g.alNoPaper = true;
+    const real = ev.getPopulation.bind(ev); let fake = 0;
+    ev.getPopulation = function(c) { real(c); if (fake) this.cityPop = fake; return this.cityPop; };
+    const cls = () => document.getElementById('cclass').textContent.trim();
+    const out = { start: cls() };
+    const run = (pop, n) => { fake = pop; g.simulation._cityPopLast = 0; __AL.fastForward(n); };
+    run(15000, 3); run(9000, 1); out.afterBlip = L.s.cityStatus || 'town';
+    run(15000, 7); out.afterGrowth = L.s.cityStatus; out.badgeCity = cls();
+    run(4000, 6); run(15000, 2); run(4000, 3);
+    out.end = L.s.cityStatus; out.badgeEnd = cls();
+    out.cityMonths = L.s.mayor.cityMonths; out.pop = ev.cityPop;
+    out.cityNews = L.s.log.filter(e => /is now a/i.test(e.text)).map(e => e.text);
+    const cw = document.getElementById('congratsWindow'); out.congrats = g._openWindow === 'congratsWindow' || !!(cw && cw.offsetParent);
+    fake = 0;
+    return out;
+  });
+  console.log('city milestone', JSON.stringify(ms));
+  if (ms.start !== 'TOWN') fail('the badge should start at TOWN, got ' + ms.start);
+  if (ms.afterBlip === 'city') fail('a short spike made Festus a city');
+  if (ms.afterGrowth !== 'city' || ms.badgeCity !== 'CITY') fail('sustained growth did not make Festus a city');
+  if (ms.end !== 'city' || ms.badgeEnd !== 'CITY') fail('the city status went back down');
+  if (ms.cityNews.length !== 1) fail('the city milestone should fire exactly once, got ' + ms.cityNews.length);
+  if (ms.congrats) fail('an engine milestone window opened');
+
+  // ---- status alerts: sparse, one per topic a year, never on a card's month ----
+  const al = await p3.evaluate(() => {
+    const L = __AL.layer, cardMonths = [];
+    const show = L.showCard; L.showCard = function(c) { cardMonths.push(this.s.months); return show.call(this, c); };
+    __AL.fastForward(40);
+    __AL.game.alNoPaper = false;
+    return { log: (L.s.mayor.alertLog || []).map(a => ({ type: a.type, month: a.month })), cardMonths, months: L.s.months };
+  });
+  console.log('alerts', JSON.stringify(al.log));
+  if (!al.log.length) fail('no status alerts in 40 months');
+  const byType = {};
+  al.log.forEach((a, i) => {
+    if (byType[a.type] !== undefined && a.month - byType[a.type] < 12) fail('two ' + a.type + ' alerts within a year');
+    byType[a.type] = a.month;
+    if (al.cardMonths.includes(a.month)) fail('an alert landed in the same month as a decision card (' + a.month + ')');
+    if (i && a.month - al.log[i - 1].month < 4) fail('alerts closer than 4 months apart');
+  });
+  if (run3.errors.length) fail('console errors (walk run):\n' + run3.errors.join('\n'));
 
   await browser.close();
   srv.close();
