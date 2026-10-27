@@ -65,6 +65,22 @@ function edgeQuad(ctx, P, u, v, d, w, col) {
 }
 
 var E = 0.012;   // overdraw so neighbouring diamonds don't leave hairline seams
+
+// Farm fields on open ground (the Festus scenario sets this; null means plain grass everywhere)
+var fieldFn = null;
+export const setFields = function(fn) { fieldFn = fn; };
+var CROPS = [['#c9b25a', '#b39a45'], ['#7fa64a', '#6a9140'], ['#9b7b55', '#86684a'], ['#a9b860', '#93a34f']];
+function field(ctx, P, u, v, f) {
+  var c = CROPS[f.crop % CROPS.length];
+  quad(ctx, P, u - E, v - E, u + 1 + E, v + 1 + E, c[0]);
+  // furrows run along the field's long side
+  var alongU = f.w >= f.h;
+  for (var i = 0; i < 4; i++) {
+    var o = 0.12 + i * 0.25;
+    if (alongU) quad(ctx, P, u, v + o, u + 1, v + o + 0.08, c[1]);
+    else quad(ctx, P, u + o, v, u + o + 0.08, v + 1, c[1]);
+  }
+}
 function grass(ctx, P, u, v, L) {
   quad(ctx, P, u - E, v - E, u + 1 + E, v + 1 + E, grassColour(u + 0.5, v + 0.5));
   if (L >= 0.6) {
@@ -248,7 +264,9 @@ export const paintGroundTile = function(ctx, P, u, v, val, own, nb, L) {
     else powerTile(ctx, P, u, v, val, nb, L);
     return;
   }
-  grass(ctx, P, u, v, L);
+  var fld = val === 0 && fieldFn ? fieldFn(u, v) : null;
+  if (fld) field(ctx, P, u, v, fld);
+  else grass(ctx, P, u, v, L);
   shore(ctx, P, u, v, nb);
   if (isTree(val)) {
     var dense = val >= 37 ? 3 : val >= 29 ? 2 : 1;

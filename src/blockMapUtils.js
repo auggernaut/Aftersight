@@ -152,6 +152,11 @@ var getPollutionValue = function(tileValue) {
   if (tileValue <= TileValues.LASTPOWERPLANT)
       return 100;
 
+  // Afterlight: data center halls (the two 3x3 slots from CHURCH1BASE) hum, glare and run diesel tests: they
+  // count as light pollution, which pulls nearby land value down
+  if (tileValue >= TileValues.CHURCH1BASE && tileValue < TileValues.CHURCH1BASE + 18)
+      return 40;
+
   return 0;
 };
 
