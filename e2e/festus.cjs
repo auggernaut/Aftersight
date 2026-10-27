@@ -172,7 +172,7 @@ const months = async (page, n) => {
   }
 
   // ---- jump the research ladder to the cure: invest, finish, place a Healing Clinic with the toolbar ----
-  await page.evaluate(() => { const L = __AL.layer, R = L.s.research; R.passed.frontier_model = 1; R.passed.robots_build_robots = 1; R.next = 0; L.s.mayor.lastCard = -99; L.s.mayor.lastType = 'ask';   // no town-hall ask jumps the queue
+  await page.evaluate(() => { const L = __AL.layer, R = L.s.research; R.passed.frontier_model = 1; R.passed.robots_build_robots = 1; R.next = 0; L.s.mayor.lastCard = -99; L.s.mayor.lastType = 'ask'; L.s.dev.nextExpansion = 9999;   // no town-hall ask jumps the queue
     __AL.game.simulation.budget.setFunds(30000); });
   if (await page.evaluate(() => __AL.build('clinic', 10, 10)) !== 'locked') fail('clinic should be locked before the research');
   await months(page, 1);
