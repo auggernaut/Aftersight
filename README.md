@@ -1,8 +1,8 @@
-# Aftersight (micropolis-iso branch)
+# AfterSight (micropolis-iso branch)
 
-Aftersight (formerly Afterlight) is a city builder about living through the singularity: a present-day town meets AI, robots and abundance. The central question is still who owns the economic engine (energy, compute, robots), and what that does to jobs, purpose and peace.
+AfterSight (formerly Afterlight) is a city builder about living through the singularity: a present-day town meets AI, robots and abundance. The central question is still who owns the economic engine (energy, compute, robots), and what that does to jobs, purpose and peace.
 
-This branch is built on **[micropolisJS](https://github.com/graememcc/micropolisJS)**, Graeme McCutcheon's HTML5 port of Micropolis, the open-source release of the 1989 SimCity engine. Aftersight is a **modified version** of micropolisJS. It is not SimCity and is not affiliated with Electronic Arts. The upstream README is kept as [README.micropolisJS.md](README.micropolisJS.md).
+This branch is built on **[micropolisJS](https://github.com/graememcc/micropolisJS)**, Graeme McCutcheon's HTML5 port of Micropolis, the open-source release of the 1989 SimCity engine. AfterSight is a **modified version** of micropolisJS. It is not SimCity and is not affiliated with Electronic Arts. The upstream README is kept as [README.micropolisJS.md](README.micropolisJS.md).
 
 This branch (`micropolis-iso`) keeps the Micropolis engine and the Afterlight layer from `micropolis` and replaces the presentation: an isometric city view and a modern interface (see below). Other branches: `micropolis` has the same game with the original 1989 top-down tiles; `sim` holds the earlier agent-based valley sim (Yuka agents); `main` holds the retired cozy story build.
 
@@ -46,6 +46,7 @@ npx webpack serve      # or serve dist/ with any static server and open index.ht
 NODE_PATH=/path/to/playwright/node_modules OUT=shots node e2e/smoke.cjs     # ~4 game years, fails on console errors
 NODE_PATH=/path/to/playwright/node_modules OUT=shots node e2e/mobile.cjs    # emulated phones: tap, pan, pinch, sheet, paper, Festus cards
 NODE_PATH=/path/to/playwright/node_modules OUT=shots node e2e/festus.cjs    # Festus: offer, counter, accept, breakthrough, election win and loss
+NODE_PATH=/path/to/playwright/node_modules N=10 node e2e/balance.cjs        # Festus win rates per offer strategy, headless
 NODE_PATH=/path/to/playwright/node_modules RUNS=3 node e2e/compare.cjs      # hands-off vs community ownership
 npm test                                                                     # upstream jest unit tests
 ```
@@ -60,6 +61,7 @@ A scenario on the `festus` branch, picked from the splash ("Play Festus, MO") or
 - **Elections** in April 2028, 2030 and 2032. Under 50% and the voters oust you. Win three, or win one with the town owning 25%+ of the compute it hosts and paying a dividend.
 - **Offers** come as cards: accept, reject, or counter with one or two asks. Keystone answers months later with better terms, a firm "take it or leave it", or walks to a neighboring town and comes back later with a better tier. Later tiers add equity, a wealth fund, a kids' trust, compute royalties and a town AI co-op.
 - **Breakthroughs** are decisions: each card shows the cost in dollars and compute. Compute comes from the town's equity in the data centers; the rest is bought on the market. Finished research unlocks a building (Healing Clinic, Fusion Plant) that you then place, pay for and keep up. Passing hands it to someone else.
-- Between those, factions come to City Hall with asks (a sound wall, a water guarantee, local hiring, publishing the deal, a tax cut, a school levy), and each election opens with a campaign choice.
+- Between those, factions come to City Hall with asks (a sound wall, a water guarantee, local hiring, publishing the deal, a tax cut, a school levy, spending the surplus, growing the town without a campus, reopening a bad deal). A declined ask comes back louder; the yearly ones repeat. A furious faction gets the floor first, and each election opens with a campaign choice.
+- Pacing: at most one decision card every 6 game months (about 25 s at Normal speed), unless it answers something you just did. All four offer strategies can win; negotiating wins most (see `e2e/balance.cjs`).
 
 Code: `src/afterlight/festus.js` (map), `src/afterlight/mayor.js` (factions, offers, research, elections, pacing), `src/afterlight/cards.js` (decision card UI). Hooks for tests: `__AL.mayor()`, `__AL.card()`, `__AL.decide(option, asks)`, `__AL.force('Counter'|'Court'|'Vote', v)`, `__AL.election(i, vote)`, `__AL.bump(deltas)`.

@@ -39,8 +39,8 @@ export const DEVELOPERS = {
 export const COUNCIL_ELECTION = 3, COURT_HEARING = 11;
 export const ELECTIONS = [27, 51, 75];
 export const WIN_TERMS = 3, WIN_SHARE = 0.25;
-var CARD_GAP = 4;          // fewest months between two decision cards
-var DRAMA_GAP = 7;         // most months without anything meaningful before the director steps in
+var CARD_GAP = 6;          // fewest months between two decision cards
+var DRAMA_GAP = 8;         // most months without anything meaningful before the director steps in
 
 // ---- Developer offers ----
 // Each tier is a full set of terms. Tier 0 is the opening offer: bad for citizens, as first offers are.
@@ -119,11 +119,27 @@ var ASK_CARDS = {
     title: 'Publish the agreement?', body: 'Residents and the school board demand the council release the developer agreement and the minutes of its closed sessions.',
     yes: {label: 'Publish it', d: {res: 7, school: 4, biz: -2}, effect: function(L) { L.s.deal.nda = false; L.s.dev.patience = Math.max(0, L.s.dev.patience - 1); }},
     no: {label: 'Keep it sealed', d: {res: -6, school: -3}}},
-  tax_cut: {faction: 'biz', when: function(L) { return L.s.months > 10 && L._sim.budget.cityTax > 4; },
+  tax_cut: {faction: 'biz', repeat: 24, when: function(L) { return L.s.months > 10 && L._sim.budget.cityTax > 4; },
     title: 'The chamber wants a tax cut', body: 'Main Street shop owners ask for a one-point cut in the city tax rate.',
     yes: {label: 'Cut taxes 1 point', d: {biz: 6, school: -4}, effect: function(L) { L._sim.budget.cityTax--; }},
     no: {label: 'Hold the rate', d: {biz: -4}}},
-  school_levy: {faction: 'school', when: function(L) { return L.s.months > 14 && L._sim.budget.cityTax < 12; },
+  // reinvest: the town's own money (taxes, PILOT, equity) can buy back goodwill, and the ask comes back every year
+  reinvest: {faction: 'school', repeat: 12, when: function(L) { return L.s.months > 8 && L._sim.budget.totalFunds > 4000; },
+    title: 'What do we do with the surplus?', body: 'The budget office has money left over this year. The school board and the neighborhood groups both have a list.',
+    yes: {label: 'Classrooms and parks ($1,200)', cost: 1200, d: {school: 6, res: 4, farm: 1}},
+    no: {label: 'Bank it', d: {biz: 2, school: -2}}},
+  // the town that said no grows its own way
+  homegrown: {faction: 'work', repeat: 10, when: function(L) { return !L.s.deal && L.s.dev.walks > 0 && (L.s.mayor.homegrown || 0) < 3; },
+    title: 'Grow it ourselves?', body: 'With no campus coming, the chamber and the trades pitch a plan: a community solar farm, Main Street grants and a training program at the high school.',
+    yes: {label: 'Fund the plan ($1,000)', cost: 1000, d: {work: 6, biz: 5, res: 2, farm: 2}, effect: function(L) { L.s.mayor.homegrown = (L.s.mayor.homegrown || 0) + 1; }},
+    no: {label: 'Not this year', d: {work: -3, biz: -3}}},
+  // a bad deal can be reopened: the new council pushes, the developer comes back to the table
+  reopen: {faction: 'res', when: function(L) { return L.s.deal && L._dealTier() <= 1 && L.s.dev.status === 'signed' && !L.s.construction &&
+                                                         L.s.months - L.s.deal.month >= 8 && !L.s.mayor.reopened; },
+    title: 'Reopen the deal?', body: 'The new council members say the agreement was signed too fast and too cheap. They want you to call the developer back to the table.',
+    yes: {label: 'Call them back', d: {res: 4, school: 2, biz: -2}, effect: function(L) { L.s.mayor.reopened = true; L.s.mayor.reopenDue = L.mi() + 1; }},
+    no: {label: 'A deal is a deal', d: {res: -4, biz: 3}}},
+  school_levy: {faction: 'school', repeat: 24, when: function(L) { return L.s.months > 14 && L._sim.budget.cityTax < 12; },
     title: 'The school board wants a levy', body: 'Classrooms are packed. The board asks you to back a one-point tax increase for the schools.',
     yes: {label: 'Back the levy', d: {school: 9, res: -3, biz: -3}, effect: function(L) { L._sim.budget.cityTax++; L.s.mayor.levy = (L.s.mayor.levy || 0) + 1; }},
     no: {label: 'Decline', d: {school: -6}}}
@@ -213,7 +229,7 @@ export function installMayor(L) {
     var pm = this._sim._powerManager;
     var shortage = pm && pm.lastShort ? 1 : 0;
     var online = this.hallsOnline();
-    var utilBill = {town: 0.18, split: 0.08, developer: 0};
+    var utilBill = {town: 0.14, split: 0.08, developer: 0};
     var bills = (deal ? utilBill[deal.utilities] * Math.min(2, online / 2) : 0) + shortage * 0.5 +
                 (s.dependence || 0) * 0.04 + (s.passedBills || 0) - (c.alFusionPop > 0 ? 0.15 : 0);
     var pop = this._sim.evaluation.cityPop || 0;
@@ -229,14 +245,20 @@ export function installMayor(L) {
     var jobs = deal && online ? clamp(deal.jobs / 50, 0, 1.5) * (m.localHire ? 1.3 : 1) : 0;
     var lost = this._farmLostCache === undefined || s.months % 6 === 0 ? (this._farmLostCache = this.farmLost()) : this._farmLostCache;
     var clinics = c.alClinicOn || 0;
+    // how good the deal is keeps mattering: people talk about what the town got for the land
+    // voters feel the jobless rate over a year or so, not the month-to-month swing of the census
+    m.jobless = m.jobless === undefined ? s.unemployment : m.jobless * 0.88 + s.unemployment * 0.12;
+    var jobless = m.jobless;
+    var fair = deal ? this._dealTier() - 1 : 0;
+    var free = !deal && s.dev.walks > 0 ? 1 : 0, home = Math.min(3, m.homegrown || 0);   // said no, and grew its own way
     var growth = clamp((this._sim._valves ? this._sim._valves.comValve : 0) / 150, -8, 8);
     s.bills = bills; s.waterStress = stress;
     return {
-      res: 56 - bills * 40 - stress * 12 - noise * 5 - secrecy * 10 - taxPain - s.unemployment * 40 + div * 8 + equity * 12 + clinics * 2,
-      farm: 58 - stress * 20 - lost * 80 - bills * 25 - taxPain * 1.2 + div * 4 + equity * 6,
-      work: 52 - s.unemployment * 90 + building * 12 + jobs * 8 + div * 10 + equity * 8 - s.automation * 15 * (1 - s.cover),
-      biz: 54 + growth - taxPain * 1.5 - bills * 30 + (online ? 5 : 0) + jobs * 4 - (s.dependence || 0) * 2,
-      school: 55 + schoolScore * 10 - secrecy * 8 - taxPain * 0.6 + clinics * 2 + div * 4
+      res: 56 + fair * 4 + free * 1 - bills * 40 - stress * 12 - noise * 5 - secrecy * 10 - taxPain - jobless * 40 + div * 8 + equity * 12 + clinics * 2,
+      farm: 58 + fair + free * 2 - stress * 20 - lost * 80 - bills * 25 - taxPain * 1.2 + div * 4 + equity * 6,
+      work: 52 - jobless * 90 + building * 12 + jobs * 11 + home * 3 + div * 10 + equity * 8 - s.automation * 15 * (1 - s.cover),
+      biz: 54 + growth - taxPain * 1.5 - bills * 30 + (online ? 7 : 0) + jobs * 4 + home * 3 - (s.dependence || 0) * 2,
+      school: 55 + fair * 3 + schoolScore * 10 - secrecy * 8 - taxPain * 0.6 + clinics * 2 + div * 4
     };
   };
 
@@ -255,7 +277,7 @@ export function installMayor(L) {
     var t = this._factionTargets(simData);
     FACTIONS.forEach(function(f) {
       var fx = m.factions[f.id];
-      fx.mem *= 0.93;
+      fx.mem *= 0.9;
       fx.v = clamp(fx.v + (t[f.id] + fx.mem - fx.v) * 0.25, 0, 100);
     });
     this._approval();
@@ -298,7 +320,7 @@ export function installMayor(L) {
     if (choice === 'accept') {
       var util = {town: -5, split: -2, developer: 2}[t.utilities];
       return {
-        res: -6 - (t.nda ? 6 : 0) + util + (t.fund ? 6 : 0) + (t.equity || 0) * 0.4 - t.abatePct / 100 * 4,
+        res: -6 - (t.nda ? 4 : 0) + util + (t.fund ? 6 : 0) + (t.equity || 0) * 0.4 - t.abatePct / 100 * 3,
         farm: -5 + util * 0.8 + t.pilot / 400,
         work: 8 + t.jobs / 15 + (t.fund ? 4 : 0),
         biz: 8 + t.pilot / 500,
@@ -306,7 +328,7 @@ export function installMayor(L) {
       };
     }
     if (choice === 'counter') {
-      var d = {res: 3, farm: 2, work: -3, biz: -3, school: 2};
+      var d = {res: 3, farm: 2, work: -2, biz: -2, school: 2};
       (asks || []).forEach(function(a) {
         if (a === 'school' || a === 'kids') d.school += 2;
         if (a === 'jobs') d.work += 3;
@@ -316,7 +338,9 @@ export function installMayor(L) {
       });
       return d;
     }
-    return {res: 5, farm: 5, work: -8, biz: -8, school: 1};
+    // the first no stings the trades and the chamber most; after that they stop counting on the campus
+    var sting = 1 / (1 + (this.s.dev.walks || 0));
+    return {res: 5, farm: 5, work: -8 * sting, biz: -8 * sting, school: 1};
   };
 
   P.leverage = function() {
@@ -372,7 +396,8 @@ export function installMayor(L) {
       firm: [dev.short + ' holds firm', 'Same terms. Take it or leave it'],
       'return': [dev.short + ' is back', 'A new offer, after the deal fell through elsewhere'],
       expansion: [dev.short + ' wants to expand', 'Two more halls, and new terms for the whole campus'],
-      renegotiate: ['Court orders a new agreement', dev.short + ' wants to re-sign fast, in the open']
+      renegotiate: ['Court orders a new agreement', dev.short + ' wants to re-sign fast, in the open'],
+      reopen: [dev.short + ' comes back to the table', 'New terms for the campus you already have']
     };
     var k = kinds[o.kind] || kinds.first;
     var asks = this.asksFor(o.terms);
@@ -380,6 +405,7 @@ export function installMayor(L) {
     var body = o.kind === 'first' ?
       dev.name + ', the data center arm of a St. Louis builder, wants about 370 acres between the west subdivisions and I-55. It won\'t name the tenant. The council meets in the high school gym tonight.' :
       o.kind === 'expansion' ? 'The campus is full. ' + dev.short + ' wants two more halls on the site and offers to re-sign the whole agreement on these terms.' :
+      o.kind === 'reopen' ? 'The council asked, and ' + dev.short + ' would rather re-sign than fight. Same halls. Say no and the old agreement stands.' :
       o.kind === 'renegotiate' ? 'The judge threw out the old agreement. ' + dev.short + ' has a new one, and this time the terms are public.' :
       'Leverage ' + Math.round(this.leverage() * 100) + '%: the longer you hold out and the more popular you are, the more they give.';
     this.showCard({
@@ -401,7 +427,10 @@ export function installMayor(L) {
     asks = asks.filter(function(a) { return ASKS[a]; }).slice(0, 2);
     if (option === 'counter' && !asks.length) asks = [this.asksFor(o.terms)[0]];
     if (option === 'accept') {
-      this.bump(this._reaction(o.terms, 'accept'), 'Accepted ' + dev.short + '\'s offer');
+      var r = this._reaction(o.terms, 'accept');
+      // terms the town fought for go down better than terms it was handed
+      if (s.dev.counters > 0 && o.kind !== 'expansion') { r.res += 2; r.school += 2; r.farm += 1; }
+      this.bump(r, 'Accepted ' + dev.short + '\'s offer');
       this.signDeal(o);
     } else if (option === 'counter') {
       this.bump(this._reaction(o.terms, 'counter', asks), 'Countered ' + dev.short + ': ' + asks.map(function(a) { return ASKS[a].label.toLowerCase(); }).join('; '));
@@ -411,8 +440,11 @@ export function installMayor(L) {
       s.dev.due = mi + 2 + Random.getRandom(1);
       this.news('neutral', dev.short + '\'s lawyers are reviewing your counter: ' + asks.map(function(a) { return ASKS[a].label.toLowerCase(); }).join(' and ') + '.');
     } else {
-      this.bump(this._reaction(o.terms, 'reject'), 'Rejected ' + dev.short);
-      if (o.kind === 'expansion') {
+      this.bump(o.kind === 'expansion' || o.kind === 'reopen' ? {res: 2, farm: 2, work: -3, biz: -3} : this._reaction(o.terms, 'reject'), 'Rejected ' + dev.short);
+      if (o.kind === 'reopen') {
+        s.dev.status = 'signed'; s.dev.offer = null;
+        this.news('neutral', 'Talks end. The old agreement with ' + dev.short + ' stands.');
+      } else if (o.kind === 'expansion') {
         s.dev.status = 'signed'; s.dev.offer = null; s.dev.nextExpansion = mi + 14;
         this.news('neutral', 'The council turns down ' + dev.short + '\'s expansion. The halls already built keep running.');
       } else this.devWalks('rejected');
@@ -426,8 +458,8 @@ export function installMayor(L) {
     s.dev.due = mi + 8 + Random.getRandom(4);
     s.dev.returnTier = Math.min(TIERS.length - 1, (s.dev.offer ? s.dev.offer.tier : 0) + 1);
     s.dev.offer = null;
-    if (s.dev.walks >= 2) s.dependence = (s.dependence || 0) + 1;
-    this.bump({work: -5, biz: -6, res: 2, farm: 2}, dev.short + ' walked away');
+    if (s.dev.walks >= 2 && (s.dependence || 0) < 2) s.dependence = (s.dependence || 0) + 1;   // walking away costs, but it doesn't compound forever
+    this.bump({work: -5 / s.dev.walks, biz: -6 / s.dev.walks, res: 2, farm: 2}, dev.short + ' walked away');
     this.news('bad', (why === 'rejected' ? 'You said no. ' : 'Talks collapse. ') + dev.short + ' takes its campus across the river to a neighboring town. The trades and the chamber are furious.',
               {paper: true, tone: 'bad', headline: dev.short.toUpperCase() + ' WALKS: CAMPUS HEADS ACROSS THE RIVER',
                body: 'Construction crews, and the money, go to a neighboring town. ' + dev.short + ' says it may be back if the terms are right.',
@@ -519,6 +551,14 @@ export function installMayor(L) {
       }
       return;
     }
+    if (s.mayor.reopenDue !== undefined && mi >= s.mayor.reopenDue && dv.status === 'signed' && !s.card) {
+      s.mayor.reopenDue = undefined;
+      this.makeOffer(Math.min(TIERS.length - 1, this._dealTier() + 1), 'reopen');
+      dv.offer.halls = 0;
+      s.mayor.lastCard = -99;
+      this._offerCard();
+      return;
+    }
     if (dv.status === 'away' && mi >= dv.due && this.canCard()) {
       dv.patience = 2;
       this.makeOffer(dv.returnTier, 'return');
@@ -545,7 +585,7 @@ export function installMayor(L) {
     if (!sc.council && mi >= COUNCIL_ELECTION) {
       sc.council = true;
       if (s.deal) {
-        this.bump({res: -4, school: -2}, 'Council members who backed the deal were ousted');
+        this.bump({res: -5, school: -2}, 'Council members who backed the deal were ousted');
         this.news('bad', 'VOTERS OUST ALL FOUR COUNCIL MEMBERS UP FOR RE-ELECTION. The deal was signed in closed sessions; the new council wants answers. Your own seat is on the ballot in April 2028.',
                   {paper: true, tone: 'bad', headline: 'VOTERS OUST ALL FOUR COUNCIL MEMBERS UP FOR RE-ELECTION',
                    body: 'Days after the ' + dev.short + ' vote, every incumbent on the ballot lost. Challengers ran on one issue: the data center, and how it was approved.',
@@ -652,7 +692,7 @@ export function installMayor(L) {
                      owns ? 'Re-elected with ' + Math.round(vote) + '%. The town owns ' + pct + '% of the compute it hosts' +
                             (s.fundDividend > 0 ? ' and its wealth fund pays every resident a dividend.' : '.') + ' You won.' :
                             'Re-elected with ' + Math.round(vote) + '% for a third term. You held the town together. You won.',
-               helps: won ? 'Aftersight complete. Keep playing as long as you like.' : 'Two more years to make the deals work.',
+               helps: won ? 'AfterSight complete. Keep playing as long as you like.' : 'Two more years to make the deals work.',
                strains: won ? (owns ? 'The deal still has to hold for the next mayor.' :
                                'The town owns ' + pct + '% of the compute it hosts. ' + dev.short + ' owns the rest, and the next mayor inherits that.') :
                         'Goal: ' + WIN_TERMS + ' wins, or a win with the town owning ' + Math.round(WIN_SHARE * 100) + '%+ of local compute and paying a dividend. Wins so far: ' + m.electionsWon + '.'});
@@ -697,7 +737,7 @@ export function installMayor(L) {
       if (r.bills) s.passedBills = (s.passedBills || 0) + r.bills;
       this.bump(r.passEffect, 'Passed on ' + r.name.toLowerCase());
       this.news('bad', 'You passed on ' + r.name.toLowerCase() + '. ' + r.pass);
-      R.next = this.mi() + 5;
+      R.next = this.mi() + 7;
     }
   };
   P._researchMonthly = function(simData) {
@@ -716,7 +756,7 @@ export function installMayor(L) {
       if (a.left <= 0) {
         R.active = null;
         R.done[a.id] = s.months;
-        R.next = this.mi() + 3;
+        R.next = this.mi() + 5;
         this.discover(a.id, simData);
         this.drama();
       }
@@ -731,25 +771,45 @@ export function installMayor(L) {
     return null;
   };
 
+  var scale = function(d, k) { var o = {}; Object.keys(d).forEach(function(f) { o[f] = d[f] * k; }); return o; };
   P._decideAsk = function(card, option) {
-    var a = ASK_CARDS[card.id], pick = option === 'yes' ? a.yes : a.no;
+    var a = ASK_CARDS[card.id], pick = option === 'yes' ? a.yes : a.no, m = this.s.mayor;
+    var log = m.askLog[card.id] = m.askLog[card.id] || {times: 0, declined: 0};
+    log.times++;
+    if (option === 'yes') log.declined = 0; else log.declined++;
+    log.last = this.s.months;
     if (pick.cost) this._sim.budget.spend(pick.cost);
     if (pick.effect) pick.effect(this);
-    this.bump(pick.d, a.title + ': ' + pick.label.toLowerCase());
+    this.bump(scale(pick.d, card.mult || 1), a.title + ': ' + pick.label.toLowerCase());
+  };
+  // An ask can come back: a declined one returns louder after ASK_RETURN months (twice at most), and the
+  // yearly ones (surplus, tax rate, levy) come round again on their own schedule.
+  var ASK_RETURN = 15;
+  P._askReady = function(k) {
+    var m = this.s.mayor, a = ASK_CARDS[k], log = m.askLog[k];
+    if (!a.when(this)) return false;
+    if (!log) return true;
+    var since = this.s.months - log.last;
+    if (log.declined) return log.declined <= 2 && since >= ASK_RETURN;
+    return !!a.repeat && since >= a.repeat;
   };
   P._askCard = function() {
     var m = this.s.mayor, self = this;
-    var ids = Object.keys(ASK_CARDS).filter(function(k) { return !m.asked[k] && ASK_CARDS[k].when(self); });
+    m.askLog = m.askLog || {};
+    var ids = Object.keys(ASK_CARDS).filter(function(k) { return self._askReady(k); });
     if (!ids.length) return false;
     // the unhappiest faction speaks first
     ids.sort(function(a, b) { return m.factions[ASK_CARDS[a].faction].v - m.factions[ASK_CARDS[b].faction].v; });
-    var id = ids[0], a = ASK_CARDS[id];
+    var id = ids[0], a = ASK_CARDS[id], log = m.askLog[id];
+    var again = log && log.declined ? log.declined : 0, mult = 1 + 0.5 * again;
     m.asked[id] = this.s.months;
     var fname = FACTIONS.filter(function(f) { return f.id === a.faction; })[0].name;
     var funds = this._sim.budget.totalFunds;
-    this.showCard({type: 'ask', id: id, kicker: 'Town hall · ' + fname, title: a.title, body: a.body, rows: [],
-      options: [{id: 'yes', label: a.yes.label, tone: 'good', disabled: (a.yes.cost || 0) > funds, preview: this.preview(a.yes.d)},
-                {id: 'no', label: a.no.label, tone: 'bad', preview: this.preview(a.no.d)}]});
+    this.showCard({type: 'ask', id: id, mult: mult, kicker: 'Town hall · ' + fname + (again ? ' · back again' : ''),
+      title: (again === 1 ? 'Again: ' : again > 1 ? 'Third time: ' : '') + a.title,
+      body: a.body + (again ? ' You turned them down before. This time they packed the gym, and saying no will cost more.' : ''), rows: [],
+      options: [{id: 'yes', label: a.yes.label, tone: 'good', disabled: (a.yes.cost || 0) > funds, preview: this.preview(scale(a.yes.d, mult))},
+                {id: 'no', label: a.no.label, tone: 'bad', preview: this.preview(scale(a.no.d, mult))}]});
     return true;
   };
 
@@ -761,8 +821,11 @@ export function installMayor(L) {
     if (!this.canCard()) return;
     var since = s.months - m.lastCard, quiet = s.months - m.lastDrama >= DRAMA_GAP;
     var nextR = !R.active && this.nextResearch();
+    // a faction that's furious gets the floor before the next breakthrough does
+    var furious = FACTIONS.some(function(f) { return m.factions[f.id].v < 30; });
+    if (furious && m.lastType !== 'ask' && this._askCard()) return;
     if (nextR && mi >= R.next) { this._researchCard(nextR); return; }
-    if (since < CARD_GAP + 1 && !quiet) return;
+    if (since < CARD_GAP && !quiet) return;
     if (m.lastType !== 'ask' && this._askCard()) return;
     if (nextR) { this._researchCard(nextR); return; }
     if (this.festus() && s.dev.status === 'away') { s.dev.due = mi; return; }
