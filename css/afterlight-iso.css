@@ -349,3 +349,68 @@ button, input, label, a, .toolButton { touch-action: manipulation; }
   .hudItem { padding: 2px 6px; }
   .hudItem > span { font-size: 12px; }
 }
+
+/* ---- Aftersight mayor layer: approval, factions, decision cards, scenario picker ---- */
+.hudApproval > span { font-weight: 800; }
+#alPanel .alApprovalRow { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+#alPanel .alApprovalBig { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+#alPanel .alApprovalSub { color: var(--muted); font-size: 11px; }
+#alPanel .alGoal { color: var(--muted); font-size: 10.5px; line-height: 1.35; margin-top: 6px; }
+#alPanel .alDeal { color: #d7e0e5; font-size: 11px; line-height: 1.35; margin-top: 5px; }
+#alPanel .alDeal:empty { display: none; }
+
+#alCard { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(600px, 94vw); max-height: calc(100% - 40px);
+  overflow-y: auto; z-index: 30; padding: 18px 22px 16px; box-sizing: border-box; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+#alCard .cardKicker { display: flex; justify-content: space-between; gap: 10px; font: 700 11px var(--font); letter-spacing: 1.1px; text-transform: uppercase; color: #8a5a12; }
+#alCard[data-type="research"] .cardKicker { color: #2f6db5; }
+#alCard[data-type="ask"] .cardKicker { color: #2d7a45; }
+#alCard .cardLev { color: #6b6457; letter-spacing: 0.5px; }
+#alCard .cardTitle { margin: 6px 0 6px; font: 800 22px/1.2 var(--font); color: #161d22; }
+#alCard .cardBody { margin: 0 0 10px; font-size: 14px; line-height: 1.45; color: #34414a; }
+#alCard .cardTerms { width: 100%; border-collapse: collapse; margin: 4px 0 12px; font-size: 13px; }
+#alCard .cardTerms tr { background: none !important; }
+#alCard .cardTerms th { text-align: left; font-weight: 650; color: #4a555d; padding: 6px 10px 6px 0; width: 38%; vertical-align: top; border-top: 1px solid #e3ddd0; }
+#alCard .cardTerms td { padding: 6px 0; border-top: 1px solid #e3ddd0; color: #1f2a30; }
+#alCard .cardTerms tr.t-bad td { color: #b0352b; }
+#alCard .cardTerms tr.t-good td { color: #227a3d; }
+#alCard .cardOptions { display: flex; gap: 10px; flex-wrap: wrap; }
+#alCard .cardOptWrap { flex: 1 1 150px; display: flex; flex-direction: column; gap: 5px; }
+#alCard .cardOption { width: 100%; min-height: 42px; border-radius: 10px; font: 750 14px var(--font); background: #e4e0d6; color: #1f2a30; border: none; cursor: pointer; }
+#alCard .cardOption.tone-good { background: var(--accent); color: #1b1406; }
+#alCard .cardOption.tone-bad { background: #3a4650; color: #fff; }
+#alCard .cardOption.disabled, #alCard .cardOption:disabled { opacity: 0.45; cursor: not-allowed; }
+#alCard .cardChips { display: flex; flex-wrap: wrap; gap: 3px; }
+#alCard .chip { font: 650 10.5px var(--font); padding: 2px 6px; border-radius: 99px; }
+#alCard .chip.up { background: #dcefdc; color: #1e6b33; }
+#alCard .chip.down { background: #f6dcd7; color: #9a2d23; }
+#alCard .cardNote { font-size: 11px; color: #6b6457; line-height: 1.35; }
+#alCard .cardAsks { width: 100%; }
+#alCard .cardAsksTitle { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+#alCard .askRow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; margin: 0 0 4px; border-radius: 9px; background: #ece7dc; font-size: 13.5px; cursor: pointer; }
+#alCard .askRow input { width: 18px; height: 18px; flex: none; }
+#alCard .cardAskButtons { display: flex; gap: 10px; margin-top: 10px; }
+#alPaper.alGameOver .paperKicker { color: #b0201a; }
+#alPaper.alWin .paperKicker { color: #227a3d; }
+#alPaperRestart { margin-right: 10px; background: #3a4650 !important; color: #fff !important; }
+
+#alScenarios { border: none; padding: 0; margin: 10px 0 !important; }
+#alScenarios legend { font-weight: 700; margin-bottom: 6px; }
+#alScenarios .alScen { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; margin-bottom: 6px; border-radius: 10px; background: #ece7dc; cursor: pointer; }
+#alScenarios .alScen input { margin-top: 3px; }
+#alScenarios .alScen small { display: block; color: #6b6457; font-size: 12px; margin-top: 2px; }
+#splashFestus { background: #2f6db5 !important; color: #fff !important; }
+
+@media (max-width: 760px), (max-height: 500px) {
+  #alCard { top: 50%; width: 96vw; max-height: calc(100% - 12px); padding: 14px 14px 12px; border-radius: 14px; }
+  #alCard .cardTitle { font-size: 19px; }
+  #alCard .cardBody { font-size: 13.5px; }
+  #alCard .cardTerms { font-size: 12.5px; }
+  #alCard .cardTerms tr { background: none !important; }
+#alCard .cardTerms th { width: 34%; }
+  #alCard .cardOptWrap { flex: 1 1 100%; }
+  #alCard .cardOption { min-height: 46px; }
+  #alCard .askRow { padding: 11px 10px; }
+}
+@media (max-width: 430px) {
+  .hudPop { display: none; }
+}

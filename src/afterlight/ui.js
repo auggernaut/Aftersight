@@ -215,6 +215,14 @@ AfterlightUI.prototype.frame = function(force) {
     $('#rci_' + p[0] + 'Up').css('height', Math.round(Math.max(0, f) * 100) + '%');
     $('#rci_' + p[0] + 'Down').css('height', Math.round(Math.max(0, -f) * 100) + '%');
   });
+  // Aftersight: approval in the top bar, and any decision card waiting for the mayor
+  var L = game.simulation.afterlight, m = L.s.mayor;
+  var a = Math.round(m.approval);
+  $('#alApproval').text(a + '%').css('color', a >= 60 ? '#5ee07a' : a >= 50 ? '#f2d36b' : a >= 40 ? '#f5a54a' : '#ff6b5e');
+  var ne = L.nextElection();
+  $('.hudApproval').attr('data-tip', m.gameOver ? 'You lost the ' + m.gameOver.year + ' election' :
+    'Your approval. ' + (ne >= 0 ? 'Next election ' + L.monthName(ne) + ' (' + (ne - L.mi()) + ' months); under 50% and you\'re out.' : ''));
+  if (L.s.card && !game.dialogOpen && !game.alNoPaper && game.alCards) game.alCards.open(L.s.card);
   var pop = $('#population').text().replace(/,/g, '');
   if (/^\d+$/.test(pop)) $('#population').text(commas(+pop));
 };

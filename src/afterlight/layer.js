@@ -13,6 +13,7 @@ import { BNCNBIT, ZONEBIT } from '../tileFlags.ts';
 import { TileUtils } from '../tileUtils.js';
 import * as TV from '../tileValues.ts';
 import * as B from './buildings.js';
+import { installMayor, freshMayor, freshDev, freshResearch, RESEARCH } from './mayor.js';
 
 export const AL_NEWS = 'Afterlight news';
 
@@ -64,7 +65,7 @@ var approach = function(v, target, rate) { return v + (target - v) * rate; };
 
 function freshState() {
   return {
-    months: 0,
+    months: 0, scenario: 'starter',
     compute: 0, computeHelix: 0, computeCoop: 0,
     robots: 0, robotsHelix: 0,
     automation: 0, unemployment: 0.05, purpose: 70, backlash: 10, hope: 50,
@@ -75,7 +76,10 @@ function freshState() {
     cooldowns: {protest: 6, strike: 8, riot: 12},
     milestones: {},
     helixBuilt: 0,
-    log: []
+    log: [],
+    // Aftersight mayor layer (mayor.js)
+    mayor: freshMayor(), dev: freshDev(), research: freshResearch(), card: null, deal: null, construction: null,
+    hallsBuilt: 0, water: {cap: 100, use: 0}, fund: 0, fundDividend: 0, kidsTrust: 0, dependence: 0, dealIncome: 0
   };
 }
 
@@ -88,7 +92,29 @@ function AfterlightLayer(map, sim) {
 }
 
 AfterlightLayer.prototype.reset = function() {
+  var scen = this.s.scenario;
   this.s = freshState();
+  this.s.scenario = scen;
+};
+
+AfterlightLayer.prototype.setScenario = function(name) {
+  var s = this.s;
+  s.scenario = name;
+  if (name === 'festus') {
+    B.NAMES[B.DC_HELIX] = 'Keystone Data Center';
+    s.policies.helixExpansion = false;
+    s.research.next = 6;
+    this.makeOffer(0, 'first');
+    s.card = {type: 'intro', kicker: 'Festus, Missouri · January 2026', title: 'You are the mayor',
+      body: 'Festus is a river town of about 12,000 people, thirty minutes south of St. Louis. A developer wants to build a $6 billion data center campus on farmland by I-55, between homes. ' +
+            'The council has to answer tonight, and a council election follows in April. Your own seat is up in April 2028.',
+      rows: [['Approval', 'Built from five factions: residents, farmers, workers, business, and schools. Each choice moves them.', 'neutral'],
+             ['Elections', 'Every two years, from April 2028. Under 50% approval, you\'re out.', 'neutral'],
+             ['Goal', 'Win 3 elections, or win one with the town owning 25%+ of local compute and paying a dividend.', 'good']],
+      options: [{id: 'go', label: 'Open the meeting', tone: 'good'}]};
+  } else {
+    s.research.next = 5;
+  }
 };
 
 AfterlightLayer.prototype.save = function(saveData) {
@@ -107,7 +133,7 @@ AfterlightLayer.prototype.load = function(saveData) {
 // ---- Discovery-driven multipliers ----
 AfterlightLayer.prototype.has = function(id) { return this.s.discovered[id] !== undefined; };
 AfterlightLayer.prototype.solarStrength = function() { return SOLAR_STRENGTH * (this.has('cheap_solar') ? 3 : 1); };
-AfterlightLayer.prototype.dcDraw = function() { return DC_DRAW * (this.has('frontier_model') ? 2 : 1); };
+AfterlightLayer.prototype.dcDraw = function() { return DC_DRAW * (this.has('frontier_model') || this.s.research.passed.frontier_model !== undefined ? 2 : 1); };
 AfterlightLayer.prototype.dcCompute = function() { return DC_COMPUTE * (this.has('frontier_model') ? 3 : 1); };
 AfterlightLayer.prototype.depotCapacity = function() { return DEPOT_CAPACITY * (this.has('robots_build_robots') ? 3 : 1); };
 AfterlightLayer.prototype.isUnlocked = function(toolName) {
@@ -311,13 +337,15 @@ AfterlightLayer.prototype.monthly = function(simData) {
   var workers = Math.max(1, c.resPop);
   var labour = s.robots * 0.5 + s.compute * 0.15 + (this.has('cheap_solar') ? jobs * 0.05 : 0);
   s.automation = jobs > 0 ? clamp(1 - Math.exp(-labour / Math.max(jobs, 1)), 0, 0.95) : 0;
-  var employed = Math.min(workers, jobs * (1 - s.automation));
+  // Aftersight: the developer's promised jobs (and construction crews while the campus goes up)
+  var dealJobs = (s.construction ? 25 : 0) + (s.deal && s.hallsBuilt ? s.deal.jobs * 0.4 * (s.mayor.localHire ? 1.3 : 1) : 0);
+  var employed = Math.min(workers, jobs * (1 - s.automation) + dealJobs);
   var unempTarget = clamp(1 - employed / workers, 0, 1);
   if (s.strike > 0) unempTarget = Math.min(1, unempTarget + 0.05);
   s.unemployment = approach(s.unemployment, unempTarget, 0.35);
 
   // Money: Helix pays a small local fee; co-op profits go to the city or into the dividend pool
-  var helixFee = (c.alDCHelixOn + c.alDepotHelixOn) * 15;
+  var helixFee = s.scenario === 'festus' ? 0 : (c.alDCHelixOn + c.alDepotHelixOn) * 15;   // Festus: the deal's terms pay instead
   var dividendPool = 0, cityIncome = helixFee;
   if (p.dividend) {
     dividendPool = s.helixRevenue * 0.2 + s.coopRevenue * 0.5;
@@ -327,6 +355,9 @@ AfterlightLayer.prototype.monthly = function(simData) {
   }
   var programCost = p.purposeProgram ? Math.round(30 + c.resPop * 0.3) : 0;
   cityIncome -= programCost;
+  dividendPool += s.fundDividend || 0;
+  // Upkeep for buildings that breakthroughs unlock
+  cityIncome -= (c.alClinicOn || 0) * 15 + (c.alFusionPop || 0) * 40;
   s.dividendPool = dividendPool;
   s.cityRevenue = cityIncome;
   if (Math.round(cityIncome) !== 0) simData.budget.spend(-Math.round(cityIncome));
@@ -367,8 +398,9 @@ AfterlightLayer.prototype.monthly = function(simData) {
 
   for (var k in s.cooldowns) if (s.cooldowns[k] > 0) s.cooldowns[k]--;
 
-  this._discoveries(simData);
-  this._helixExpansion(simData);
+  // Aftersight: breakthroughs are decision cards now (mayor.js), not a fixed schedule
+  this.mayorMonthly(simData);
+  if (this.s.scenario !== 'festus') this._helixExpansion(simData);
   this._events(simData);
   this._milestones(simData);
 };
@@ -559,5 +591,7 @@ AfterlightLayer.prototype._milestones = function(simData) {
                helps: 'Material want is over.', strains: 'Meaning, status and power are what people fight over now.'});
   }
 };
+
+installMayor(AfterlightLayer);
 
 export { AfterlightLayer };

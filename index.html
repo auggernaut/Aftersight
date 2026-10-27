@@ -36,7 +36,8 @@
         <div class="hudItem hudCity"><span id="name">Your Name Here</span><span id="cclass" class="hudSub">VILLAGE</span></div>
         <div class="hudItem"><label>Date</label><span id="date">Jan 1900</span></div>
         <div class="hudItem"><label>Funds</label><span class="hudMoney">$<span id="funds">20000</span></span></div>
-        <div class="hudItem"><label>Population</label><span id="population">0</span></div>
+        <div class="hudItem hudPop"><label>Population</label><span id="population">0</span></div>
+        <div class="hudItem hudApproval" data-tip="Your approval"><label>Approval</label><span id="alApproval">55%</span></div>
         <div class="hudItem hudScore"><label>Score</label><span id="score">0</span></div>
         <div id="speedButtons" class="hudItem" role="group" aria-label="Speed">
           <button class="speedButton" data-speed="0" data-tip="Pause"><svg viewBox="0 0 16 16"><rect x="3" y="3" width="3.5" height="10" rx="1"/><rect x="9.5" y="3" width="3.5" height="10" rx="1"/></svg></button>
@@ -72,6 +73,7 @@
           <div id="splashButtonContainer">
             <div id="splashButtons">
               <button id="splashLoad" class="width140 block loadSave splashButton" disabled>Load game</button>
+              <button id="splashFestus" class="width140 block margin10 splashButton">Play Festus, MO</button>
               <button id="splashPlay" class="width140 block margin10 splashButton">Play this map</button>
               <button id="splashGenerate" class="width140 block margin10 splashButton">Generate another</button>
             </div>
@@ -86,7 +88,11 @@
             <input type="radio" class="difficulty" name="difficulty" id="difficultyEasy" value="0" checked="checked"><label for="difficultyEasy">Easy</label>
             <input type="radio" class="difficulty" name="difficulty" id="difficultyMed" value="1"><label for="difficultyMed">Medium</label>
             <input type="radio" class="difficulty" name="difficulty" id="difficultyHard" value="2"><label for="difficultyHard">Hard</label>
-            <div class="margin10"><input type="checkbox" id="alStarter" checked="checked"><label for="alStarter">Start with a present-day town (2026)</label></div>
+            <fieldset id="alScenarios" class="margin10"><legend>Town</legend>
+              <label class="alScen"><input type="radio" name="alScenario" id="alScenFestus" value="festus"><span><b>Festus, Missouri (2026)</b><small>A real river town, a $6B data center offer, and an election coming</small></span></label>
+              <label class="alScen"><input type="radio" name="alScenario" id="alStarter" value="starter" checked="checked"><span><b>A present-day town on this map</b><small>Helix already runs a data center here</small></span></label>
+              <label class="alScen"><input type="radio" name="alScenario" id="alScenEmpty" value="empty"><span><b>An empty valley</b><small>Classic Micropolis start</small></span></label>
+            </fieldset>
             <div id="playSubmitDiv">
               <input id="playit" type="submit" value="Play!">
             </div>

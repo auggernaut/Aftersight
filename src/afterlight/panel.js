@@ -5,6 +5,9 @@
 
 import $ from "jquery";
 
+import { FACTIONS, ELECTIONS, WIN_TERMS, WIN_SHARE, RESEARCH, UTIL_TEXT } from './mayor.js';
+import { LABELS, SITE } from './festus.js';
+
 var bar = function(id, label, colour) {
   return '<div class="alRow"><span class="alLabel">' + label + '</span>' +
          '<span class="alBar"><span id="' + id + 'Bar" class="alFill" style="background:' + colour + '"></span></span>' +
@@ -26,6 +29,13 @@ function AfterlightPanel(game) {
       '<div class="alTitle"><span class="alTitleText">City pulse</span> <span id="alEra"></span><span id="alMini"></span>' +
         '<button id="alCollapse" class="alCollapse" data-tip="Hide or show the panel">&#x2013;</button></div>' +
       '<div class="alBody">' +
+      '<div class="alSection alMayor"><div class="alSectionTitle">Mayor</div>' +
+        '<div class="alApprovalRow"><span class="alApprovalBig" id="alApprovalBig"></span><span class="alApprovalSub" id="alElection"></span></div>' +
+        FACTIONS.map(function(f) { return bar('alF_' + f.id, f.short, '#d9b44a'); }).join('') +
+        '<div class="alGoal" id="alGoal"></div>' +
+        '<div class="alDeal" id="alDeal"></div>' +
+        '<div class="alDeal" id="alResearch"></div>' +
+      '</div>' +
       '<div class="alSection alDemand"><div class="alSectionTitle">Demand</div><div id="alRCI"></div></div>' +
       '<div class="alSection alMood"><div class="alSectionTitle">Mood</div>' +
         bar('alUnemp', 'Unemployment', '#e0574f') +
@@ -38,7 +48,7 @@ function AfterlightPanel(game) {
         '<div><span>Compute</span><b id="alCompute"></b></div>' +
         '<div><span>Robots</span><b id="alRobots"></b></div>' +
         '<div><span>Automation</span><b id="alAuto"></b></div>' +
-        '<div><span>Helix owns</span><b id="alHelix"></b></div>' +
+        '<div><span id="alHelixLabel">Helix owns</span><b id="alHelix"></b></div>' +
         '<div><span>Dividend</span><b id="alDividend"></b></div>' +
       '</div>' +
       '<div class="alSection alPolicies"><div class="alSectionTitle">Policies</div>' +
@@ -47,12 +57,12 @@ function AfterlightPanel(game) {
         policy('communityFirst', 'Community-first zoning', 'Every Helix site gives the town a 25% stake; Helix builds half as often.') +
         policy('purposeProgram', 'Purpose programs', 'City-funded guilds, apprenticeships and civic projects. Costs money each month.') +
       '</div>' +
-      '<div class="alSection alNewsBox"><div class="alSectionTitle">Valley news</div><ul id="alNews"></ul></div>' +
+      '<div class="alSection alNewsBox"><div class="alSectionTitle" id="alNewsTitle">Valley news</div><ul id="alNews"></ul></div>' +
       '</div>' +
     '</div>' +
     '<div class="hidden modal shadow" id="alPaper">' +
       '<div class="paperMast"><div class="paperEdition"><span>Vol. XXVI</span><span id="alPaperDate"></span><span>One dollar</span></div>' +
-        '<div class="alPaperHead">The Valley Ledger</div>' +
+        '<div class="alPaperHead" id="alPaperHead">The Valley Ledger</div>' +
         '<div class="paperRule"></div></div>' +
       '<div class="paperBody open">' +
         '<div class="paperKicker" id="alPaperKicker">Breaking</div>' +
@@ -61,7 +71,8 @@ function AfterlightPanel(game) {
         '<div class="paperCols"><p id="alPaperBody"></p>' +
           '<div class="paperFacts"><div class="paperHelps"><b>Helps</b><span id="alPaperHelps"></span></div>' +
           '<div class="paperStrains"><b>Strains</b><span id="alPaperStrains"></span></div></div></div>' +
-        '<form id="alPaperForm" class="alignCenter"><input type="submit" id="alPaperOK" class="dialogOK" value="Back to the city"></form>' +
+        '<form id="alPaperForm" class="alignCenter"><button type="button" id="alPaperRestart" class="dialogOK hidden">Start over</button>' +
+        '<input type="submit" id="alPaperOK" class="dialogOK" value="Back to the city"></form>' +
       '</div>' +
     '</div>';
   $('#canvasContainer').append(html);
@@ -72,17 +83,34 @@ function AfterlightPanel(game) {
     $(this).prop('checked', !!self.layer.s.policies[name]);
     $(this).on('change', function() { self.layer.setPolicy(name, $(this).is(':checked')); self.refresh(true); });
   });
-  $('#alPaperForm').on('submit', function(e) { e.preventDefault(); self.paperWindow.close(); });
+  $('#alPaperForm').on('submit', function(e) {
+    e.preventDefault();
+    if (self._paperData && self._paperData.gameOver) self.layer.s.mayor.sandbox = true;   // keep watching as a citizen
+    self.paperWindow.close();
+  });
+  $('#alPaperRestart').on('click', function(e) { e.preventDefault(); window.location.reload(); });
+  var festus = this.layer.s.scenario === 'festus';
+  if (festus) {
+    $('#alPaperHead').text('The River Ledger');
+    $('#alNewsTitle').text('River news');
+    $('#alPol_helixExpansion, #alPol_communityFirst').closest('.alPolicy').hide();
+  }
+  $('#alHelixLabel').text(this.layer.dev().short + ' owns');
 
   this.paperWindow = {
     open: function(data) {
+      self._paperData = data;
+      $('#alPaperRestart').toggleClass('hidden', !data.gameOver);
+      $('#alPaperOK').val(data.gameOver ? 'Keep watching' : data.win ? 'Keep playing' : 'Back to the city');
+      $('#alPaper').toggleClass('alWin', !!data.win).toggleClass('alGameOver', !!data.gameOver);
       $('#alPaperDate').text('· ' + self.layer.dateString());
       $('#alPaperHeadline').text(data.headline || data.text);
       $('#alPaperBody').text(data.body || '');
       $('#alPaperHelps').text(data.helps || '');
       $('#alPaperStrains').text(data.strains || '');
       $('#alPaper').toggleClass('alBad', data.tone === 'bad');
-      $('#alPaperKicker').text(data.tone === 'bad' ? 'Trouble in the Valley' : data.tone === 'good' ? 'Good news' : 'Breaking');
+      var place = self.layer.s.scenario === 'festus' ? 'Festus' : 'the Valley';
+      $('#alPaperKicker').text(data.gameOver ? 'Election night' : data.win ? 'Election night' : data.tone === 'bad' ? 'Trouble in ' + place : data.tone === 'good' ? 'Good news' : 'Breaking');
       if (self.onPaperOpen) self.onPaperOpen(data);
       $('#opaque').removeClass('hidden');
       $('#alPaper').removeClass('hidden');
@@ -121,13 +149,39 @@ AfterlightPanel.prototype.refresh = function(force) {
     var supply = pm.lastMaxPower + draw, demand = pm.lastConsumption + draw;
     $('#alPower').text((pm.lastShort ? 'SHORT ' : '') + fmt(demand) + ' / ' + fmt(supply)).css('color', pm.lastShort ? '#b0201a' : '');
   }
+  // mayor
+  var m = s.mayor, L = this.layer;
+  var col = function(v) { return v >= 60 ? '#35c45a' : v >= 50 ? '#e9c84a' : v >= 40 ? '#f0962e' : '#e0574f'; };
+  $('#alApprovalBig').text(Math.round(m.approval) + '%').css('color', col(m.approval));
+  var next = L.nextElection(), mi = L.mi();
+  $('#alElection').text(m.gameOver ? 'Voted out in ' + m.gameOver.year : m.won ? 'You won · ' + m.won.year :
+                        next >= 0 ? 'Election ' + L.monthName(next) + ' · ' + (next - mi) + ' mo · need 50%' : 'Final term');
+  FACTIONS.forEach(function(f) {
+    var v = m.factions[f.id].v;
+    setBar('alF_' + f.id, v);
+    $('#alF_' + f.id + 'Bar').css('background', col(v));
+  });
+  $('#alGoal').text('Goal: win ' + WIN_TERMS + ' elections (' + m.electionsWon + ' so far), or win one with the town owning ' +
+                    Math.round(WIN_SHARE * 100) + '%+ of local compute (now ' + Math.round(L.townShare() * 100) + '%) and paying a dividend.');
+  var d = s.deal, dev = L.dev();
+  var dealText = '';
+  if (d) dealText = dev.short + ': ' + d.halls + ' halls' + (s.construction ? ' (building)' : '') + ' · abatement ' + d.abatePct + '% · PILOT $' + fmt(d.pilot) + '/yr' +
+                    ' · equity ' + (d.equity || 0) + '%' + (d.nda ? ' · NDA' : '') + (s.fund ? ' · fund $' + fmt(s.fund) : '');
+  else if (s.dev.status === 'review') dealText = dev.short + ' is reviewing your counter.';
+  else if (s.dev.status === 'away') dealText = dev.short + ' walked away. It may be back.';
+  else if (s.dev.status === 'offer') dealText = dev.short + '\'s offer is on the table.';
+  $('#alDeal').text(dealText).toggle(!!dealText);
+  var ra = s.research.active;
+  var rText = ra ? 'Researching ' + RESEARCH[ra.id].name.toLowerCase() + ': ' + ra.left + ' mo left' + (ra.stalled ? ' (stalled)' : '') : '';
+  rText += (rText ? ' · ' : '') + 'Town compute ' + L.townCompute() + '/mo';
+  $('#alResearch').text(rText);
   $('#alCompute').text(fmt(s.compute));
   $('#alRobots').text(fmt(s.robots));
   $('#alAuto').text(pct(s.automation));
   $('#alHelix').text(s.compute + s.robots > 0 ? pct(s.helixShare) : '-');
   $('#alDividend').text(s.policies.dividend ? '$' + fmt(s.dividendPool) + '/mo' : 'off');
   var known = Object.keys(s.discovered).length;
-  $('#alMini').text('Jobless ' + pct(s.unemployment) + ' · Hope ' + Math.round(s.hope));
+  $('#alMini').text('Approval ' + Math.round(m.approval) + '% · Jobless ' + pct(s.unemployment));
   $('#alEra').text(['· The Before', '· Cheap Power', '· Thinking Machines', '· Self-Building', '· The Cure', '· Abundance'][Math.min(5, known)]);
   var items = s.log.slice(0, 5).map(function(e) {
     return '<li class="al_' + e.tone + '"><span class="alDate">' + e.date + '</span> ' + $('<div>').text(e.text).html() + '</li>';
@@ -144,6 +198,13 @@ AfterlightPanel.prototype.overlays = function() {
   var s = this.layer.s;
   var list = [];
   if (s.protest) list.push({x: s.protest.x - 2, y: s.protest.y - 2, w: 5, h: 5, kind: 'protest'});
+  if (s.scenario === 'festus') {
+    LABELS.forEach(function(l) {
+      if (l.kind === 'site' && s.hallsBuilt) return;
+      list.push({kind: l.kind === 'site' ? 'sitelabel' : 'label', x: l.x, y: l.y, text: l.kind === 'site' && s.construction ? 'Under construction' : l.text});
+    });
+    if (!s.hallsBuilt || s.construction) list.push({kind: s.construction ? 'build' : 'site', x: SITE.x, y: SITE.y, w: SITE.w, h: SITE.h});
+  }
   return list;
 };
 

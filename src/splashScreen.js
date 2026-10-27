@@ -57,7 +57,13 @@ function SplashScreen(tileSet, snowTileSet, spriteSheet) {
   // Set up listeners on buttons. When play is clicked, we will move on to get the player's desired
   // difficulty level and city name before launching the game properly
   $('#splashGenerate').click(regenerateMap.bind(this));
-  $('#splashPlay').click(acquireNameAndDifficulty.bind(this));
+  $('#splashPlay').click(function(e) { $('#alStarter').prop('checked', true); acquireNameAndDifficulty.call(this, e); }.bind(this));
+  // Aftersight: the Festus scenario has its own map, so it skips straight to the new-game form
+  $('#splashFestus').click(function(e) {
+    $('#alScenFestus').prop('checked', true);
+    if (!$('#nameForm').val()) $('#nameForm').val('Festus');
+    acquireNameAndDifficulty.call(this, e);
+  }.bind(this));
   $('#splashLoad').click(handleLoad.bind(this));
 
   // Conditionally enable load/save buttons
@@ -93,6 +99,7 @@ var handleLoad = function(e) {
     return;
 
   // Remove installed event listeners
+  $('#splashFestus').off('click');
   $('#splashLoad').off('click');
   $('#splashGenerate').off('click');
   $('#splashPlay').off('click');
@@ -111,6 +118,7 @@ var acquireNameAndDifficulty = function(e) {
   e.preventDefault();
 
   // Remove the initial event listeners
+  $('#splashFestus').off('click');
   $('#splashLoad').off('click');
   $('#splashGenerate').off('click');
   $('#splashPlay').off('click');

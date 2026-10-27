@@ -41,7 +41,11 @@ import { Text } from './text.js';
 import { TouchWarnWindow } from './touchWarnWindow.js';
 import { AL_NEWS } from './afterlight/layer.js';
 import { AfterlightPanel } from './afterlight/panel.js';
+import { CardWindow } from './afterlight/cards.js';
+import * as ALB from './afterlight/buildings.js';
 import { buildStarterTown, prewarm } from './afterlight/starterTown.js';
+import { festusTerrain, buildFestus, fieldAt } from './afterlight/festus.js';
+import { setFields } from './afterlight/iso/ground.js';
 
 var disasterTimeout = 20 * 1000;
 
@@ -50,8 +54,10 @@ function Game(gameMap, tileSet, snowTileSet, spriteSheet, difficulty, name) {
   difficulty = difficulty || 0;
   var savedGame;
 
+  // Aftersight: which town to start in (Festus, a random present-day town, or an empty valley)
+  var scenario = $('input[name=alScenario]:checked').val() || 'starter';
   if (!gameMap.isSavedGame) {
-    this.gameMap = gameMap;
+    this.gameMap = scenario === 'festus' ? festusTerrain() : gameMap;
     savedGame = null;
   } else {
     this.gameMap = new GameMap(120, 100);
@@ -64,10 +70,18 @@ function Game(gameMap, tileSet, snowTileSet, spriteSheet, difficulty, name) {
   this.simulation = new Simulation(this.gameMap, difficulty, this.defaultSpeed, savedGame);
 
   // Afterlight: unless the player asked for an empty valley, start from an ordinary present-day town
-  if (!savedGame && $('#alStarter').length && $('#alStarter').is(':checked')) {
+  if (!savedGame && scenario === 'festus') {
+    this.starterTown = buildFestus(this.simulation, this.gameMap);
+    prewarm(this.simulation, 3);
+    this.simulation.afterlight.setScenario('festus');
+  } else if (!savedGame && scenario === 'starter') {
     this.starterTown = buildStarterTown(this.simulation, this.gameMap);
     prewarm(this.simulation, 3);
+    this.simulation.afterlight.setScenario('starter');
+  } else if (!savedGame) {
+    this.simulation.afterlight.setScenario('empty');
   }
+  setFields(this.simulation.afterlight.s.scenario === 'festus' ? function(x, y) { return fieldAt(x, y); } : null);
 
   this.name = name || 'MyTown';
   this.everClicked = false;
@@ -243,6 +257,7 @@ function Game(gameMap, tileSet, snowTileSet, spriteSheet, difficulty, name) {
   // Afterlight indicators, policies and newspaper
   this.alPanel = new AfterlightPanel(this);
   this.alPaperWindow = this.alPanel.paperWindow;
+  this.alCards = new CardWindow(this);
   this.alUI = new AfterlightUI(this);
   if (this.starterTown)
     this.gameCanvas.centreOn(this.starterTown.x + 13, this.starterTown.y + 11);
@@ -279,6 +294,20 @@ function Game(gameMap, tileSet, snowTileSet, spriteSheet, difficulty, name) {
     findSite: function() { return game.simulation.afterlight.findSite(); },
     setPolicy: function(name, v) { game.simulation.afterlight.setPolicy(name, v); game.alPanel.refresh(true); },
     funds: function() { return game.simulation.budget.totalFunds; },
+    // Aftersight mayor layer
+    card: function() { var c = game.simulation.afterlight.s.card; return c ? JSON.parse(JSON.stringify(c)) : null; },
+    decide: function(option, asks) {
+      if (game._openWindow === 'alCard') game.alCards.close();
+      var r = game.simulation.afterlight.decide(option, asks); game.alPanel.refresh(true); return r;
+    },
+    mayor: function() { var L = game.simulation.afterlight; var s = L.s; return {approval: s.mayor.approval, factions: JSON.parse(JSON.stringify(s.mayor.factions)),
+      won: s.mayor.won, gameOver: s.mayor.gameOver, electionsWon: s.mayor.electionsWon, deal: s.deal, dev: JSON.parse(JSON.stringify(s.dev)),
+      research: JSON.parse(JSON.stringify(s.research)), townCompute: L.townCompute(), townShare: L.townShare(), mi: L.mi(), halls: s.hallsBuilt,
+      construction: s.construction, fund: s.fund, fundDividend: s.fundDividend, dependence: s.dependence, water: s.water, bills: s.bills}; },
+    // force the next outcome of a counter (true/false), the court ruling, or an election's vote share
+    force: function(what, v) { game.simulation.afterlight['_force' + what] = v; },
+    election: function(i, vote) { var L = game.simulation.afterlight; if (vote !== undefined) L._forceVote = vote; L.election(i); L._forceVote = undefined; game.alPanel.refresh(true); },
+    bump: function(d) { game.simulation.afterlight.bump(d); game.alPanel.refresh(true); },
     date: function() { return game.simulation.getDate(); }
   };
 

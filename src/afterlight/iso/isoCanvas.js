@@ -750,7 +750,46 @@ IsoCanvas.prototype.paintOverlays = function(list) {
   var ctx = this._canvas.getContext('2d');
   ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
   this._paintProtests(ctx, this._lastP, this._overlays, Date.now(), this._zoom);
+  this._paintMarks(ctx, this._lastP, this._overlays, Date.now(), this._zoom);
   this._overlays = null;
+};
+
+// Aftersight: map labels (I-55, the river, Main Street) and the proposed data center site, in world space
+IsoCanvas.prototype._paintMarks = function(ctx, P, list, t, L) {
+  list.forEach(function(item) {
+    if (item.kind === 'site' || item.kind === 'build') {
+      var c = [[item.x, item.y], [item.x + item.w, item.y], [item.x + item.w, item.y + item.h], [item.x, item.y + item.h]].map(function(q) { return P(q[0], q[1], 0); });
+      ctx.save();
+      ctx.beginPath(); c.forEach(function(p, i) { if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }); ctx.closePath();
+      ctx.fillStyle = item.kind === 'build' ? 'rgba(160,120,70,0.35)' : 'rgba(255,214,90,0.10)'; ctx.fill();
+      ctx.strokeStyle = item.kind === 'build' ? 'rgba(240,150,40,0.95)' : 'rgba(255,214,90,0.9)';
+      ctx.lineWidth = 2; ctx.setLineDash([8, 6]); ctx.lineDashOffset = -t / 80; ctx.stroke(); ctx.setLineDash([]);
+      if (item.kind === 'build') {          // tower cranes over the graded site
+        [[item.x + 3, item.y + 7], [item.x + 7, item.y + 10]].forEach(function(q, k) {
+          var b = P(q[0], q[1], 0), top = P(q[0], q[1], 9);
+          ctx.strokeStyle = '#e8b52c'; ctx.lineWidth = Math.max(1.5, 3 * L);
+          ctx.beginPath(); ctx.moveTo(b[0], b[1]); ctx.lineTo(top[0], top[1]); ctx.stroke();
+          var sw = Math.sin(t / 2400 + k) * 0.6, arm = P(q[0] + 3 * Math.cos(sw), q[1] + 3 * Math.sin(sw), 9);
+          ctx.beginPath(); ctx.moveTo(top[0], top[1]); ctx.lineTo(arm[0], arm[1]); ctx.stroke();
+        });
+      }
+      ctx.restore();
+      return;
+    }
+    if (item.kind !== 'label' && item.kind !== 'sitelabel') return;
+    var p = P(item.x, item.y, 0);
+    var fs = Math.round(Math.max(11, Math.min(18, 15 * Math.sqrt(L / 0.7))));
+    ctx.save();
+    ctx.font = (item.kind === 'sitelabel' ? '700 ' : '600 ') + fs + 'px system-ui, -apple-system, Segoe UI, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    var w = ctx.measureText(item.text).width + 16, h = fs + 10;
+    ctx.fillStyle = item.kind === 'sitelabel' ? 'rgba(40,30,10,0.78)' : 'rgba(14,20,26,0.55)';
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(p[0] - w / 2, p[1] - h / 2, w, h, h / 2); ctx.fill(); }
+    else ctx.fillRect(p[0] - w / 2, p[1] - h / 2, w, h);
+    ctx.fillStyle = item.kind === 'sitelabel' ? '#ffd65a' : 'rgba(255,255,255,0.92)';
+    ctx.fillText(item.text, p[0], p[1] + 0.5);
+    ctx.restore();
+  });
 };
 
 IsoCanvas.prototype._paintProtests = function(ctx, P, list, t, L) {
