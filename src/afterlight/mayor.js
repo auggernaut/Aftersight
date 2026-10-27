@@ -49,7 +49,7 @@ export const ELECTIONS = [27, 51, 75];
 export const WIN_TERMS = 3, WIN_SHARE = 0.25;
 var CARD_GAP = 6;          // fewest months between two decision cards
 var GONE_AFTER = 3;        // walks after which the developer builds elsewhere for good
-var FREE_FADE = 30;        // months over which voters stop crediting a mayor for saying no
+var FREE_FADE = 42;        // months over which voters stop crediting a mayor for saying no
 var CITY_POP = 13000, CITY_MONTHS = 6;   // the town-to-city milestone: this many people, held this many months
 var DRAMA_GAP = 8;         // most months without anything meaningful before the director steps in
 
@@ -285,7 +285,7 @@ var ASK_CARDS = {
           cost: function(L) { return L.wellCost(); }, d: {farm: 6, res: 3}, effect: function(L) { L.s.water.cap += WELL_ADD; }},
     no: {label: 'Not now', d: {farm: -4, res: -2}}},
   // a bad deal can be reopened: residents push, the developer comes back to the table
-  reopen: {faction: 'res', when: function(L) { return L.s.deal && L._dealTier() <= 1 && L.s.dev.status === 'signed' && !L.s.construction &&
+  reopen: {faction: 'res', card: true, when: function(L) { return L.s.deal && L._dealTier() <= 1 && L.s.dev.status === 'signed' && !L.s.construction &&
                                                          L.s.months - L.s.deal.month >= 8 && !L.s.mayor.reopened; },
     title: 'Reopen the deal?', body: 'Residents who packed the spring town hall say the agreement was signed too fast and too cheap. They want you to call the developer back to the table.',
     yes: {label: 'Call them back', d: {res: 4, school: 2, biz: -2}, effect: function(L) { L.s.mayor.reopened = true; L.s.mayor.reopenDue = L.mi() + 1; }},
@@ -1054,8 +1054,7 @@ export function installMayor(L) {
       return;
     }
     if (dv.status === 'signed' && dv.nextExpansion >= 0 && mi >= dv.nextExpansion && s.deal.halls < this.maxHalls() && !s.construction && this.canCard()) {
-      // a mayor who has pushed back gets better terms for the whole campus; one who never has gets the same again
-      var tier = Math.min(TIERS.length - 1, this._dealTier() + (s.dev.counters > 0 || s.mayor.reopened ? 1 : 0));
+      var tier = Math.min(TIERS.length - 1, this._dealTier() + 1);
       this.makeOffer(tier, 'expansion');
       this._offerCard();
     }
@@ -1318,11 +1317,14 @@ export function installMayor(L) {
     return !!a.repeat && since >= a.repeat;
   };
   // the ask that's due, unhappiest faction first (furious: only factions under FURIOUS)
-  P._pickAsk = function(furiousOnly) {
+  // kind: 'card' for the asks big enough to always get the floor (reopening the deal), 'quick' for the rest
+  P._pickAsk = function(furiousOnly, kind) {
     var m = this.s.mayor, self = this;
     m.askLog = m.askLog || {};
     var ids = Object.keys(ASK_CARDS).filter(function(k) {
-      return self._askReady(k) && (!furiousOnly || m.factions[ASK_CARDS[k].faction].v < FURIOUS);
+      var a = ASK_CARDS[k];
+      return self._askReady(k) && (!furiousOnly || m.factions[a.faction].v < FURIOUS) &&
+             (!kind || (kind === 'card' ? !!a.card : !a.card));
     });
     if (!ids.length) return null;
     ids.sort(function(a, b) { return m.factions[ASK_CARDS[a].faction].v - m.factions[ASK_CARDS[b].faction].v; });
@@ -1340,8 +1342,8 @@ export function installMayor(L) {
       options: [{id: 'yes', label: optLabel(this, a.yes), tone: 'good', disabled: optCost(this, a.yes) > funds, preview: this.preview(scale(a.yes.d, mult))},
                 {id: 'no', label: optLabel(this, a.no), tone: 'bad', preview: this.preview(scale(a.no.d, mult))}]};
   };
-  P._askCard = function(furiousOnly) {
-    var id = this._pickAsk(furiousOnly);
+  P._askCard = function(furiousOnly, kind) {
+    var id = this._pickAsk(furiousOnly, kind);
     if (!id) return false;
     this.s.mayor.asked[id] = this.s.months;
     this.showCard(this._askCardData(id));
@@ -1361,7 +1363,7 @@ export function installMayor(L) {
       return;
     }
     if (s.card || m.lastCard === s.months || s.months - (m.lastQuick === undefined ? -99 : m.lastQuick) < QUICK_GAP) return;
-    var id = this._pickAsk(false);
+    var id = this._pickAsk(false, 'quick');
     if (!id) return;
     var card = this._askCardData(id, true);
     card.quick = true;
@@ -1635,6 +1637,7 @@ export function installMayor(L) {
     var furious = FACTIONS.some(function(f) { return m.factions[f.id].v < FURIOUS; });
     if (furious && m.lastType !== 'ask' && this._askCard(festus)) return;
     if (nextR && clock >= R.next) { this._researchCard(nextR); return; }
+    if (festus && m.lastType !== 'ask' && this._askCard(false, 'card')) return;   // reopening a bad deal gets a card, not the ticker
     if (festus && m.lastType !== 'project' && (m.lastType === 'ask' || s.purpose < 65) && this._suggestProject()) return;
     if (!festus && m.lastType !== 'ask' && this._askCard()) return;
     if (nextR && clock >= R.next - 2) { this._researchCard(nextR); return; }
