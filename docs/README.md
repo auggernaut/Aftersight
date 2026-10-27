@@ -5,7 +5,7 @@ AfterSight is a city-builder sim in the browser. You are mayor of a real, contes
 It is a modified version of [micropolisJS](https://github.com/graememcc/micropolisJS), the HTML5 port of Micropolis (the open-sourced 1989 SimCity engine). It is **not SimCity** and is not affiliated with Electronic Arts. The license is GPL-3.0 with additional terms (see the root [README](../README.md#license)).
 
 - **Live:** https://aftersight-zeta.vercel.app. It is a stable Vercel production URL with `noindex, nofollow` set on purpose: it is not public yet.
-- **Repo:** https://github.com/auggernaut/Aftersight. It is private. `festus` is the working branch.
+- **Repo:** https://github.com/auggernaut/Aftersight. It is private. `main` is the game and the working branch.
 - **Owner:** Augustin Bralley.
 
 ## The docs
@@ -66,7 +66,7 @@ Test hooks live on `window.__AL` (defined in `src/game.js`):
 **Deploys need Augustin's explicit OK every time.** The production URL above is a Vercel project (`auggernauts-projects/aftersight`) that is deployed from the agent box with the Vercel CLI. There is no Git integration.
 
 ```
-bash tools/deploy/aftersight-redeploy.sh festus
+bash tools/deploy/aftersight-redeploy.sh        # defaults to main
 ```
 
 The script checks out the branch and pulls. It builds, copies `dist/` into a deploy folder linked to the Vercel project, and writes `vercel.json` with an `X-Robots-Tag: noindex, nofollow` header. It also adds a robots meta tag to every HTML file, then runs `vercel deploy --prod`. It deploys by itself, so run it once and don't run a separate `vercel deploy` afterwards. After a deploy, check that `curl -sI https://aftersight-zeta.vercel.app/ | grep -i robots` still shows noindex, and run `e2e/festus.cjs` and `e2e/mobile.cjs` with `BASE_URL`.
@@ -75,14 +75,14 @@ Never commit `.vercel/`, `.env*` or tokens.
 
 ## Branch map
 
-Every branch is pushed to `origin`. `festus` contains all the others in its history.
+Every branch is pushed to `origin`. `main` contains all the others in its history. The Festus work was developed on a `festus` branch, which was merged into `main` (fast-forward) and deleted on 2026-10-27.
 
 | Branch | What it is |
 |---|---|
-| `festus` | **Current work.** The isometric Micropolis build plus the Festus, MO mayor scenario and everything since. Deployed to the live URL. |
+| `main` | **The game and current work.** The isometric Micropolis build plus the Festus, MO mayor scenario and everything since. Deployed to the live URL. GitHub's default branch. |
 | `micropolis-iso` | The isometric renderer, modern UI and mobile controls on the Micropolis engine, before Festus. |
 | `micropolis` | The first fork: the Afterlight layer on micropolisJS with the original 1989 top-down tiles. |
 | `sim` | An earlier, retired restart: a minimal agent-based valley sim (Yuka agents, loyalties, ownership shares). |
-| `main` | The original cozy story game (Mara, Teo, Juno, Odile), now retired. It is also GitHub's default branch. |
+| `legacy/story-game` (also tag `legacy-story-game`) | The original cozy story game (Mara, Teo, Juno, Odile), retired. This was `main` until 2026-10-27 (f81a611). |
 
 The status record for the whole project is `projects/afterlight.md` in [auggernaut/mind-dump](https://github.com/auggernaut/mind-dump/blob/main/projects/afterlight.md).

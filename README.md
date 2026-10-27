@@ -6,7 +6,7 @@ AfterSight is a city-builder sim about living through the arrival of AI, robots 
 - **Start here:** [docs/README.md](docs/README.md) (run, test, deploy, branch map), [AGENTS.md](AGENTS.md) for AI agents
 - **Docs:** [Vision](docs/VISION.md) · [Architecture](docs/ARCHITECTURE.md) · [Decisions](docs/DECISIONS.md) · [Ideas](docs/IDEAS.md) · [Open questions](docs/OPEN_QUESTIONS.md) · [Research](docs/RESEARCH.md)
 
-It is built on **[micropolisJS](https://github.com/graememcc/micropolisJS)**, Graeme McCutcheon's HTML5 port of Micropolis, the open-source release of the 1989 SimCity engine. AfterSight is a **modified version** of micropolisJS. It is not SimCity and is not affiliated with Electronic Arts. The upstream README is kept as [README.micropolisJS.md](README.micropolisJS.md). `festus` is the working branch and contains every other branch.
+It is built on **[micropolisJS](https://github.com/graememcc/micropolisJS)**, Graeme McCutcheon's HTML5 port of Micropolis, the open-source release of the 1989 SimCity engine. AfterSight is a **modified version** of micropolisJS. It is not SimCity and is not affiliated with Electronic Arts. The upstream README is kept as [README.micropolisJS.md](README.micropolisJS.md). `main` is the game and the working branch; earlier versions live on `micropolis-iso`, `micropolis`, `sim` and `legacy/story-game`.
 
 ## Quick start
 

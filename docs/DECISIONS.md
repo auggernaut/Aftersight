@@ -1,9 +1,11 @@
 # Decisions
 
-A dated log, newest first. Each entry gives the decision and the reason for it. Commits are on `festus` unless a branch is named.
+A dated log, newest first. Each entry gives the decision and the reason for it. Commits are on `main` (developed on the former `festus` branch) unless a branch is named.
 
 ## 2026-10-27
 
+- **`main` is the game.** The `festus` branch was fast-forwarded into `main` and deleted; the old story game moved to `legacy/story-game` and tag `legacy-story-game`.
+  *Why:* one obvious branch for people and agents; GitHub's default already pointed at `main`.
 - **Keep it SimCity-simple.** A new system has to read from the screen (a card, a chip, a panel line) and fit the existing loop of zone, build, budget and decide.
   *Why:* the point is to make ownership trade-offs feel obvious to non-experts. Every layer of rules makes that harder. When in doubt, cut.
 - **No Report Card ending yet.** There is no "2036 Report Card" or scoring screen until Augustin asks for one (see [IDEAS.md](IDEAS.md)).

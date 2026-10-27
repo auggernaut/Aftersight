@@ -1,6 +1,6 @@
 # Agent instructions
 
-AfterSight is a city-builder sim on the micropolisJS engine about who owns AI, robots and compute as abundance arrives. You play the mayor of Festus, MO in 2026 against a data center developer. **Work on the `festus` branch.**
+AfterSight is a city-builder sim on the micropolisJS engine about who owns AI, robots and compute as abundance arrives. You play the mayor of Festus, MO in 2026 against a data center developer. **Work on `main`** (the old story game is on `legacy/story-game`).
 
 ## Start here
 
