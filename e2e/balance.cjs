@@ -34,6 +34,9 @@ const out = await page.evaluate(async strat => {
       if (!has(pick)) pick=o[0].id;
     } else if (card.type==='research') pick = has('invest') && __AL.funds() > 2500 ? 'invest' : 'pass';
     else if (card.type==='campaign') pick = has('tour') ? 'tour' : 'freeze';
+    // town projects: neighbors + robots when there's room in the budget, robots when it's tight
+    else if (card.type==='project') { const f=__AL.funds(), n=has('neighbors'), r=has('robots');
+      pick = n && f > n.cost + 2500 ? 'neighbors' : r && f > r.cost + 1500 ? 'robots' : 'later'; }
     else pick = has('yes') && (__AL.funds() > 1500 || !/\$/.test(has('yes').label)) ? 'yes' : (o.find(x=>x.id!=='yes')||o[0]).id;
     cards.push(m.mi+' '+card.type+':'+card.title.slice(0,34)+' -> '+pick);
     L.decide(pick, asks);
@@ -41,7 +44,7 @@ const out = await page.evaluate(async strat => {
   if (L.s.card) L.autoDecide(L.s.card);
   let result='timeout';
   for (let i=0;i<84;i++){ __AL.fastForward(1); const m=__AL.mayor(); approvals.push(Math.round(m.approval));
-    if (i%6===0) rows.push([m.mi, Math.round(m.approval), Object.values(m.factions).map(f=>Math.round(f.v)).join('/'), __AL.funds(), g.simulation.evaluation.cityPop, m.halls, Math.round(m.townShare*100)+'%', m.dev.status, 'u'+__AL.state().unemployment.toFixed(2), 'a'+__AL.state().automation.toFixed(2), 'tier'+(L.s.deal?L._dealTier():'-'), L.s.deal?(L.s.deal.cooling+'/'+L.s.deal.power):'', 'w'+Math.round(100*L.s.water.use/L.s.water.cap)].join(' '));
+    if (i%6===0) rows.push([m.mi, Math.round(m.approval), Object.values(m.factions).map(f=>Math.round(f.v)).join('/'), __AL.funds(), g.simulation.evaluation.cityPop, m.halls, Math.round(m.townShare*100)+'%', m.dev.status, 'u'+__AL.state().unemployment.toFixed(2), 'a'+__AL.state().automation.toFixed(2), 'tier'+(L.s.deal?L._dealTier():'-'), L.s.deal?(L.s.deal.cooling+'/'+L.s.deal.power):'', 'w'+Math.round(100*L.s.water.use/L.s.water.cap), 'p'+Math.round(L.s.purpose), 'fund'+Math.round(L.s.fund||0), 'div$'+(L.s.dividendPerRes||0), 'nw$'+(L.s.netWorth||0), Object.keys(L.s.projects||{}).join('+')].join(' '));
     if (m.gameOver && !m.sandbox) { result='LOST '+m.gameOver.year+' '+m.gameOver.vote; break; }
     if (m.won) { result='WON '+m.won.year+' '+m.won.vote+' share'+m.won.share; break; } }
   result += L.s.deal ? ' '+L.s.deal.cooling+'/'+L.s.deal.power : ' nodeal';

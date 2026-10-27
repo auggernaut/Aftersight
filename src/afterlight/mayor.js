@@ -148,6 +148,27 @@ export const RESEARCH = {
     pass: 'The developer builds its own fusion plant for the campus and sells the town its power.',
     passEffect: {biz: -3, res: -2}, dependent: true, bills: 0.1}
 };
+// ---- Festus Fund ----
+var FUND_GROWTH = 0.004, FUND_FLOOR = 0.04, FUND_RANGE = 0.36;   // ~5% a year; pays out 4% to 40% of the fund each January
+var DOLLARS = 1000;      // real dollars per game dollar, for the per-resident dividend and net worth
+
+// ---- Town projects (proposed tuning; see the equity and purpose research Page) ----
+var NEIGHBOR_COST = 1.15, ROBOT_PURPOSE = 0.6, NEIGHBOR_PURPOSE = 1.5, PROJECT_FADE = 24, PROJECT_FLOOR = 0.3;
+export const PROJECTS = {
+  garden: {name: 'Community garden plots', base: 300, labor: 0.7, purpose: 5, months: [2, 4], d: {res: 2, farm: 2},
+    body: 'Raised beds and a tool shed on the empty lots off Main Street. Anyone can take a plot; the extension office will teach.',
+    opened: ['The community garden opens. The robots did a tidy job; a few plots are already taken.',
+             'The community garden opens with a potluck. Neighbors who built the beds are trading tomatoes and seed tips.']},
+  murals: {name: 'Main Street murals', base: 600, labor: 0.8, purpose: 7, months: [2, 4], d: {biz: 3, res: 2},
+    body: 'Painted walls down Main Street: the river, the old glassworks, the people of Festus. The chamber likes the foot traffic.',
+    opened: ['The Main Street murals are finished. Printed from a design file, they look sharp.',
+             'The Main Street murals are finished. Local painters, students and retirees signed their corners.']},
+  park: {name: 'Riverfront park and trail', base: 2500, labor: 0.65, purpose: 10, months: [6, 12], d: {res: 4, biz: 2, school: 2},
+    body: 'A trail and picnic lawns along the Mississippi bottoms, with a launch for kayaks and a stage for summer nights.',
+    opened: ['The riverfront park and trail open. Families are out on the first warm weekend.',
+             'The riverfront park and trail open. The crews who cleared the bottoms walk the first mile together, and the high school band plays.']}
+};
+export const PROJECT_ORDER = ['garden', 'murals', 'park'];
 export const RESEARCH_ORDER = ['cheap_solar', 'frontier_model', 'robots_build_robots', 'the_cure', 'fusion'];
 var COMPUTE_PRICE = 3;     // dollars per compute unit bought on the market
 
@@ -330,14 +351,17 @@ export function installMayor(L) {
     var fair = deal ? this._dealTier() - 1 : 0;
     var free = !deal && s.dev.walks > 0 ? 1 : 0, home = Math.min(3, m.homegrown || 0);   // said no, and grew its own way
     var growth = clamp((this._sim._valves ? this._sim._valves.comValve : 0) / 150, -8, 8);
+    // purpose feeds approval (it already lags), and the fund's dividends add up to real household wealth
+    var purp = this.festus() ? clamp((s.purpose - 60) / 10, -4, 3) : 0;
+    var worth = this.festus() ? clamp((s.netWorth || 0) / 150, 0, 4) : 0;
     s.bills = bills; s.waterStress = stress;
     return {
       res: 51 + fair * 5 + free * 6 - bills * 40 - stress * 12 - noise * 5 - secrecy * 10 - taxPain - jobless * 40 + div * 8 + equity * 12 + clinics * 2 -
-           fumes * FUMES_RES + cleanAir * 2 - riverWorry * 2,
+           fumes * FUMES_RES + cleanAir * 2 - riverWorry * 2 + purp * 2.5 + worth,
       farm: 53 + fair * 2 + free * 4 - stress * 20 - lost * 80 - bills * 25 - taxPain * 1.2 + div * 4 + equity * 6 - fumes * 2 + cleanAir - riverWorry * 4,
-      work: 47 + fair * 2 - jobless * 90 + building * 12 + jobs * 11 + home * 3 + div * 10 + equity * 8 - s.automation * 15 * (1 - s.cover),
+      work: 47 + fair * 2 - jobless * 90 + building * 12 + jobs * 11 + home * 3 + div * 10 + equity * 8 - s.automation * 15 * (1 - s.cover) + purp * 2.5,
       biz: 49 + growth - taxPain * 1.5 - bills * 30 + (online ? 7 : 0) + jobs * 4 + home * 3 - (s.dependence || 0) * 2,
-      school: 50 + fair * 4 + free * 5 + schoolScore * 10 - secrecy * 8 - taxPain * 0.6 + clinics * 2 + div * 4 - fumes * FUMES_SCHOOL + cleanAir
+      school: 50 + fair * 4 + free * 5 + schoolScore * 10 - secrecy * 8 - taxPain * 0.6 + clinics * 2 + div * 4 - fumes * FUMES_SCHOOL + cleanAir + purp * 1.5
     };
   };
 
@@ -352,6 +376,8 @@ export function installMayor(L) {
     var s = this.s, m = s.mayor, mi = this.mi();
     if (!m.inited) { m.inited = true; this.initMayor(simData); }
     this._dealMoney(simData);
+    this._fundMonthly();
+    this._projectsMonthly();
     this._construction(simData);
     var t = this._factionTargets(simData);
     FACTIONS.forEach(function(f) {
@@ -467,6 +493,7 @@ export function installMayor(L) {
     else if (card.type === 'research') this._decideResearch(card, option);
     else if (card.type === 'ask') this._decideAsk(card, option);
     else if (card.type === 'campaign') this._decideCampaign(card, option);
+    else if (card.type === 'project') this._decideProject(card, option);
     else if (card.type === 'intro' && this.s.dev.offer) this._offerCard();
     return true;
   };
@@ -531,7 +558,7 @@ export function installMayor(L) {
   P.asksFor = function(terms) {
     var late = this.s.dev.offer && this.s.dev.offer.tier >= 2 || this.mi() >= 24;
     var festus = this.festus();
-    return Object.keys(ASKS).filter(function(k) { return (!ASKS[k].late || late) && (!ASKS[k].design || festus) && ASKS[k].ok(terms); });
+    return Object.keys(ASKS).filter(function(k) { return (!ASKS[k].late || late) && (!ASKS[k].design || festus) && !(festus && k === 'fund') && ASKS[k].ok(terms); });
   };
 
   P.termRows = function(t, halls, o) {
@@ -540,14 +567,14 @@ export function installMayor(L) {
       ['Campus', !halls && this.s.deal ? 'The same ' + this.s.deal.halls + ' halls on ' + pl.acres + ' acres, new terms' :
                  halls + ' halls' + (this.s.deal ? ' more' : '') + ' on about ' + pl.acres + ' acres by I-55, about ' + money(halls * HALL_REVENUE) + '/mo in revenue', 'neutral'],
       ['Tax abatement', t.abatePct ? t.abatePct + '% for ' + t.abateYears + ' years' : 'None', t.abatePct >= 75 ? 'bad' : t.abatePct <= 25 ? 'good' : 'neutral'],
-      ['Payment in lieu of taxes', money(t.pilot) + ' a year' + (t.fund ? ', into a town wealth fund' : ''), t.pilot >= 900 ? 'good' : t.pilot < 400 ? 'bad' : 'neutral'],
+      ['Payment in lieu of taxes', money(t.pilot) + ' a year' + (this.festus() ? ', into the Festus Fund' : t.fund ? ', into a town wealth fund' : ''), t.pilot >= 900 ? 'good' : t.pilot < 400 ? 'bad' : 'neutral'],
       ['School fund', t.school ? money(t.school) + ' a year' : 'None', t.school >= 300 ? 'good' : t.school ? 'neutral' : 'bad'],
       ['Jobs promised', t.jobs + ' permanent (plus construction crews)', t.jobs >= 55 ? 'good' : t.jobs < 35 ? 'bad' : 'neutral'],
       ['Cooling', this.coolingText(t, halls), {evap: 'bad', hybrid: 'neutral', closed: 'good'}[t.cooling || 'evap']],
       ['Power', this.powerText(t, halls), {grid: 'bad', gas: 'bad', clean: 'good'}[t.power || 'grid']],
       ['Water and power upgrades', UTIL_TEXT[t.utilities] + (t.utilities !== 'developer' ? ' (' + money(self.utilityBill(t, halls)) + ' now, and higher bills)' : ''), t.utilities === 'developer' ? 'good' : t.utilities === 'town' ? 'bad' : 'neutral'],
       ['Secrecy', t.nda ? 'NDA: the tenant stays secret, sessions closed' : 'Open: terms and tenant public', t.nda ? 'bad' : 'good'],
-      ['Town equity', (t.equity || 0) + '%' + ((t.equity || 0) ? ' of revenue and compute' : ''), (t.equity || 0) >= 10 ? 'good' : (t.equity || 0) ? 'neutral' : 'bad']
+      ['Town equity', (t.equity || 0) + '%' + ((t.equity || 0) ? ' of revenue and compute' + (this.festus() ? '; the revenue goes to the Festus Fund' : '') : ''), (t.equity || 0) >= 10 ? 'good' : (t.equity || 0) ? 'neutral' : 'bad']
     ];
     if (t.kids) rows.push(['Kids\' trust', t.kids + '% of revenue for every child, vesting at 21', 'good']);
     if (t.royalty) rows.push(['Compute royalty', t.royalty + ' compute a month for the town', 'good']);
@@ -722,14 +749,23 @@ export function installMayor(L) {
 
   // Monthly money from the deal: abated property tax, PILOT (or the wealth fund), equity, kids' trust
   P._dealMoney = function(simData) {
-    var s = this.s, d = s.deal, budget = this._sim.budget;
-    s.fundDividend = 0;
+    var s = this.s, d = s.deal, budget = this._sim.budget, festus = this.festus();
+    if (!festus) s.fundDividend = 0;
+    s.fundIn = 0;
     if (!d || !s.hallsBuilt) { s.dealIncome = 0; return; }
     var online = this.devHalls().filter(function(h) { return h.powered; }).length;
     var abated = s.months - d.month < d.abateYears * 12 ? d.abatePct / 100 : 0;
     var tax = online * HALL_TAX * (1 - abated);
     var pilot = d.pilot / 12;
     var equity = online * HALL_REVENUE * (d.equity || 0) / 100;
+    if (festus) {   // Festus: Keystone's payments and the equity dividends go to the Festus Fund; property tax still runs the city
+      s.fund = (s.fund || 0) + pilot + equity;
+      s.fundIn = pilot + equity;
+      if (d.kids) s.kidsTrust = (s.kidsTrust || 0) + online * HALL_REVENUE * d.kids / 100;
+      s.dealIncome = tax;
+      if (Math.round(tax)) budget.spend(-Math.round(tax));
+      return;
+    }
     var income = tax + equity;
     if (d.fund) s.fund = (s.fund || 0) + pilot; else income += pilot;
     if (d.kids) s.kidsTrust = (s.kidsTrust || 0) + online * HALL_REVENUE * d.kids / 100;
@@ -1037,6 +1073,109 @@ export function installMayor(L) {
     return true;
   };
 
+  // ---- the Festus Fund ----
+  // Keystone's payments and the town's equity dividends flow in every month and the fund earns about 5% a year.
+  // Each January it pays every resident a dividend: the payout slider sets how much of the fund goes out
+  // (FUND_FLOOR at full reinvest, FUND_FLOOR + FUND_RANGE at full payout); the rest stays in and compounds.
+  P.fundShare = function() { var p = this.s.fundPayout; return FUND_FLOOR + FUND_RANGE * (p === undefined ? 0.5 : p); };
+  P.setFundPayout = function(v) { this.s.fundPayout = clamp(+v || 0, 0, 1); };
+  P.dividendEstimate = function() {   // next January's dividend per resident, in dollars, at today's fund and slider
+    var pop = Math.max(1000, this._sim.evaluation.cityPop || 0);
+    return Math.round((this.s.fund || 0) * this.fundShare() * DOLLARS / pop);
+  };
+  P._fundMonthly = function() {
+    var s = this.s, mi = this.mi();
+    if (!this.festus()) return;
+    s.fund = (s.fund || 0) * (1 + FUND_GROWTH);
+    if (mi > 0 && mi % 12 === 0 && s.fundYear !== mi) {
+      s.fundYear = mi;
+      var pay = (s.fund || 0) * this.fundShare();
+      var pop = Math.max(1000, this._sim.evaluation.cityPop || 0);
+      s.fund -= pay;
+      s.fundPaid = pay;
+      s.dividendPerRes = Math.round(pay * DOLLARS / pop);
+      s.netWorth = (s.netWorth || 0) + s.dividendPerRes;
+      if (s.dividendPerRes >= 1)
+        this.news('good', 'Festus Fund dividend: ' + money(s.dividendPerRes) + ' to every resident this year. ' + Math.round(this.fundShare() * 100) +
+                  '% of the fund went out; ' + money(s.fund) + ' stays invested.', {alert: 'fund'});
+    }
+    s.fundDividend = (s.fundPaid || 0) / 12;   // what households feel each month until the next payout
+  };
+
+  // ---- town projects: no revenue, built for purpose ----
+  // Costs fall on the labor share as abundance rises; who builds it decides how much purpose it makes.
+  P.abundance = function() {
+    var s = this.s;
+    return clamp(0.12 * Object.keys(s.discovered || {}).length + 0.5 * (s.automation || 0) + 0.4 * this.townShare(), 0, 0.9);
+  };
+  P.projectCost = function(id, who) {
+    var p = PROJECTS[id], a = this.abundance();
+    return Math.round(p.base * ((1 - p.labor) + p.labor * (1 - 0.9 * a)) * (who === 'neighbors' ? NEIGHBOR_COST : 1));
+  };
+  P.projectState = function(id) { var pr = (this.s.projects || {})[id]; return !pr ? 'open' : pr.built ? 'built' : 'building'; };
+  P.projectBoost = function() {
+    var s = this.s, b = 0;
+    for (var id in (s.projects || {})) {
+      var pr = s.projects[id];
+      if (pr.built) b += pr.purpose * Math.max(PROJECT_FLOOR, 1 - (s.months - pr.built) / PROJECT_FADE);
+    }
+    return b;
+  };
+  P.projectCard = function(id, suggested) {
+    var s = this.s, p = PROJECTS[id];
+    if (!p || s.card || this.projectState(id) !== 'open' || !this.festus()) return false;
+    var funds = this._sim.budget.totalFunds, a = this.abundance();
+    var rc = this.projectCost(id, 'robots'), nc = this.projectCost(id, 'neighbors');
+    var pr = Math.round(p.purpose * ROBOT_PURPOSE), pn = Math.round(p.purpose * NEIGHBOR_PURPOSE);
+    s.mayor.projAsked = s.mayor.projAsked || {};
+    s.mayor.projAsked[id] = s.months;
+    this.showCard({type: 'project', id: id, kicker: 'Town project' + (suggested ? ' · residents are asking' : '') + ' · no revenue',
+      title: p.name, body: p.body,
+      rows: [['Cost today', money(rc) + ' (' + money(p.base) + ' before robots and cheap compute; abundance ' + Math.round(a * 100) + '%)', 'neutral'],
+             ['Robots only', money(rc) + ', done in ' + p.months[0] + ' months. Purpose +' + pr, 'neutral'],
+             ['Neighbors + robots', money(nc) + ', done in ' + p.months[1] + ' months. Purpose +' + pn + ': people value what they build', 'good'],
+             ['Pays back', 'Nothing in dollars. Purpose fades slowly over two years, and feeds approval', 'neutral']],
+      options: [{id: 'robots', label: 'Robots build it (' + money(rc) + ')', tone: 'neutral', cost: rc, disabled: rc > funds,
+                 preview: this.preview(scale(p.d, 0.7)), note: 'Quick and cheap. When it opens: Purpose +' + pr + '.'},
+                {id: 'neighbors', label: 'Neighbors + robots (' + money(nc) + ')', tone: 'good', cost: nc, disabled: nc > funds,
+                 preview: this.preview(scale(p.d, 1.2)), note: 'Slower and dearer. When it opens: Purpose +' + pn + '.'},
+                {id: 'later', label: 'Not now', tone: 'bad', preview: []}]
+    });
+    return true;
+  };
+  P._decideProject = function(card, option) {
+    var s = this.s, p = PROJECTS[card.id];
+    if (option !== 'robots' && option !== 'neighbors') return;
+    var cost = this.projectCost(card.id, option);
+    if (cost > this._sim.budget.totalFunds) return;
+    this._sim.budget.spend(cost);
+    var n = option === 'neighbors';
+    s.projects = s.projects || {};
+    s.projects[card.id] = {who: option, cost: cost, start: s.months, done: s.months + p.months[n ? 1 : 0],
+                           purpose: p.purpose * (n ? NEIGHBOR_PURPOSE : ROBOT_PURPOSE), d: scale(p.d, n ? 1.2 : 0.7)};
+    this.news('neutral', p.name + ': ' + (n ? 'neighbors sign up for weekend shifts alongside the robots' : 'the robots start work') + '. ' + money(cost) + ', open in ' + p.months[n ? 1 : 0] + ' months.');
+  };
+  P._projectsMonthly = function() {
+    var s = this.s;
+    for (var id in (s.projects || {})) {
+      var pr = s.projects[id];
+      if (pr.built || s.months < pr.done) continue;
+      pr.built = s.months;
+      this.bump(pr.d, PROJECTS[id].name + ' opened');
+      this.news('good', PROJECTS[id].opened[pr.who === 'neighbors' ? 1 : 0]);
+      this.drama();
+    }
+  };
+  P._suggestProject = function() {
+    var s = this.s, m = s.mayor, self = this, asked = m.projAsked || {};
+    if (s.months < 4) return false;
+    var ids = PROJECT_ORDER.filter(function(id) {
+      return self.projectState(id) === 'open' && (asked[id] === undefined || s.months - asked[id] >= 12) &&
+             self.projectCost(id, 'robots') <= self._sim.budget.totalFunds;
+    });
+    return ids.length ? this.projectCard(ids[0], true) : false;
+  };
+
   // ---- the director: research cards on a schedule, and something every few months, never two cards at once ----
   P._director = function(mi) {
     // Something to decide every few months: a breakthrough when one is due, otherwise whichever faction is
@@ -1050,6 +1189,7 @@ export function installMayor(L) {
     if (furious && m.lastType !== 'ask' && this._askCard()) return;
     if (nextR && mi >= R.next) { this._researchCard(nextR); return; }
     if (since < CARD_GAP && !quiet) return;
+    if (this.festus() && m.lastType !== 'project' && (m.lastType === 'ask' || s.purpose < 65) && this._suggestProject()) return;
     if (m.lastType !== 'ask' && this._askCard()) return;
     if (nextR) { this._researchCard(nextR); return; }
     if (this.festus() && s.dev.status === 'away') { s.dev.due = mi; return; }

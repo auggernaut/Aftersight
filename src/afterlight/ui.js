@@ -219,6 +219,8 @@ AfterlightUI.prototype.frame = function(force) {
   var L = game.simulation.afterlight, m = L.s.mayor;
   var a = Math.round(m.approval);
   $('#alApproval').text(a + '%').css('color', a >= 60 ? '#5ee07a' : a >= 50 ? '#f2d36b' : a >= 40 ? '#f5a54a' : '#ff6b5e');
+  var pu = Math.round(L.s.purpose);
+  $('#alPurposeHud').text(pu).css('color', pu >= 60 ? '#8fb6ff' : pu >= 45 ? '#f2d36b' : '#ff6b5e');
   var ne = L.nextElection();
   $('.hudApproval').attr('data-tip', m.gameOver ? 'You lost the ' + m.gameOver.year + ' election' :
     'Your approval. ' + (ne >= 0 ? 'Next election ' + L.monthName(ne) + ' (' + (ne - L.mi()) + ' months); under 50% and you\'re out.' : ''));

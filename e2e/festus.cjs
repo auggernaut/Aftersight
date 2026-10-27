@@ -399,6 +399,54 @@ const months = async (page, n) => {
   if (!(cheap.bills > green.bills)) fail('grid power should raise bills more than on-site gas');
   if (!/Cooling: closed-loop/.test(green.signNews)) fail('signing news should name the design');
 
+  // ---- Festus Fund, Purpose, town projects ----
+  {
+    const run = await startFestus(browser, url);
+    const pg = run.page;
+    await pg.click('#alCard .cardOption[data-option="go"]');
+    await pg.waitForSelector('#alCard[data-type="offer"]:not(.hidden)');
+    if (!(await pg.isVisible('#alPurposeHud'))) fail('Purpose is not in the top bar');
+    if (!(await pg.isVisible('#alFundBox')) || !(await pg.isVisible('#alProjBox'))) fail('Festus Fund or projects missing from the panel');
+    await pg.click('#alCard .cardOption[data-option="accept"]');
+    // the payout slider sets how much of the fund goes out each January
+    const sl = await pg.evaluate(() => { const L = __AL.layer, el = document.getElementById('alFundPayout');
+      const share = v => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); return L.fundShare(); };
+      const r = { low: share(0), high: share(100) }; share(50); return r; });
+    console.log('fund slider shares', JSON.stringify(sl));
+    if (!(sl.high > sl.low)) fail('the payout slider does not change the payout');
+    const fund = await pg.evaluate(() => {
+      const L = __AL.layer; L.autoDecide = function(c) { this.decide(c.options[c.options.length - 1].id); };
+      if (L.s.card) L.autoDecide(L.s.card);
+      __AL.game.alNoPaper = true; __AL.fastForward(26);
+      return { fund: Math.round(L.s.fund), paid: Math.round(L.s.fundPaid), perRes: L.s.dividendPerRes, netWorth: L.s.netWorth, budgetIncome: Math.round(L.s.dealIncome),
+               news: L.s.log.filter(e => /Festus Fund dividend/.test(e.text)).map(e => e.text) };
+    });
+    console.log('festus fund', JSON.stringify(fund));
+    if (!(fund.fund > 0) || !(fund.perRes > 0) || !(fund.netWorth >= fund.perRes) || !fund.news.length) fail('the Festus Fund did not collect and pay a dividend');
+    // projects: open one from the panel, compare who builds it, let neighbors build it, watch purpose
+    await pg.evaluate(() => { const L = __AL.layer; L.autoDecide = null; L.s.card = null; if (__AL.game._openWindow === 'alCard') __AL.game.alCards.close();
+      __AL.game.simulation.budget.setFunds(20000); __AL.game.alNoPaper = false; __AL.game.alPanel.refresh(true); });
+    if (await pg.evaluate(() => document.getElementById('alPanel').classList.contains('collapsed'))) await pg.click('#alCollapse');
+    const before = await pg.evaluate(() => ({ purpose: __AL.layer.s.purpose, boost: __AL.layer.projectBoost(), cheap: __AL.layer.projectCost('park', 'robots') }));
+    await pg.click('.alProj[data-proj="garden"]');
+    await pg.waitForSelector('#alCard[data-type="project"]:not(.hidden)', { timeout: 5000 });
+    const pc = await pg.evaluate(() => __AL.card());
+    console.log('project card', pc.title, JSON.stringify(pc.options.map(o => o.label)));
+    const rob = pc.options.find(o => o.id === 'robots'), nb = pc.options.find(o => o.id === 'neighbors');
+    if (!rob || !nb || !(nb.cost > rob.cost)) fail('project card should offer robots (cheaper) and neighbors + robots (dearer)');
+    await pg.click('#alCard .cardOption[data-option="neighbors"]');
+    const after = await pg.evaluate(() => { const L = __AL.layer; L.autoDecide = function(c) { this.decide(c.options[c.options.length - 1].id); };
+      __AL.game.alNoPaper = true; __AL.fastForward(5);
+      const pr = L.s.projects.garden; const a0 = L.projectCost('park', 'robots'); L.s.automation = 0.9; const a1 = L.projectCost('park', 'robots');
+      return { built: pr.built !== undefined, who: pr.who, boost: L.projectBoost(), purpose: L.s.purpose, state: L.projectState('garden'), costNow: a0, costAbundant: a1,
+               info: document.getElementById('alProj_garden').textContent }; });
+    console.log('project after', JSON.stringify(after));
+    if (!after.built || after.who !== 'neighbors' || !(after.boost > before.boost)) fail('the neighbor-built garden did not open and lift purpose');
+    if (!(after.costAbundant < after.costNow)) fail('project costs should fall as abundance rises');
+    if (run.errors.length) fail('console errors (fund run):\n' + run.errors.join('\n'));
+    await pg.close();
+  }
+
   await browser.close();
   srv.close();
   console.log(failed ? 'FESTUS FAILED' : 'FESTUS PASSED');

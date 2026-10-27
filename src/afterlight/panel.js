@@ -5,7 +5,7 @@
 
 import $ from "jquery";
 
-import { FACTIONS, ELECTIONS, WIN_TERMS, WIN_SHARE, RESEARCH, UTIL_TEXT } from './mayor.js';
+import { FACTIONS, ELECTIONS, WIN_TERMS, WIN_SHARE, RESEARCH, UTIL_TEXT, PROJECTS, PROJECT_ORDER } from './mayor.js';
 import { LABELS } from './festus.js';
 
 var bar = function(id, label, colour) {
@@ -35,6 +35,20 @@ function AfterlightPanel(game) {
         '<div class="alGoal" id="alGoal"></div>' +
         '<div class="alDeal" id="alDeal"></div>' +
         '<div class="alDeal" id="alResearch"></div>' +
+      '</div>' +
+      // Festus only: the town fund and its dividend, and the purpose projects
+      '<div class="alSection alFund" id="alFundBox"><div class="alSectionTitle">Festus Fund</div>' +
+        '<div class="alFundGrid"><div><span>In the fund</span><b id="alFundBal"></b></div>' +
+        '<div><span>Last dividend</span><b id="alFundDiv"></b></div>' +
+        '<div><span>Next January</span><b id="alFundNext"></b></div>' +
+        '<div><span>Net worth from it</span><b id="alNetWorth"></b></div></div>' +
+        '<label class="alSlider" data-tip="How much of the fund goes out as a dividend each January. The rest stays in and compounds.">' +
+          '<span>Reinvest</span><input type="range" id="alFundPayout" min="0" max="100" step="10" aria-label="Fund payout"><span>Pay out</span></label>' +
+        '<div class="alFundNote" id="alFundNote"></div>' +
+      '</div>' +
+      '<div class="alSection alProjects" id="alProjBox"><div class="alSectionTitle">Town projects <span class="alAbund" id="alAbund"></span></div>' +
+        PROJECT_ORDER.map(function(id) { return '<button class="alProj" data-proj="' + id + '"><span class="alProjName">' + PROJECTS[id].name +
+          '</span><span class="alProjInfo" id="alProj_' + id + '"></span></button>'; }).join('') +
       '</div>' +
       '<div class="alSection alDemand"><div class="alSectionTitle">Demand</div><div id="alRCI"></div></div>' +
       '<div class="alSection alMood"><div class="alSectionTitle">Mood</div>' +
@@ -90,6 +104,12 @@ function AfterlightPanel(game) {
   });
   $('#alPaperRestart').on('click', function(e) { e.preventDefault(); window.location.reload(); });
   var festus = this.layer.s.scenario === 'festus';
+  $('#alFundBox, #alProjBox').toggle(festus);
+  $('#alFundPayout').on('input change', function() { self.layer.setFundPayout($(this).val() / 100); self.refresh(true); });
+  $('#alPanel').on('click', '.alProj', function(e) {
+    e.preventDefault();
+    if (self.layer.projectCard($(this).attr('data-proj'))) { self.refresh(true); if (game.alUI) game.alUI.frame(true); }
+  });
   if (festus) {
     $('#alPaperHead').text('The River Ledger');
     $('#alNewsTitle').text('River news');
@@ -175,6 +195,24 @@ AfterlightPanel.prototype.refresh = function(force) {
   var rText = ra ? 'Researching ' + RESEARCH[ra.id].name.toLowerCase() + ': ' + ra.left + ' mo left' + (ra.stalled ? ' (stalled)' : '') : '';
   rText += (rText ? ' · ' : '') + 'Town compute ' + L.townCompute() + '/mo';
   $('#alResearch').text(rText);
+  if (L.festus()) {
+    var money = function(n) { return '$' + Math.round(n).toLocaleString('en-US'); };
+    $('#alFundBal').text(money(s.fund || 0));
+    $('#alFundDiv').text(s.dividendPerRes ? money(s.dividendPerRes) + '/person' : 'none yet');
+    $('#alFundNext').text(money(L.dividendEstimate()) + '/person');
+    $('#alNetWorth').text('+' + money(s.netWorth || 0));
+    if (!$('#alFundPayout').is(':focus')) $('#alFundPayout').val(Math.round((s.fundPayout === undefined ? 0.5 : s.fundPayout) * 100));
+    $('#alFundNote').text('Pays out ' + Math.round(L.fundShare() * 100) + '% of the fund each January' +
+                          (s.fundIn ? '; ' + L.dev().short + ' and equity add ' + money(s.fundIn * 12) + ' a year.' : '. Keystone payments and equity dividends flow in.'));
+    $('#alAbund').text('· abundance ' + Math.round(L.abundance() * 100) + '%');
+    PROJECT_ORDER.forEach(function(id) {
+      var st = L.projectState(id), pr = (s.projects || {})[id];
+      $('#alProj_' + id).text(st === 'built' ? 'Open · built by ' + (pr.who === 'neighbors' ? 'neighbors + robots' : 'robots') :
+                              st === 'building' ? 'Building · ' + Math.max(0, pr.done - s.months) + ' mo left' :
+                              'from ' + money(L.projectCost(id, 'robots')));
+      $('.alProj[data-proj="' + id + '"]').toggleClass('done', st !== 'open').prop('disabled', st !== 'open');
+    });
+  }
   $('#alCompute').text(fmt(s.compute));
   $('#alRobots').text(fmt(s.robots));
   $('#alAuto').text(pct(s.automation));

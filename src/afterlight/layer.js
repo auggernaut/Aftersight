@@ -80,7 +80,9 @@ function freshState() {
     log: [],
     // Aftersight mayor layer (mayor.js)
     mayor: freshMayor(), dev: freshDev(), research: freshResearch(), card: null, deal: null, construction: null,
-    hallsBuilt: 0, water: {cap: 100, use: 0}, fund: 0, fundDividend: 0, kidsTrust: 0, dependence: 0, dealIncome: 0
+    hallsBuilt: 0, water: {cap: 100, use: 0}, fund: 0, fundDividend: 0, kidsTrust: 0, dependence: 0, dealIncome: 0,
+    // Festus Fund and town projects (mayor.js)
+    fundPayout: 0.5, fundPaid: 0, dividendPerRes: 0, netWorth: 0, projects: {}, projBoost: 0
   };
 }
 
@@ -388,6 +390,11 @@ AfterlightLayer.prototype.monthly = function(simData) {
   var meaning = 1 - 0.5 * coopShare - (p.purposeProgram ? 0.35 : 0);
   var purposeTarget = 80 - s.unemployment * 100 * Math.max(0.1, meaning) + (p.purposeProgram ? 5 : 0) +
                       c.alClinicOn * 2 - (s.slump ? 10 : 0) - (this.has('the_cure') ? 8 : 0);
+  // Festus: automation layoffs drain it even when the dividend pays the bills; projects and ownership build it back
+  if (s.scenario === 'festus')
+    purposeTarget += -s.automation * 25 * (1 - 0.5 * s.cover) + this.projectBoost() + this.townShare() * 20 - 4 +
+                     // with no campus coming, young people leave for work elsewhere, unless the town grows its own
+                     (!s.deal && s.dev.walks > 0 ? -8 + Math.min(3, s.mayor.homegrown || 0) * 2 : 0);
   var recentRiot = s.months - s.riotMonth < 6 ? 15 : 0;
   var hopeTarget = 45 + s.cover * 25 + c.alClinicOn * 4 + (s.milestones.basics_free ? 15 : 0) -
                    s.unemployment * 35 * (1 - s.cover) - recentRiot - s.backlash * 0.15 + coopShare * 10 -
