@@ -228,3 +228,124 @@ footer#footer #author { display: inline !important; margin-left: 4px; }
 footer#footer #author::before { content: "· "; }
 footer#footer .nameLicense { display: block; margin: 0; }
 footer#footer #build { position: static; display: inline; margin-left: 8px; opacity: 0.6; }
+
+/* ---- phones and small tablets ----
+ * The upstream "screen too small" blocker is retired: small screens get the layout below instead. Everything else in
+ * this block only applies under the media query, so desktop layout is unchanged. */
+#tooSmall, #tooSmall[data-hasscript=true] { display: none !important; }
+html, body { overscroll-behavior: none; }
+button, input, label, a, .toolButton { touch-action: manipulation; }
+#canvasContainer, #MicropolisCanvas { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+#menuToggle, #alMini { display: none; }
+
+@media (max-width: 760px), (max-height: 500px) {
+  body { -webkit-tap-highlight-color: transparent; }
+  header#header { height: 44px; padding: 0 6px; padding-left: max(6px, env(safe-area-inset-left)); padding-right: max(6px, env(safe-area-inset-right)); gap: 6px; }
+  #brand .alSub { display: none; }
+  #brandMark { width: 20px; height: 20px; flex: none; }
+  body.inGame #title, body.inGame #headerLinks { display: none; }
+  body:has(#alPanel:not(.collapsed)) #zoomButtons, body:has(#alPanel:not(.collapsed)) #hint { display: none; }
+  #hud { flex: 1 1 auto; min-width: 0; margin-left: 0; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+  #hud::-webkit-scrollbar { display: none; }
+  .hudItem { padding: 2px 7px; min-width: 0; height: 34px; flex: none; }
+  .hudItem label { font-size: 8.5px; letter-spacing: 0.5px; }
+  .hudItem > span { font-size: 12.5px; }
+  .hudCity, .hudScore { display: none; }
+  #speedButtons { padding: 2px; gap: 2px; }
+  .speedButton { width: 32px !important; height: 30px !important; }
+  #menuToggle:not(.initialHidden) { display: block; flex: none; width: 38px; height: 34px; border-radius: 9px; background: rgba(255,255,255,0.08); color: var(--ink);
+    border: 1px solid var(--line); font-size: 18px; line-height: 1; }
+  #menuButtons { display: none !important; }
+  #menuButtons.open:not(.initialHidden) { display: flex !important; position: fixed; top: 48px; right: 6px; z-index: 40; flex-direction: column; gap: 4px; padding: 8px;
+    background: var(--glass2); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,0.5); }
+  #menuButtons.open .miscButton { height: 42px; min-width: 160px; text-align: left; font-size: 14px; }
+  #headerLinks { gap: 8px; font-size: 11px; white-space: nowrap; }
+
+  #wrapper { top: 44px !important; }
+  main#canvasContainer { bottom: 18px !important; }
+  footer#footer { height: 18px !important; padding: 0 8px !important; white-space: nowrap; overflow-x: auto; overflow-y: hidden; font-size: 9px; line-height: 18px; scrollbar-width: none; }
+  footer#footer::-webkit-scrollbar { display: none; }
+  footer#footer .nameLicense { display: inline; margin-left: 6px; }
+
+  /* toolbar: a full-width strip that scrolls sideways, big targets */
+  #controls { left: 0; right: 0; bottom: 0; transform: none; border-radius: 14px 14px 0 0; padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); border-bottom: none; }
+  #buttons { overflow-x: auto; overflow-y: hidden; gap: 2px; touch-action: pan-x; scrollbar-width: none; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+  #buttons::-webkit-scrollbar { display: none; }
+  .toolGroup { padding: 0 4px; flex: none; }
+  .toolGroupLabel { display: none; }
+  #controls .toolButton { width: 52px; height: 52px; flex: none; }
+  #controls .toolButton:hover { transform: none; }
+  .tbIcon { width: 42px; height: 42px; }
+  #toolInfo { top: -26px; font-size: 11px; padding: 3px 10px; max-width: 70vw; overflow: hidden; text-overflow: ellipsis; }
+
+  #zoomButtons { right: 8px; bottom: 120px; }
+  #zoomButtons button { width: 42px; height: 42px; }
+  #hint { left: 8px; right: 60px; bottom: 120px; font-size: 11px; }
+
+  #notifications { top: 6px !important; max-width: 92vw; z-index: 30; font-size: 12px; padding: 6px 12px 6px 28px !important; }
+  #notifications::before { left: 11px; }
+
+  /* City pulse: a bottom sheet above the toolbar; collapsed it is just a summary bar */
+  #alPanel { top: auto !important; bottom: 66px; left: 0; right: 0; width: auto; max-height: 58%; border-radius: 14px 14px 0 0; padding: 6px 12px 8px;
+    border-bottom: none; box-shadow: 0 -8px 24px rgba(0,0,0,0.35); }
+  #alPanel .alTitle { margin-bottom: 4px; min-height: 30px; align-items: center; cursor: pointer; }
+  #alPanel .alTitle::before { content: ""; position: absolute; left: 50%; top: 4px; width: 36px; height: 4px; margin-left: -18px; border-radius: 4px; background: rgba(255,255,255,0.25); }
+  #alPanel #alMini { display: inline; font-size: 11.5px; color: var(--muted); font-weight: 500; }
+  #alPanel .alTitle #alEra { display: none; }
+  #alPanel .alCollapse { width: 40px; height: 32px; font-size: 16px; }
+  #alPanel.collapsed { padding-bottom: 4px; }
+  #alPanel.collapsed .alCollapse::after { content: ""; }
+  #alPanel .alPolicy { margin: 8px 0; min-height: 28px; }
+  .alSwitch { width: 40px; height: 22px; }
+  .alSwitch::after { width: 18px; height: 18px; }
+  .alSwitch:checked::after { left: 20px; }
+
+  /* dialogs fit the screen */
+  .modal { width: min(520px, 94vw) !important; max-height: calc(100% - 20px); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  #aboutWindow { width: min(600px, 94vw) !important; }
+  .aboutBody { font-size: 13px; }
+  #statisticsList, .queryList { width: auto !important; padding: 0 10px !important; }
+  #budgetForm > div, #budgetForm > fieldset { width: 100% !important; }
+  #budgetForm input[type="range"] { max-width: 100%; width: 90%; }
+  .modal .dialogOK, .modal input[type="submit"], .modal button, .modal .cancel { height: 42px; }
+  #alPaper { width: 96vw !important; }
+  #alPaper .paperMast { padding: 10px 12px 0; }
+  #alPaper .alPaperHead { font-size: 28px; }
+  #alPaper .paperBody { padding: 8px 12px 14px; }
+  #alPaper h2 { font-size: 20px; }
+  #alPaperPhoto { height: auto; aspect-ratio: 1120 / 440; }
+  #alPaper .paperCols { grid-template-columns: 1fr; gap: 10px; }
+  #alPaper .paperFacts { border-left: none; padding-left: 0; border-top: 1px solid #b9b09d; padding-top: 8px; }
+  #alPaper p { font-size: 14px; }
+
+  /* splash and new-game cards */
+  #splash { width: min(540px, 94vw) !important; height: auto !important; max-height: calc(100% - 16px); overflow-y: auto; box-sizing: border-box; padding: 12px !important; }
+  #splash p { font-size: 13px; }
+  #splashContainer, #splashButtonContainer, #splashButtons { position: static !important; }
+  #splashContainer canvas { width: 100%; height: auto; display: block; margin: 8px 0; }
+  #splashButtons { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  #splashButtons .splashButton { width: auto !important; min-width: 120px; height: 44px !important; margin: 0 !important; flex: 1 1 auto; }
+  #start { width: min(400px, 92vw) !important; box-sizing: border-box; font-size: 15px; max-height: calc(100% - 16px); overflow-y: auto; }
+  #nameForm { font-size: 16px; height: 36px; width: 80%; }
+  #start input[type=radio] { width: 20px; height: 20px; vertical-align: middle; }
+  #playit { width: 70%; height: 46px; }
+}
+
+/* phones held sideways: little height, so the sheet and toolbar get slimmer */
+@media (max-height: 500px) {
+  #controls { padding-top: 4px; padding-bottom: calc(4px + env(safe-area-inset-bottom)); }
+  #controls .toolButton { width: 48px; height: 46px; }
+  .tbIcon { width: 38px; height: 38px; }
+  #alPanel { bottom: 56px; left: auto; right: max(0px, env(safe-area-inset-right)); width: min(380px, 60vw); max-height: calc(100% - 70px); }
+  #zoomButtons { bottom: 100px; }
+  #hint { bottom: 100px; }
+  #splash .alignCenter { margin: 0; }
+}
+
+/* narrow portrait phones: the slow speed goes so the top bar fits without scrolling */
+@media (max-width: 430px) {
+  .speedButton[data-speed="1"] { display: none; }
+  body.inGame #brand { display: none; }
+  .hudItem { padding: 2px 6px; }
+  .hudItem > span { font-size: 12px; }
+}

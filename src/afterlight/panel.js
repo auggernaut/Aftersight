@@ -23,7 +23,7 @@ function AfterlightPanel(game) {
 
   var html =
     '<div id="alPanel">' +
-      '<div class="alTitle"><span class="alTitleText">City pulse</span> <span id="alEra"></span>' +
+      '<div class="alTitle"><span class="alTitleText">City pulse</span> <span id="alEra"></span><span id="alMini"></span>' +
         '<button id="alCollapse" class="alCollapse" data-tip="Hide or show the panel">&#x2013;</button></div>' +
       '<div class="alBody">' +
       '<div class="alSection alDemand"><div class="alSectionTitle">Demand</div><div id="alRCI"></div></div>' +
@@ -127,6 +127,7 @@ AfterlightPanel.prototype.refresh = function(force) {
   $('#alHelix').text(s.compute + s.robots > 0 ? pct(s.helixShare) : '-');
   $('#alDividend').text(s.policies.dividend ? '$' + fmt(s.dividendPool) + '/mo' : 'off');
   var known = Object.keys(s.discovered).length;
+  $('#alMini').text('Jobless ' + pct(s.unemployment) + ' · Hope ' + Math.round(s.hope));
   $('#alEra').text(['· The Before', '· Cheap Power', '· Thinking Machines', '· Self-Building', '· The Cure', '· Abundance'][Math.min(5, known)]);
   var items = s.log.slice(0, 5).map(function(e) {
     return '<li class="al_' + e.tone + '"><span class="alDate">' + e.date + '</span> ' + $('<div>').text(e.text).html() + '</li>';

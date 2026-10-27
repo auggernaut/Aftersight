@@ -231,18 +231,99 @@ IsoCanvas.prototype._bindInput = function() {
     self._clampCam();
   });
   window.addEventListener('mouseup', function() { if (drag) { drag = null; c.style.cursor = ''; } });
-  // pinch zoom on touch screens
-  var pinch = null;
-  c.addEventListener('touchstart', function(e) {
-    if (e.touches.length === 2) pinch = {d: Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY), idx: self._zoomIdx};
-  }, {passive: true});
-  c.addEventListener('touchmove', function(e) {
-    if (!pinch || e.touches.length !== 2) return;
-    var d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-    var steps = Math.round(Math.log(d / pinch.d) / Math.log(1.45));
-    self.setZoomLevel(pinch.idx + steps);
-  }, {passive: true});
-  c.addEventListener('touchend', function() { pinch = null; }, {passive: true});
+  this._bindTouch();
+};
+
+// ---- touch: one finger pans, two fingers pinch-zoom (and pan), a tap acts as a click for the current tool ----
+// Only pointerType 'touch' is handled here, so mouse and pen keep the desktop paths above. The browser's
+// compatibility mouse events that follow a touch are swallowed in the capture phase so a tap never counts twice.
+IsoCanvas.prototype._bindTouch = function() {
+  var self = this, c = this._canvas, pts = new Map(), gesture = null, lastTouch = 0;
+  c.style.touchAction = 'none';
+  var rel = function(e) { var r = c.getBoundingClientRect(); return {x: e.clientX - r.left, y: e.clientY - r.top}; };
+  var startGesture = function() {
+    var list = Array.from(pts.values());
+    if (list.length === 1) {
+      var p = list[0];
+      gesture = {kind: 'pan', sx: p.x, sy: p.y, cx: self._camX, cy: self._camY, t: Date.now(), moved: false, tap: true};
+    } else if (list.length >= 2) {
+      var a = list[0], b = list[1], mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      gesture = {kind: 'pinch', d: Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), z: self._zoom,
+                 world: self._screenToWorld(mx, my, self._zoom), tap: false};
+    }
+  };
+  c.addEventListener('pointerdown', function(e) {
+    if (e.pointerType !== 'touch') return;
+    lastTouch = Date.now();
+    e.preventDefault();
+    try { c.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointers */ }
+    pts.set(e.pointerId, rel(e));
+    var wasPinch = gesture && gesture.kind === 'pinch';
+    startGesture();
+    if (wasPinch && gesture) gesture.tap = false;
+  });
+  c.addEventListener('pointermove', function(e) {
+    if (e.pointerType !== 'touch' || !pts.has(e.pointerId)) return;
+    lastTouch = Date.now();
+    e.preventDefault();
+    pts.set(e.pointerId, rel(e));
+    if (!gesture) return;
+    var list = Array.from(pts.values());
+    if (gesture.kind === 'pan' && list.length === 1) {
+      var dx = list[0].x - gesture.sx, dy = list[0].y - gesture.sy;
+      if (!gesture.moved && Math.hypot(dx, dy) > 9) { gesture.moved = true; gesture.tap = false; }
+      if (gesture.moved) {
+        self._camX = gesture.cx - dx / self._zoom;
+        self._camY = gesture.cy - dy / self._zoom;
+        self._clampCam();
+      }
+    } else if (gesture.kind === 'pinch' && list.length >= 2) {
+      var a = list[0], b = list[1], mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      var d = Math.max(20, Math.hypot(a.x - b.x, a.y - b.y));
+      var z = Math.max(LEVELS[0], Math.min(LEVELS[LEVELS.length - 1], gesture.z * d / gesture.d));
+      self._zoom = self._zoomTarget = z;
+      self._zoomAnchor = null;
+      // cache level: the nearest level at or above the live zoom keeps sprites crisp
+      var idx = 0;
+      while (idx < LEVELS.length - 1 && LEVELS[idx] < z - 0.001) idx++;
+      self._zoomIdx = idx;
+      // keep the world point under the fingers' midpoint fixed (this also pans with two fingers)
+      self._camX = gesture.world.X - (mx - self._w / 2) / z;
+      self._camY = gesture.world.Y - (my - self._h / 2) / z;
+      self._clampCam();
+    }
+  });
+  var end = function(e) {
+    if (e.pointerType !== 'touch' || !pts.has(e.pointerId)) return;
+    lastTouch = Date.now();
+    e.preventDefault();
+    var p = pts.get(e.pointerId);
+    pts.delete(e.pointerId);
+    var g = gesture;
+    if (g && g.kind === 'pan' && g.tap && e.type === 'pointerup' && Date.now() - g.t < 600 && self.onTap) self.onTap(p.x, p.y);
+    if (g && g.kind === 'pinch' && pts.size < 2) {
+      // settle on the nearest zoom level, anchored where the fingers were
+      var best = 0;
+      for (var i = 1; i < LEVELS.length; i++) if (Math.abs(Math.log(LEVELS[i] / self._zoom)) < Math.abs(Math.log(LEVELS[best] / self._zoom))) best = i;
+      var m = self._worldToScreen(g.world.X, g.world.Y);
+      self.setZoomLevel(best, m.x, m.y);
+    }
+    gesture = null;
+    if (pts.size) { startGesture(); if (gesture) gesture.tap = false; }
+  };
+  c.addEventListener('pointerup', end);
+  c.addEventListener('pointercancel', end);
+  // swallow compatibility mouse events and clicks generated by touches
+  ['mousedown', 'mousemove', 'mouseup', 'click', 'dblclick'].forEach(function(type) {
+    self._parent.addEventListener(type, function(e) {
+      if (e.target === c && Date.now() - lastTouch < 800) { e.stopPropagation(); e.preventDefault(); }
+    }, true);
+  });
+  this.lastTouchTime = function() { return lastTouch; };
+};
+
+IsoCanvas.prototype._worldToScreen = function(X, Y) {
+  return {x: (X - this._camX) * this._zoom + this._w / 2, y: (Y - this._camY) * this._zoom + this._h / 2};
 };
 
 // ---- map scan: find buildings and dirty chunks ----

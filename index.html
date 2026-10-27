@@ -17,7 +17,10 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, height=device-height, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#141c22">
     <meta name="description" content="Aftersight: a city builder about living through the shift to a post-labor economy. A modified version of micropolisJS, the HTML5 port of Micropolis.">
     <link rel="stylesheet" media="screen" type="text/css" href="css/style.css">
     <link rel="stylesheet" media="screen" type="text/css" href="css/afterlight-iso.css">
@@ -34,7 +37,7 @@
         <div class="hudItem"><label>Date</label><span id="date">Jan 1900</span></div>
         <div class="hudItem"><label>Funds</label><span class="hudMoney">$<span id="funds">20000</span></span></div>
         <div class="hudItem"><label>Population</label><span id="population">0</span></div>
-        <div class="hudItem"><label>Score</label><span id="score">0</span></div>
+        <div class="hudItem hudScore"><label>Score</label><span id="score">0</span></div>
         <div id="speedButtons" class="hudItem" role="group" aria-label="Speed">
           <button class="speedButton" data-speed="0" data-tip="Pause"><svg viewBox="0 0 16 16"><rect x="3" y="3" width="3.5" height="10" rx="1"/><rect x="9.5" y="3" width="3.5" height="10" rx="1"/></svg></button>
           <button class="speedButton" data-speed="1" data-tip="Slow"><svg viewBox="0 0 16 16"><path d="M5 3l8 5-8 5z"/></svg></button>
@@ -42,6 +45,7 @@
           <button class="speedButton" data-speed="3" data-tip="Fast"><svg viewBox="0 0 16 16"><path d="M1 3l5 5-5 5zM6 3l5 5-5 5zM11 3l4 5-4 5z"/></svg></button>
         </div>
       </div>
+      <button id="menuToggle" class="initialHidden" aria-label="Menu">&#9776;</button>
       <nav id="menuButtons" class="initialHidden">
         <button id="budgetRequest" class="miscButton" data-tip="Budget and taxes">Budget</button>
         <button id="evalRequest" class="miscButton" data-tip="What residents think">Evaluation</button>

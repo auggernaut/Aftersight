@@ -44,6 +44,7 @@ npx webpack serve      # or serve dist/ with any static server and open index.ht
 
 ```
 NODE_PATH=/path/to/playwright/node_modules OUT=shots node e2e/smoke.cjs     # ~4 game years, fails on console errors
+NODE_PATH=/path/to/playwright/node_modules OUT=shots node e2e/mobile.cjs    # emulated phones: tap, pan, pinch, sheet, paper
 NODE_PATH=/path/to/playwright/node_modules RUNS=3 node e2e/compare.cjs      # hands-off vs community ownership
 npm test                                                                     # upstream jest unit tests
 ```

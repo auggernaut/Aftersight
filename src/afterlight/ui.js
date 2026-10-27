@@ -5,6 +5,8 @@
 
 import $ from "jquery";
 
+import { TOOL_CLICKED } from '../messages.ts';
+
 import { makeP, box, quad, line, tree, poly, cylinder } from './iso/art.js';
 import * as B from './iso/buildings.js';
 
@@ -102,6 +104,8 @@ function AfterlightUI(game) {
   // tooltips for anything with data-tip
   var tip = $('#tooltip');
   $(document).on('mouseenter', '[data-tip]', function() {
+    if (game.gameCanvas.lastTouchTime && Date.now() - game.gameCanvas.lastTouchTime() < 800) return;
+    if ($('body').hasClass('touchUI')) return;
     var r = this.getBoundingClientRect();
     tip.text($(this).attr('data-tip')).removeClass('hidden');
     var tw = tip.outerWidth(), th = tip.outerHeight();
@@ -119,11 +123,29 @@ function AfterlightUI(game) {
     self.setSpeed(+$(this).attr('data-speed'));
   });
 
+  // touch: a tap on the map is a click for the selected tool (pans and pinches are handled by the iso view)
+  game.gameCanvas.onTap = function(x, y) {
+    var input = game.inputStatus;
+    if (!input.currentTool || game.dialogOpen) return;
+    input.mouseX = x; input.mouseY = y;          // show the footprint where the tap landed
+    input._emitEvent(TOOL_CLICKED, {x: x, y: y});
+  };
+  var touchUI = window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+  if (touchUI) $('body').addClass('touchUI');
+  $('body').addClass('inGame');
+  var compact = window.matchMedia && window.matchMedia('(max-width: 760px), (max-height: 500px)');
+  if (compact && compact.matches) $('#alPanel').addClass('collapsed');
+  // stop iOS page pinch and double-tap zoom over the game; the map has its own pinch
+  ['gesturestart', 'gesturechange'].forEach(function(t) { document.addEventListener(t, function(e) { e.preventDefault(); }, {passive: false}); });
+  $('#menuToggle').on('click', function(e) { e.preventDefault(); $('#menuButtons').toggleClass('open'); });
+  $('#menuButtons').on('click', '.miscButton', function() { $('#menuButtons').removeClass('open'); });
+
   // zoom buttons
   $('#canvasContainer').append(
     '<div id="zoomButtons" class="initialHiddenNo"><button id="zoomIn" data-tip="Zoom in (mouse wheel)">+</button>' +
     '<button id="zoomOut" data-tip="Zoom out (mouse wheel)">&#x2212;</button></div>' +
-    '<div id="hint">Drag to pan · wheel to zoom · right-drag pans while building</div>');
+    '<div id="hint">' + (touchUI ? 'Drag to pan · pinch to zoom · pick a tool, then tap to build' :
+      'Drag to pan · wheel to zoom · right-drag pans while building') + '</div>');
   $('#zoomIn').on('click', function() { game.gameCanvas.zoomIn(); });
   $('#zoomOut').on('click', function() { game.gameCanvas.zoomOut(); });
   setTimeout(function() { $('#hint').addClass('fade'); }, 9000);
@@ -141,7 +163,10 @@ function AfterlightUI(game) {
   $('#aboutForm').on('submit', function(e) { e.preventDefault(); game.aboutWindow.close(); });
 
   // panel collapse
-  $('#alCollapse').on('click', function() { $('#alPanel').toggleClass('collapsed'); });
+  var syncCollapse = function() { $('#alCollapse').html($('#alPanel').hasClass('collapsed') ? '+' : '&#x2013;'); };
+  $('#alCollapse').on('click', function(e) { e.stopPropagation(); $('#alPanel').toggleClass('collapsed'); syncCollapse(); });
+  syncCollapse();
+  $('#alPanel .alTitle').on('click', function() { if (compact && compact.matches) $('#alPanel').toggleClass('collapsed'); syncCollapse(); });
 
   // RCI demand meter
   $('#alRCI').html(['res', 'com', 'ind'].map(function(k, i) {

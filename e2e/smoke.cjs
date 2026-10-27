@@ -59,7 +59,9 @@ const POSITIVE = /SOLAR NOW CHEAPER|FRONTIER MODEL|ROBOTS NOW BUILD|THE CURE|FUS
     for (const sel of ['#congratsOK', '#budgetOK', '#alPaperOK', '#queryOK', '#aboutOK']) if (await page.isVisible(sel)) await page.click(sel);
   };
   // Papers would pause the game on every discovery during fast-forward; we look at one on purpose below
-  await page.evaluate(() => { __AL.game.alNoPaper = true; });
+  await page.evaluate(() => { __AL.game.alNoPaper = true;
+    // the upstream "X is now a town!" window can pop mid-drag and steal clicks; this test isn't about it
+    ['Town', 'City', 'Capital', 'Metropolis', 'Megalopolis'].forEach(k => { __AL.game['_reached' + k] = true; }); });
 
   const tileValue = (x, y) => page.evaluate(([x, y]) => __AL.game.gameMap.getTileValue(x, y), [x, y]);
   const view = (x, y, zoom) => page.evaluate(([x, y, z]) => { const g = __AL.game.gameCanvas; if (z !== undefined) g.setZoomNow(z); g.centreOn(x, y); }, [x, y, zoom]);

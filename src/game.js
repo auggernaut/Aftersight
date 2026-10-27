@@ -234,8 +234,8 @@ function Game(gameMap, tileSet, snowTileSet, spriteSheet, difficulty, name) {
   this.congratsWindow.addEventListener(Messages.CONGRATS_WINDOW_CLOSED, this.genericDialogClosure);
 
   // Listen for touches, so we can warn tablet users
+  // Aftersight: the iso view has real touch controls, so the upstream "touch isn't supported" warning stays off
   this.touchListener = touchListener.bind(this);
-  window.addEventListener('touchstart', this.touchListener, false);
 
   // Unhide controls
   this.revealControls();
