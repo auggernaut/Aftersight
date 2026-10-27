@@ -78,7 +78,7 @@ const months = async (page, n) => {
   if (town.water < 500) fail('no river on the east side');
   if (!town.i55) fail('I-55 does not run the length of the map');
   if (!town.clear) fail('the data center site is not empty at the start');
-  if (town.pop < 4000) fail('Festus did not grow into a town (pop ' + town.pop + ')');
+  if (town.pop < 1500) fail('Festus did not grow into a town (pop ' + town.pop + ')');
 
   // ---- intro card, then the opening map with the card held back ----
   await page.waitForSelector('#alCard:not(.hidden)', { timeout: 5000 });

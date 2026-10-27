@@ -44,9 +44,22 @@ npx webpack serve      # or serve dist/ with any static server and open index.ht
 
 ```
 NODE_PATH=/path/to/playwright/node_modules OUT=shots node e2e/smoke.cjs     # ~4 game years, fails on console errors
-NODE_PATH=/path/to/playwright/node_modules OUT=shots node e2e/mobile.cjs    # emulated phones: tap, pan, pinch, sheet, paper
+NODE_PATH=/path/to/playwright/node_modules OUT=shots node e2e/mobile.cjs    # emulated phones: tap, pan, pinch, sheet, paper, Festus cards
+NODE_PATH=/path/to/playwright/node_modules OUT=shots node e2e/festus.cjs    # Festus: offer, counter, accept, breakthrough, election win and loss
 NODE_PATH=/path/to/playwright/node_modules RUNS=3 node e2e/compare.cjs      # hands-off vs community ownership
 npm test                                                                     # upstream jest unit tests
 ```
 
 The smoke test starts a game and plays it through the iso interface: it picks tools from the toolbar and clicks or drags on iso tiles to build a solar farm, a co-op data center, a co-op depot and a road, bulldozes and queries, zooms with the wheel, pans, uses the speed buttons and opens the About panel. It then passes policies through the panel, fast-forwards four years, checks that at least one negative and one positive event fire, forces a protest, a riot and a discovery page for screenshots, builds a fusion plant and checks the save includes Afterlight state. In the browser, `window.__AL` exposes test hooks (`fastForward(months)`, `discover(id)`, `protest()`, `riot()`, `strike()`, `state()`).
+
+## Festus, Missouri (2026)
+
+A scenario on the `festus` branch, picked from the splash ("Play Festus, MO") or the new-game Town list. A river town on the Mississippi with I-55, a Main Street and farmland, and an empty site by the interstate that a fictional developer, Keystone Compute Partners, wants for a $6B data center campus. You are the mayor:
+
+- **Approval** (top bar) is a weighted mix of five factions: residents, farmers, workers, business and schools. They react to power bills, water, noise, taxes, jobs, school money and secrecy.
+- **Elections** in April 2028, 2030 and 2032. Under 50% and the voters oust you. Win three, or win one with the town owning 25%+ of the compute it hosts and paying a dividend.
+- **Offers** come as cards: accept, reject, or counter with one or two asks. Keystone answers months later with better terms, a firm "take it or leave it", or walks to a neighboring town and comes back later with a better tier. Later tiers add equity, a wealth fund, a kids' trust, compute royalties and a town AI co-op.
+- **Breakthroughs** are decisions: each card shows the cost in dollars and compute. Compute comes from the town's equity in the data centers; the rest is bought on the market. Finished research unlocks a building (Healing Clinic, Fusion Plant) that you then place, pay for and keep up. Passing hands it to someone else.
+- Between those, factions come to City Hall with asks (a sound wall, a water guarantee, local hiring, publishing the deal, a tax cut, a school levy), and each election opens with a campaign choice.
+
+Code: `src/afterlight/festus.js` (map), `src/afterlight/mayor.js` (factions, offers, research, elections, pacing), `src/afterlight/cards.js` (decision card UI). Hooks for tests: `__AL.mayor()`, `__AL.card()`, `__AL.decide(option, asks)`, `__AL.force('Counter'|'Court'|'Vote', v)`, `__AL.election(i, vote)`, `__AL.bump(deltas)`.

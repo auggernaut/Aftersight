@@ -22,6 +22,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#141c22">
     <meta name="description" content="Aftersight: a city builder about living through the shift to a post-labor economy. A modified version of micropolisJS, the HTML5 port of Micropolis.">
+    <link rel="icon" href="assets/brand/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/brand/si-32.png">
+    <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
+    <link rel="manifest" href="assets/brand/manifest.webmanifest">
     <link rel="stylesheet" media="screen" type="text/css" href="css/style.css">
     <link rel="stylesheet" media="screen" type="text/css" href="css/afterlight-iso.css">
     <title>Aftersight</title>
@@ -31,7 +35,7 @@
     <img id="snowtiles" class="imageData" src="images/tilessnow.png" alt="These are the game's alternate tiles">
     <img id="sprites" class="imageData" src="images/sprites.png" alt="These are the game's sprites">
     <header id="header">
-      <div id="brand"><span id="brandMark"></span><h1 id="title">Aftersight</h1><span class="alSub">a modified micropolisJS</span></div>
+      <div id="brand"><span id="brandMark"></span><h1 id="title" aria-label="Aftersight">After<span class="si">SI</span>ght</h1><span class="alSub">a modified micropolisJS</span></div>
       <div id="hud" class="initialHidden">
         <div class="hudItem hudCity"><span id="name">Your Name Here</span><span id="cclass" class="hudSub">VILLAGE</span></div>
         <div class="hudItem"><label>Date</label><span id="date">Jan 1900</span></div>
@@ -64,6 +68,7 @@
     </header>
     <div id="wrapper">
       <main id="canvasContainer">
+        <div id="alPoster" aria-hidden="true"></div>
         <div class="hidden" id="opaque"></div>
         <div data-hasscript="false" id="loadingBanner" class="alignCenter padding10 mintcream chunk shadow centred">Loading</div>
         <div id="splash" class="mintcream awaitGeneration open shadow padding10 centred">

@@ -34,6 +34,7 @@ function copyStaticAssets() {
   return new CopyPlugin({
     "patterns": [
       recursivelyCopy('css'),
+      recursivelyCopy('assets'),
       recursivelyCopy('images'),
       recursivelyCopy('sprites'),
       'LICENSE',
