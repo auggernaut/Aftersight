@@ -83,6 +83,8 @@ export function buildStarterTown(simulation, map) {
   use('coal', ox - 4, oy + 9);                // 4x4 tool: centre is offset (1,1) from top-left
   simulation.afterlight.placeBuilding(B.SOLAR, ox - 5, oy + 12);   // two small solar farms beside it
   simulation.afterlight.placeBuilding(B.SOLAR, ox - 5, oy + 15);
+  // ...and a small university Research Lab past them, so breakthroughs can turn up here
+  simulation.afterlight.placeBuilding(B.LAB, ox - 5, oy + 18);
   use('wire', ox - 1, oy + 9);
   use('wire', ox, oy + 9);
   for (y = 0; y < H; y++) use('wire', ox + 13, oy + y);

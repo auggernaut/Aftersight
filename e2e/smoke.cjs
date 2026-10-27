@@ -53,6 +53,7 @@ const POSITIVE = /SOLAR NOW CHEAPER|FRONTIER MODEL|ROBOTS NOW BUILD|THE CURE|FUS
   const c0 = await page.evaluate(() => __AL.census());
   console.log('start', JSON.stringify(c0), JSON.stringify(await page.evaluate(() => __AL.date())));
   if (c0.dc < 1) fail('starter town has no data center');
+  if (c0.labs < 1) fail('starter town has no running Research Lab');
 
   // Close any Micropolis dialog (e.g. "now a city!") that fast-forwarding popped up
   const closeDialogs = async () => {

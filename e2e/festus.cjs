@@ -147,6 +147,42 @@ const months = async (page, n) => {
   const lv = await page.evaluate(() => { const b = __AL.game.simulation.blockMaps; return { site: b.pollutionDensityMap.worldGet(45, 35), far: b.pollutionDensityMap.worldGet(20, 80) }; });
   console.log('pollution near the campus vs far away', JSON.stringify(lv));
 
+  // ---- no Research Lab, no breakthroughs: a news hint points at the Compute menu; build a lab with the toolbar ----
+  const noLab = await page.evaluate(() => ({ labs: __AL.layer.labsOn(), clock: __AL.layer.s.research.clock, done: Object.keys(__AL.layer.s.research.done).length,
+    hint: __AL.layer.s.log.some(e => /Research Lab/.test(e.text)), chip: document.getElementById('alComputeChip').textContent,
+    compute: [...document.querySelectorAll('.alGroupCompute .toolButton')].map(b => b.id), after: [...document.querySelectorAll('.alGroupAfter .toolButton')].map(b => b.id) }));
+  console.log('before a lab', JSON.stringify(noLab));
+  if (noLab.labs || noLab.clock || noLab.done) fail('breakthrough work happened with no Research Lab');
+  if (!noLab.hint) fail('no news hint to build a Research Lab');
+  if (!/\/mo/.test(noLab.chip)) fail('the Compute section does not show town compute');
+  if (noLab.compute.join() !== 'dcHelixButton,dcCoopButton,labButton' || !['depotCoopButton', 'clinicButton', 'fusionButton'].every(id => noLab.after.includes(id)))
+    fail('build menu sections are wrong: ' + JSON.stringify(noLab));
+  {
+    for (let i = 0; i < 4; i++) {   // clear whatever is open (a card, a paper) so the toolbar can be clicked
+      await page.evaluate(() => { if (__AL.card()) __AL.decide(__AL.card().options[__AL.card().options.length - 1].id); });
+      for (const sel of ['#alPaperOK', '#congratsOK', '#alAlertClose']) if (await page.isVisible(sel)) await page.click(sel);
+      await page.waitForTimeout(150);
+    }
+    const spot = await page.evaluate(() => __AL.findSite());
+    await page.evaluate(s => { const g = __AL.game.gameCanvas; g.setZoomNow(3); g.centreOn(s.x + 1, s.y + 1); }, spot);
+    await page.waitForTimeout(200);
+    await page.click('#labButton');
+    const p = await page.evaluate(s => { const g = __AL.game.gameCanvas; const c = g.tileToCanvasCoordinate(s.x + 1, s.y + 1); const r = g._canvas.getBoundingClientRect(); return { x: r.left + c.x, y: r.top + c.y }; }, spot);
+    const f0 = await page.evaluate(() => __AL.funds());
+    await page.mouse.move(p.x, p.y - 40, { steps: 2 }); await page.mouse.move(p.x, p.y, { steps: 2 }); await page.mouse.click(p.x, p.y);
+    await page.waitForTimeout(100);
+    const v = await page.evaluate(s => __AL.game.gameMap.getTileValue(s.x + 1, s.y + 1), spot);
+    console.log('lab placed at', JSON.stringify(spot), 'tile', v, 'cost', f0 - await page.evaluate(() => __AL.funds()));
+    if (v !== 888) fail('the Research Lab was not placed');
+    await page.click('#queryButton');
+    await months(page, 2);
+    const lab = await page.evaluate(() => ({ labs: __AL.layer.labsOn(), bill: __AL.layer.s.labBill, clock: __AL.layer.s.research.clock,
+      site: __AL.sites().filter(x => x.kind === 'lab'), census: __AL.census() }));
+    console.log('lab running', JSON.stringify(lab));
+    if (lab.labs !== 1 || !(lab.clock > 0)) fail('the Research Lab is not running');
+    await page.evaluate(() => { __AL.layer.s.research.clock = Math.max(__AL.layer.s.research.clock, __AL.layer.s.research.next); });   // skip the wait
+  }
+
   // ---- a breakthrough card: invest ----
   let card = await page.evaluate(() => __AL.card());
   for (let i = 0; i < 10 && !(card && card.type === 'research'); i++) {

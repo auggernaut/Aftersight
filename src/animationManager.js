@@ -205,9 +205,7 @@ AnimationManager.prototype.registerAnimations = function() {
   this.registerSingleAnimation([158, 206, 190, 174, 158]);
   this.registerSingleAnimation([159, 207, 191, 175, 159]);
   this.registerSingleAnimation([621, 852, 853, 854, 855, 856, 857, 858, 859, 852]);
-  this.registerSingleAnimation([641, 884, 885, 886, 887, 884]);
-  this.registerSingleAnimation([644, 888, 889, 890, 891, 888]);
-  this.registerSingleAnimation([649, 892, 893, 894, 895, 892]);
+  // Afterlight: tiles 884-892 hold the Research Lab now (afterlight/buildings.js), so these three stacks stay still
   this.registerSingleAnimation([650, 896, 897, 898, 899, 896]);
   this.registerSingleAnimation([676, 900, 901, 902, 903, 900]);
   this.registerSingleAnimation([677, 904, 905, 906, 907, 904]);

@@ -77,7 +77,8 @@ var ICONS = {
   dcCoop: [3, function(ctx, P) { B.dataCenter(ctx, P, 'coop'); }, 8],
   depotHelix: [3, function(ctx, P) { B.depot(ctx, P, 'helix'); }, 8],
   depotCoop: [3, function(ctx, P) { B.depot(ctx, P, 'coop'); }, 8],
-  clinic: [3, function(ctx, P) { B.clinic(ctx, P); }, 8]
+  clinic: [3, function(ctx, P) { B.clinic(ctx, P); }, 8],
+  lab: [3, function(ctx, P) { B.lab(ctx, P); }, 8]
 };
 
 function renderIcons() {

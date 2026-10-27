@@ -38,6 +38,7 @@ T[ALB.DEPOT_HELIX] = {k: 'depot', owner: 'helix', n: 3, own: 8, h: 2.9};
 T[ALB.DEPOT_COOP] = {k: 'depot', owner: 'coop', n: 3, own: 8, h: 2.9};
 T[ALB.FUSION] = {k: 'fusion', n: 3, own: 8, h: 3, plant: true};
 T[ALB.CLINIC] = {k: 'clinic', n: 3, own: 1, h: 3.6};
+T[ALB.LAB] = {k: 'lab', n: 3, own: 1, h: 4.2, zoneOnly: true};   // 888 is also an old smoke frame: only a zone centre is a lab
 T[750].plant = T[816].plant = true;
 
 var RES_H = [0, 3.4, 4.6, 8.6, 16.2], COM_H = [0, 1.6, 3.7, 9, 14.2, 24], IND_H = [0, 2.9, 7, 8, 10];
@@ -353,7 +354,7 @@ IsoCanvas.prototype._scan = function(force) {
     for (x = 0; x < W; x++) {
       i = y * W + x; v = raw[i];
       var c = null;
-      if (data[i].isZone() || T[v]) c = classify(v);
+      if (data[i].isZone() || (T[v] && !T[v].zoneOnly)) c = classify(v);
       if (c) {
         var x0 = x - 1, y0 = y - 1, n = c.n;
         for (var dy = 0; dy < n; dy++)
@@ -463,6 +464,7 @@ IsoCanvas.prototype._sprite = function(o, idx) {
       case 'solar': B.solar(ctx, P); break;
       case 'fusion': B.fusion(ctx, P); break;
       case 'clinic': B.clinic(ctx, P); break;
+      case 'lab': B.lab(ctx, P); break;
     }
   } finally { collectShadows(null); }
   drawShadows(sh.getContext('2d'), P, boxes);

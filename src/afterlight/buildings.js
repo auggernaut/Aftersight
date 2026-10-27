@@ -16,7 +16,12 @@ export const DEPOT_COOP = TV.CHURCH5;    // co-op robot depot
 export const FUSION = TV.CHURCH6;        // fusion plant (unlocked by discovery)
 export const CLINIC = TV.CHURCH7;        // healing / longevity clinic (unlocked by discovery)
 
-export const ALL = [DC_HELIX, DC_COOP, SOLAR, DEPOT_HELIX, DEPOT_COOP, FUSION, CLINIC];
+// The Research Lab takes the nine tiles after the explosion frames (884-892). Upstream used them for industrial smoke
+// frames, which the isometric view never shows; animationManager.js no longer cycles those three stacks into them.
+export const LAB_BASE = 884;
+export const LAB = LAB_BASE + 4;
+
+export const ALL = [DC_HELIX, DC_COOP, SOLAR, DEPOT_HELIX, DEPOT_COOP, FUSION, CLINIC, LAB];
 
 export const NAMES = {};
 NAMES[DC_HELIX] = 'Helix Data Center';
@@ -26,13 +31,15 @@ NAMES[DEPOT_HELIX] = 'Helix Robot Depot';
 NAMES[DEPOT_COOP] = 'Co-op Robot Depot';
 NAMES[FUSION] = 'Fusion Plant';
 NAMES[CLINIC] = 'Healing Clinic';
+NAMES[LAB] = 'Research Lab';
 
 export const isALTile = function(v) {
-  return v >= TV.CHURCH1BASE && v <= TV.CHURCH7LAST;
+  return (v >= TV.CHURCH1BASE && v <= TV.CHURCH7LAST) || (v >= LAB_BASE && v < LAB_BASE + 9);
 };
 
 export const centreOf = function(v) {
   if (!isALTile(v)) return -1;
+  if (v < TV.CHURCH1BASE) return LAB;
   return TV.CHURCH1BASE + Math.floor((v - TV.CHURCH1BASE) / 9) * 9 + 4;
 };
 
@@ -112,6 +119,13 @@ painters[DEPOT_HELIX] = function(c) { depot(c, HELIX); };
 painters[DEPOT_COOP] = function(c) { depot(c, COOP); };
 painters[FUSION] = fusion;
 painters[CLINIC] = clinic;
+painters[LAB] = function(c) {
+  ground(c, '#7fb85a');
+  rect(c, '#c9b48f', 4, 10, 40, 26);          // brick and glass
+  rect(c, '#5f87a6', 6, 16, 36, 4); rect(c, '#5f87a6', 6, 26, 36, 4);
+  c.fillStyle = '#f4f4f0'; c.beginPath(); c.arc(32, 12, 8, Math.PI, 0); c.fill();   // dome
+  rect(c, '#3a7bd5', 30, 4, 4, 8);
+};
 
 // Replace the seven reserved 3x3 tile slots in a loaded TileSet with Afterlight art.
 export const patchTileSet = function(tileSet) {

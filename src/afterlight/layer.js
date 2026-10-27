@@ -21,6 +21,7 @@ export const AL_NEWS = 'Afterlight news';
 var DC_DRAW = 150;          // power units a data center pulls (a coal plant makes 700)
 var DEPOT_DRAW = 60;
 var CLINIC_DRAW = 40;
+var LAB_DRAW = 30;
 var SOLAR_STRENGTH = 300;
 var FUSION_STRENGTH = 6000;
 var VALVE_LEAK = 0.8;       // Festus: demand valves forget 20% a step, so population grows instead of cycling
@@ -106,7 +107,7 @@ AfterlightLayer.prototype.setScenario = function(name) {
   if (name === 'festus') {
     B.NAMES[B.DC_HELIX] = 'Keystone Data Center';
     s.policies.helixExpansion = false;
-    s.research.next = 6;
+    s.research.next = 5;      // lab-months: a lab built in the first month brings the first breakthrough around month 6
     this.makeOffer(0, 'first');
     s.card = {type: 'intro', kicker: 'Festus, Missouri · January 2026', title: 'You are the mayor',
       body: 'Festus is a river town of about 12,000 people, thirty minutes south of St. Louis. A developer wants to build a $6 billion data center campus on farmland by I-55, between homes. ' +
@@ -196,6 +197,15 @@ AfterlightLayer.prototype.registerHandlers = function(mapScanner, powerManager) 
     simData.census.alFusionPop++;
     site('fusion', 'coop', map, x, y, simData.census);
     powerManager._powerStack.push(new Position(x, y));
+  });
+  // 888 is also an old smoke frame inside some saved industrial zones: only a zone centre counts as a lab
+  mapScanner.addAction(function(tile) { return tile.getValue() === B.LAB && tile.isZone(); }, function(map, x, y, simData) {
+    var c = simData.census;
+    c.alLabCount++;
+    if (site('lab', 'coop', map, x, y, c)) {
+      c.alLabOn++;
+      c.alPowerDraw += LAB_DRAW;
+    }
   });
   mapScanner.addAction(B.CLINIC, function(map, x, y, simData) {
     var c = simData.census;

@@ -317,6 +317,24 @@ export function clinic(ctx, P) {
   trees(ctx, P, [[0.5, 2.5, 0.7], [1.3, 2.6, 0.6], [2.2, 2.4, 0.7], [2.7, 1.1, 0.6]], 7);
 }
 
+// Research Lab: a brick-and-glass lab wing with an observatory dome and a rooftop dish
+export function lab(ctx, P) {
+  quad(ctx, P, 0, 0, 3, 3, '#86bb5a');
+  quad(ctx, P, 0.2, 2.2, 2.8, 2.8, '#b8b2a4');
+  box(ctx, P, 0.25, 0.3, 2.75, 1.5, 0, 2.6, '#c99a72', {top: '#8f8a80'});
+  windows(ctx, P, 0.25, 0.3, 2.75, 1.5, 0, 2.6, {floor: 0.9, glass: '#4f8fb3', spacing: 0.32, seed: 7});
+  box(ctx, P, 1.6, 1.5, 2.6, 2.1, 0, 1.6, '#e4ddcf', {top: '#a9a397'});
+  bands(ctx, P, 1.6, 1.5, 2.6, 2.1, 0, 1.6, 0.8, '#5f87a6');
+  cylinder(ctx, P, 0.95, 0.9, 0.42, 2.6, 3.0, '#e9edf0', {top: '#f7f9fa'});
+  var c = P(0.95, 0.9, 3.0), L = Math.abs(P(1, 0, 0)[0] - P(0, 0, 0)[0]) / 32;
+  ctx.fillStyle = '#f2f5f7'; ctx.beginPath(); ctx.ellipse(c[0], c[1], 19 * L, 15 * L, 0, Math.PI, 0); ctx.fill();
+  ctx.fillStyle = '#3a7bd5'; ctx.fillRect(c[0] - 2 * L, c[1] - 15 * L, 4 * L, 14 * L);   // the telescope slit
+  var d = P(2.2, 0.8, 2.6);
+  ctx.strokeStyle = '#d8dde2'; ctx.lineWidth = 2 * L; ctx.beginPath(); ctx.moveTo(d[0], d[1]); ctx.lineTo(d[0], d[1] - 10 * L); ctx.stroke();
+  ctx.fillStyle = '#eef2f4'; ctx.beginPath(); ctx.ellipse(d[0], d[1] - 12 * L, 9 * L, 5 * L, -0.5, 0, Math.PI * 2); ctx.fill();
+  trees(ctx, P, [[0.4, 2.55, 0.6], [2.75, 2.5, 0.55]], 11);
+}
+
 export function emptyZone(ctx, P, n, col) {
   for (var u = 0; u < n; u++)
     for (var v = 0; v < n; v++)

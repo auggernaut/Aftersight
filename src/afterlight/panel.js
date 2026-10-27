@@ -198,7 +198,10 @@ AfterlightPanel.prototype.refresh = function(force) {
   $('#alDeal').text(dealText).toggle(!!dealText);
   var ra = s.research.active;
   var rText = ra ? 'Researching ' + RESEARCH[ra.id].name.toLowerCase() + ': ' + ra.left + ' mo left' + (ra.stalled ? ' (stalled)' : '') : '';
-  rText += (rText ? ' · ' : '') + 'Town compute ' + L.townCompute() + '/mo';
+  var labs = L.labsOn(), soon = L.nextBreakthroughIn();
+  rText += (rText ? ' · ' : '') + (labs ? labs + (labs > 1 ? ' labs' : ' lab') + ' running' + (!ra && L.nextResearch() ? (soon ? ', next breakthrough in about ' + soon + ' mo' : ', a breakthrough is due') : '') :
+                                          (s.labsBuilt ? 'Research Lab idle (no power or money): no breakthroughs' : 'No Research Lab: no breakthroughs (build one from the Compute menu)'));
+  rText += ' · Town compute ' + L.townCompute() + '/mo';
   $('#alResearch').text(rText);
   if (L.festus()) {
     var money = function(n) { return '$' + Math.round(n).toLocaleString('en-US'); };
@@ -231,6 +234,9 @@ AfterlightPanel.prototype.refresh = function(force) {
   });
   $('#alNews').html(items.join(''));
   for (var name in s.policies) $('#alPol_' + name).prop('checked', !!s.policies[name]);
+  $('#alComputeChip').text(L.townCompute() + '/mo · ' + Math.round(L.townShare() * 100) + '% own');
+  $('#labButton').toggleClass('alLabIdle', !labs).attr('data-tip', 'Research Lab · $1,500. ' + (labs ? labs + ' running' + (s.labBill ? ', $' + s.labBill + '/mo for upkeep and compute' : '') + '. ' :
+    'None running: breakthroughs only turn up while a lab runs. ') + 'Each uses 10 town compute a month plus $10 upkeep; more labs and more town compute bring breakthroughs sooner.');
   $('#clinicButton').toggleClass('alLocked', !this.layer.isUnlocked('clinic'));
   $('#fusionButton').toggleClass('alLocked', !this.layer.isUnlocked('fusion'));
   $('#solarButton').attr('data-tip', this.layer.toolCostMultiplier('solar') < 1 ? 'Solar farm · $750 (cheap solar)' : 'Solar farm · $1,500');

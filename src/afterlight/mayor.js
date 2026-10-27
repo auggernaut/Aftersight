@@ -171,6 +171,10 @@ export const PROJECTS = {
 export const PROJECT_ORDER = ['garden', 'murals', 'park'];
 export const RESEARCH_ORDER = ['cheap_solar', 'frontier_model', 'robots_build_robots', 'the_cure', 'fusion'];
 var COMPUTE_PRICE = 3;     // dollars per compute unit bought on the market
+// Research Labs: breakthroughs only turn up while one runs. Each uses some town compute (bought at market price
+// when the town has too little) and costs upkeep; more labs and more town compute bring the next one sooner.
+export const LAB_COST = 1500;
+var LAB_COMPUTE = 10, LAB_UPKEEP = 10, LAB_FAST = 150;
 
 // ---- Town hall asks: raised by the state of the town ----
 var ASK_CARDS = {
@@ -226,7 +230,7 @@ export function freshMayor() {
           gameOver: null, won: null, sandbox: false, scripted: {}};
 }
 export function freshDev() { return {status: 'none', offer: null, due: -1, patience: 2, walks: 0, counters: 0, nextExpansion: -1, plan: 0, farmed: null}; }
-export function freshResearch() { return {active: null, done: {}, passed: {}, next: 6}; }
+export function freshResearch() { return {active: null, done: {}, passed: {}, next: 6, clock: 0}; }   // next and clock count lab-months
 
 export function installMayor(L) {
   var P = L.prototype;
@@ -311,6 +315,20 @@ export function installMayor(L) {
   };
   P.townShare = function() { return this.s.compute > 0 ? this.townCompute() / Math.max(1, this.s.compute) : 0; };
   P.computePrice = function() { return COMPUTE_PRICE + (this.s.dependence || 0); };
+  // ---- Research Labs ----
+  P.labsOn = function() { return this.s.labsOn || 0; };
+  P.labCompute = function() { return this.labsOn() * LAB_COMPUTE; };
+  // compute left for breakthrough work once the labs have taken theirs
+  P.researchCompute = function() { return Math.max(0, this.townCompute() - this.labCompute()); };
+  // lab-months gained per calendar month: 1 for a lab, +0.5 for each extra (two at most), up to +1 for town compute
+  P.labSpeed = function() {
+    var n = this.labsOn();
+    return n ? 1 + 0.5 * Math.min(2, n - 1) + Math.min(1, this.townCompute() / LAB_FAST) : 0;
+  };
+  P.nextBreakthroughIn = function() {
+    var R = this.s.research, v = this.labSpeed();
+    return v ? Math.max(0, Math.ceil(((R.next || 0) - (R.clock || 0)) / v)) : null;
+  };
 
   P._factionTargets = function(simData) {
     var s = this.s, m = s.mayor, c = simData.census, budget = this._sim.budget, deal = s.deal;
@@ -960,7 +978,7 @@ export function installMayor(L) {
 
   // ---- breakthroughs ----
   P.researchEstimate = function(id) {
-    var r = RESEARCH[id], per = r.compute / r.months, own = this.townCompute();
+    var r = RESEARCH[id], per = r.compute / r.months, own = this.researchCompute();
     var market = Math.max(0, per - own) * r.months * this.computePrice();
     return {per: Math.round(per), own: own, market: Math.round(market), total: Math.round(r.cost + market)};
   };
@@ -972,7 +990,7 @@ export function installMayor(L) {
       rows: [
         ['Cost', money(r.cost) + ' up front', 'neutral'],
         ['Compute', r.compute.toLocaleString() + ' over ' + r.months + ' months (' + e.per + ' a month)', 'neutral'],
-        ['Your compute', e.own + ' a month from the town\'s data center share', e.own >= e.per ? 'good' : e.own ? 'neutral' : 'bad'],
+        ['Your compute', e.own + ' a month from the town\'s data center share' + (this.labCompute() ? ', after the lab\'s ' + this.labCompute() : ''), e.own >= e.per ? 'good' : e.own ? 'neutral' : 'bad'],
         ['Market compute', e.market ? money(e.market) + ' to buy the rest at ' + money(this.computePrice()) + ' a unit' : 'Not needed', e.market ? 'bad' : 'good'],
         ['Total', money(e.total) + ' (you have ' + money(funds) + ')', e.total > funds ? 'bad' : 'good'],
         ['Unlocks', r.unlocks, 'good']
@@ -997,14 +1015,37 @@ export function installMayor(L) {
       if (r.bills) s.passedBills = (s.passedBills || 0) + r.bills;
       this.bump(r.passEffect, 'Passed on ' + r.name.toLowerCase());
       this.news('bad', 'You passed on ' + r.name.toLowerCase() + '. ' + r.pass);
-      R.next = this.mi() + 7;
+      R.next = (R.clock || 0) + 7;
     }
   };
   P._researchMonthly = function(simData) {
     var s = this.s, R = s.research, budget = this._sim.budget;
+    // the labs: count the ones running, pay their upkeep and any compute the town can't cover, advance the clock
+    var labs = simData.census.alLabOn || 0;
+    if (labs) {
+      var labBill = labs * LAB_UPKEEP + Math.round(Math.max(0, labs * LAB_COMPUTE - this.townCompute()) * this.computePrice());
+      if (labBill > budget.totalFunds) {
+        if (!R.labBroke) this.news('bad', 'The Research Lab goes dark: the town can\'t cover its ' + money(labBill) + ' monthly bill for upkeep and compute.', {alert: 'research'});
+        R.labBroke = true; labs = 0;
+      } else { budget.spend(labBill); R.labBroke = false; }
+    }
+    s.labsOn = labs;
+    s.labsBuilt = simData.census.alLabCount || 0;
+    s.labBill = labs ? labBill : 0;
+    R.clock = (R.clock || 0) + this.labSpeed();
+    if (!labs && !R.hinted && s.months >= 4 && this.nextResearch()) {
+      R.hinted = true;
+      this.news('neutral', 'Researchers at the state university say a town Research Lab would bring breakthroughs here first: cheap solar, AI services, new therapies. Build one from the Compute menu.', {alert: 'research'});
+    }
     var a = R.active;
+    if (a && !labs) {
+      if (!a.paused) this.news('bad', 'Research on ' + RESEARCH[a.id].name.toLowerCase() + ' pauses: no Research Lab is running.', {alert: 'research'});
+      a.paused = true;
+      return;
+    }
     if (a) {
-      var own = this.townCompute(), short = Math.max(0, a.per - own), cost = Math.round(short * this.computePrice());
+      a.paused = false;
+      var own = this.researchCompute(), short = Math.max(0, a.per - own), cost = Math.round(short * this.computePrice());
       if (cost > budget.totalFunds) {
         if (!a.stalled) this.news('bad', 'Research on ' + RESEARCH[a.id].name.toLowerCase() + ' stalls: the town can\'t afford ' + money(cost) + ' of market compute this month.');
         a.stalled++;
@@ -1016,7 +1057,7 @@ export function installMayor(L) {
       if (a.left <= 0) {
         R.active = null;
         R.done[a.id] = s.months;
-        R.next = this.mi() + 5;
+        R.next = (R.clock || 0) + 5;
         this.discover(a.id, simData);
         this.drama();
       }
@@ -1224,15 +1265,17 @@ export function installMayor(L) {
     var s = this.s, R = s.research, m = s.mayor;
     if (!this.canCard()) return;
     var since = s.months - m.lastCard, quiet = s.months - m.lastDrama >= DRAMA_GAP;
-    var nextR = !R.active && this.nextResearch();
+    // breakthroughs only turn up while a Research Lab runs, on the lab clock (more labs and compute run it faster)
+    var nextR = !R.active && this.labsOn() > 0 && this.nextResearch();
+    var clock = R.clock || 0;
     // a faction that's furious gets the floor before the next breakthrough does
     var furious = FACTIONS.some(function(f) { return m.factions[f.id].v < 30; });
     if (furious && m.lastType !== 'ask' && this._askCard()) return;
-    if (nextR && mi >= R.next) { this._researchCard(nextR); return; }
+    if (nextR && clock >= R.next) { this._researchCard(nextR); return; }
     if (since < CARD_GAP && !quiet) return;
     if (this.festus() && m.lastType !== 'project' && (m.lastType === 'ask' || s.purpose < 65) && this._suggestProject()) return;
     if (m.lastType !== 'ask' && this._askCard()) return;
-    if (nextR) { this._researchCard(nextR); return; }
+    if (nextR && clock >= R.next - 2) { this._researchCard(nextR); return; }
     if (this.festus() && s.dev.status === 'away') { s.dev.due = mi; return; }
     this._askCard();
   };

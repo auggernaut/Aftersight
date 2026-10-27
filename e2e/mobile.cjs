@@ -243,6 +243,9 @@ async function festus(browser, url, phone) {
   if (st.status !== 'review' || st.asks.length !== 2) fail(who, 'counter by touch did not go through');
   if (st.open) fail(who, 'card did not close after the counter');
   await shot('2-after-counter');
+  // the build menu: Compute (with the town's compute and equity) and AfterSight sections both show a label on a phone
+  const sec = await page.evaluate(() => [...document.querySelectorAll('.alGroupCompute .toolGroupLabel, .alGroupAfter .toolGroupLabel')].map(e => ({ t: e.textContent, vis: getComputedStyle(e).display !== 'none' })));
+  if (sec.length !== 2 || !sec.every(x => x.vis) || !/Compute.*\/mo/.test(sec[0].t) || !/AfterSight/.test(sec[1].t)) fail(who, 'build menu sections missing on the phone: ' + JSON.stringify(sec));
   // the news ticker: readable, and a tap opens the full story
   await page.evaluate(() => { __AL.layer.news('bad', 'Water: test alert with enough words to need two lines on a phone screen, so the clamp and the More link show.', {alert: 'water'}); });
   await page.waitForTimeout(300);

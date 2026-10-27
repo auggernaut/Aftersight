@@ -633,3 +633,34 @@ body:not(.inGame) #title .si { background: linear-gradient(180deg, #2f7fd1, #163
   #notifications { width: calc(100vw - 24px) !important; max-width: calc(100vw - 24px); box-sizing: border-box; top: 52px !important; }
 }
 body:not(.inGame) #notifications, #notifications:empty { display: none !important; }
+
+/* ---- build menu: Compute (halls, co-op, Research Lab) and AfterSight (unlocks) sections ---- */
+.toolGroupLabel { font-size: 10px; color: #b7c5cf; white-space: nowrap; }
+.tgIcon { margin-right: 4px; font-size: 11px; letter-spacing: 0; }
+.alGroupCompute .toolGroupLabel { color: #9fd0ff; }
+.alGroupAfter .toolGroupLabel { color: #f2c66d; }
+#alComputeChip { margin-left: 5px; color: #f4f7f9; font-weight: 700; text-transform: none; letter-spacing: 0; }
+#labButton::after { background: #3a7bd5 !important; }
+#controls .alLabIdle::after { background: #e0574f !important; }
+@media (max-width: 760px), (max-height: 500px) {
+  .alGroupCompute .toolGroupLabel, .alGroupAfter .toolGroupLabel { display: flex; position: static; flex: none; flex-direction: column; align-items: center;
+    justify-content: center; width: 58px; height: 52px; font-size: 9px; letter-spacing: 0.5px; white-space: normal; text-align: center; line-height: 1.2;
+    border-radius: 10px; background: rgba(255,255,255,0.06); }
+  .tgIcon { margin: 0 0 1px; font-size: 13px; }
+  #alComputeChip { display: block; margin: 2px 0 0; font-size: 10px; }
+}
+/* leave room for "More ›" when the ticker is a single line */
+#notifications { padding-right: 60px !important; }
+@media (max-width: 760px), (max-height: 500px) { #notifications { padding-right: 54px !important; } }
+.alGroupCompute { min-width: 178px; }
+@media (max-width: 760px), (max-height: 500px) { .alGroupCompute { min-width: 0; } }
+/* narrower desktops: smaller buttons, and the strip scrolls sideways rather than running off the screen */
+@media (min-width: 761px) and (min-height: 501px) and (max-width: 1360px) {
+  #controls { max-width: calc(100vw - 24px); }
+  #buttons { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+  #controls .toolButton { width: 40px; height: 40px; flex: none; }
+  #controls .toolButton:hover { transform: none; }
+  .tbIcon { width: 34px; height: 34px; }
+  .toolGroup { flex: none; padding-left: 4px; padding-right: 4px; }
+  .alGroupCompute { min-width: 166px; }
+}

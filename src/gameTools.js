@@ -51,6 +51,7 @@ function GameTools(map) {
     depotCoop: new BuildingTool(2500, AL.DEPOT_COOP, map, 3, false),
     fusion: new BuildingTool(8000, AL.FUSION, map, 3, false),
     clinic: new BuildingTool(1200, AL.CLINIC, map, 3, false),
+    lab: new BuildingTool(1500, AL.LAB, map, 3, false),
   });
 
   tools.query.addEventListener(QUERY_WINDOW_NEEDED, MiscUtils.reflectEvent.bind(tools, QUERY_WINDOW_NEEDED));

@@ -127,7 +127,8 @@ var checkBigZone = function(tileValue) {
 var checkZoneSize = function(tileValue) {
   if ((tileValue >= TileValues.RESBASE - 1        && tileValue <= TileValues.PORTBASE - 1) ||
       (tileValue >= TileValues.LASTPOWERPLANT + 1 && tileValue <= TileValues.POLICESTATION + 4) ||
-      (tileValue >= TileValues.CHURCH1BASE && tileValue <= TileValues.CHURCH7LAST)) {
+      (tileValue >= TileValues.CHURCH1BASE && tileValue <= TileValues.CHURCH7LAST) ||
+      (tileValue >= 884 && tileValue <= 892)) {   // Afterlight Research Lab
     return 3;
   }
 

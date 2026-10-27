@@ -292,7 +292,7 @@ function Game(gameMap, tileSet, snowTileSet, spriteSheet, difficulty, name) {
     riot: function() { var sim = game.simulation; var p = sim.afterlight.s.protest; var r = p ? sim.afterlight.riot(sim._constructSimData(), p.x, p.y) : sim.afterlight.riot(sim._constructSimData()); game.alPanel.refresh(true); return r; },
     strike: function() { game.simulation.afterlight.strike(); game.alPanel.refresh(true); },
     state: function() { return JSON.parse(JSON.stringify(game.simulation.afterlight.s)); },
-    census: function() { var c = game.simulation._census; return {resPop: c.resPop, comPop: c.comPop, indPop: c.indPop, totalPop: c.totalPop, powered: c.poweredZoneCount, unpowered: c.unpoweredZoneCount, dc: c.alDCCount}; },
+    census: function() { var c = game.simulation._census; return {resPop: c.resPop, comPop: c.comPop, indPop: c.indPop, totalPop: c.totalPop, powered: c.poweredZoneCount, unpowered: c.unpoweredZoneCount, dc: c.alDCCount, labs: c.alLabOn}; },
     sites: function() { return game.simulation.afterlight.sites.slice(); },
     centreOn: function(x, y) { game.gameCanvas.centreOn(x, y); },
     // Build with a player tool at a map position (centre tile), paying from city funds like a click would
