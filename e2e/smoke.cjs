@@ -61,7 +61,16 @@ const POSITIVE = /SOLAR NOW CHEAPER|FRONTIER MODEL|ROBOTS NOW BUILD|THE CURE|FUS
   // Papers would pause the game on every discovery during fast-forward; we look at one on purpose below
   await page.evaluate(() => { __AL.game.alNoPaper = true;
     // the upstream "X is now a town!" window can pop mid-drag and steal clicks; this test isn't about it
-    ['Town', 'City', 'Capital', 'Metropolis', 'Megalopolis'].forEach(k => { __AL.game['_reached' + k] = true; }); });
+    ['Town', 'City', 'Capital', 'Metropolis', 'Megalopolis'].forEach(k => { __AL.game['_reached' + k] = true; });
+    // Breakthroughs are decision cards now. This test plays a mayor who funds every one and says no to asks, and
+    // keeps winning elections, so the long run reaches every breakthrough (e2e/festus.cjs covers the cards themselves).
+    __AL.force('Vote', 70);
+    __AL.layer.autoDecide = card => {
+      if (card.type === 'research') { const b = __AL.game.simulation.budget; if (b.totalFunds < 20000) b.setFunds(20000); }
+      const o = card.options.filter(o => !o.disabled);
+      const pick = o.find(x => x.id === 'invest') || o.find(x => x.id === 'accept') || o[o.length - 1];
+      __AL.layer.decide(pick.id, []);
+    }; });
 
   const tileValue = (x, y) => page.evaluate(([x, y]) => __AL.game.gameMap.getTileValue(x, y), [x, y]);
   const view = (x, y, zoom) => page.evaluate(([x, y, z]) => { const g = __AL.game.gameCanvas; if (z !== undefined) g.setZoomNow(z); g.centreOn(x, y); }, [x, y, zoom]);

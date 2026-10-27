@@ -207,12 +207,53 @@ async function play(browser, url, phone) {
   await ctx.close();
 }
 
+// Festus on a phone: the mayor's cards fit the screen and work by touch
+async function festus(browser, url, phone) {
+  const who = phone.name + '-festus';
+  const vp = phone.landscape ? { width: phone.dev.viewport.height, height: phone.dev.viewport.width } : phone.dev.viewport;
+  const ctx = await browser.newContext({ ...phone.dev, viewport: vp, screen: vp, hasTouch: true, isMobile: true });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+  const shot = async (n) => { const f = path.join(OUT, who + '-' + n + '.png'); await page.screenshot({ path: f }); console.log('screenshot', f); };
+  const fits = async () => { const r = await page.evaluate(() => { const b = document.getElementById('alCard').getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top, b: b.bottom, w: innerWidth, h: innerHeight }; });
+    if (r.l < 0 || r.r > r.w + 1 || r.t < 0 || r.b > r.h + 1) fail(who, 'card does not fit the screen: ' + JSON.stringify(r)); };
+  const tapIn = async sel => { await page.locator(sel).scrollIntoViewIfNeeded(); await page.tap(sel); await page.waitForTimeout(200); };
+
+  await page.goto(url);
+  await page.waitForSelector('#splashFestus:visible', { timeout: 20000 });
+  await page.tap('#splashFestus');
+  await page.waitForSelector('#playit:visible', { timeout: 15000 });
+  await page.tap('#playit');
+  await page.waitForFunction(() => window.__AL, null, { timeout: 90000 });
+  await page.waitForSelector('#alCard:not(.hidden)', { timeout: 10000 });
+  await fits();
+  if (!(await page.isVisible('#alApproval'))) fail(who, 'approval is not in the top bar');
+  await tapIn('#alCard .cardOption[data-option="go"]');
+  await page.waitForSelector('#alCard[data-type="offer"]:not(.hidden)');
+  await fits();
+  await shot('1-offer');
+  await tapIn('#alCard .cardOption[data-option="counter"]');
+  await tapIn('#alCard .askRow:nth-child(2)');
+  await tapIn('#alCard .askRow:nth-child(4)');
+  await tapIn('#alSendCounter');
+  const st = await page.evaluate(() => ({ status: __AL.mayor().dev.status, asks: __AL.mayor().dev.asks, open: __AL.game.dialogOpen }));
+  console.log(who, 'counter', JSON.stringify(st));
+  if (st.status !== 'review' || st.asks.length !== 2) fail(who, 'counter by touch did not go through');
+  if (st.open) fail(who, 'card did not close after the counter');
+  await shot('2-after-counter');
+  if (errors.length) fail(who, 'console errors:\n' + errors.join('\n'));
+  await ctx.close();
+}
+
 (async () => {
   const srv = await serve();
   const url = `http://localhost:${srv.address().port}/index.html`;
   const browser = await chromium.launch();
   for (const phone of PHONES) {
     try { await play(browser, url, phone); } catch (e) { fail(phone.name, e.stack || e.message); }
+    try { await festus(browser, url, phone); } catch (e) { fail(phone.name + '-festus', e.stack || e.message); }
   }
   await browser.close();
   srv.close();
