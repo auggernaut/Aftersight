@@ -664,3 +664,53 @@ body:not(.inGame) #notifications, #notifications:empty { display: none !importan
   .toolGroup { flex: none; padding-left: 4px; padding-right: 4px; }
   .alGroupCompute { min-width: 166px; }
 }
+
+/* ---- Festus: the three headline dials (approval, household income, Purpose), the path, and town hall asks ---- */
+body.alFestus .hudScore { display: none; }
+body:not(.alFestus) .hudIncome { display: none; }
+.hudIncome { min-width: 96px; }
+.hudIncome .hudIncBar { display: flex; flex: none; height: 7px !important; min-height: 7px; width: 78px; margin: 3px 0 2px; border-radius: 99px; overflow: hidden; background: rgba(255,255,255,0.08); }
+.hudIncome .hudIncBar i { height: 7px !important; }
+.hudIncBar i, #alPanel .alIncBar i { display: block; height: 100%; transition: width 400ms; }
+#hudIncW, #alIncW { background: #9aa9b3; }
+#hudIncO, #alIncO { background: #35c45a; }
+#hudIncT, #alIncT { background: #e9b44a; }
+.hudIncome .hudOwn { font-size: 11px !important; font-weight: 700; color: #7fe39a; line-height: 1; }
+@media (max-width: 760px), (max-height: 500px) { .hudIncome { min-width: 0; } .hudIncome .hudIncBar { width: 54px; } }
+@media (max-width: 430px) { .hudIncome { display: none !important; } }
+#alPanel .alPath, #alPanel .alTownHall { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; width: 100%; height: auto; min-height: 30px; margin: 4px 0 6px;
+  padding: 6px 9px; border-radius: 8px; border: 1px solid var(--line); background: rgba(255,255,255,0.05); color: var(--ink); font: 700 12px/1.3 var(--font);
+  text-align: left; cursor: pointer; box-sizing: border-box; }
+#alPanel .alPath[data-tone="good"] { border-color: rgba(70,200,110,0.55); color: #a9efbd; }
+#alPanel .alPath[data-tone="bad"] { border-color: rgba(240,96,84,0.55); color: #ffb3aa; }
+#alPanel .alTownHall { border-color: rgba(242,181,68,0.55); background: rgba(242,181,68,0.12); }
+#alPanel .alTownHall b { margin-left: auto; color: var(--accent); white-space: nowrap; }
+#alPanel .alTownHall .alPathK { flex-basis: 100%; }
+#alPanel .alTownHall.hidden { display: none; }
+#alPanel .alPathK { font-weight: 600; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.9px; color: var(--muted); }
+#alPanel .alIncBar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: rgba(255,255,255,0.08); margin: 2px 0 5px; }
+#alPanel .alIncLegend { display: flex; flex-wrap: wrap; gap: 3px 10px; font-size: 11px; color: var(--muted); }
+#alPanel .alIncLegend b { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
+#alPanel .alIncLegend em { font-style: normal; color: var(--ink); font-weight: 650; font-variant-numeric: tabular-nums; }
+#alPanel .alIncLegend .kW { background: #9aa9b3; } #alPanel .alIncLegend .kO { background: #35c45a; } #alPanel .alIncLegend .kT { background: #e9b44a; }
+#alPanel #alIncomeOwn { font-weight: 600; letter-spacing: 0; text-transform: none; color: #7fe39a; }
+#alPanel .alIncNote { font-size: 11px; color: var(--muted); line-height: 1.35; margin-top: 3px; }
+#alPanel .alMoreToggle { width: 100%; margin: 6px 0 2px; padding: 6px 9px; border-radius: 8px; border: 1px dashed var(--line); background: none; color: var(--muted);
+  font: 600 11px var(--font); text-align: left; cursor: pointer; }
+#alPanel .alMore { display: none; }
+#alPanel .alMore.open { display: block; }
+/* offer cards: the key terms first, the rest folded */
+#alCard .cardTerms tr.minor { display: none; }
+#alCard .cardTerms.showAll tr.minor { display: table-row; }
+#alCard .cardMore { margin: -6px 0 12px; padding: 4px 10px; border: none; border-radius: 8px; background: #ece7dc; color: #4a555d; font: 650 12px var(--font); cursor: pointer; }
+/* alert window: what you can do, and town hall asks decided in place */
+#alAlert .alAlertLever { color: #24543a; }
+#alAlert .alQuick { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0 4px; }
+#alAlert .alQuick .cardOptWrap { flex: 1 1 150px; display: flex; flex-direction: column; gap: 5px; }
+#alAlert .alQuick .cardOption.tone-bad { background: #3a4650; color: #fff; }
+#alAlert .alQuick .cardOption.disabled { opacity: 0.45; cursor: not-allowed; }
+#alAlert .cardChips { display: flex; flex-wrap: wrap; gap: 3px; }
+#alAlert .chip { font: 650 10.5px var(--font); padding: 2px 6px; border-radius: 99px; }
+#alAlert .chip.up { background: #dcefdc; color: #1e6b33; }
+#alAlert .chip.down { background: #f6dcd7; color: #9a2d23; }
+#alAlert .alQuickNote { font-size: 11.5px; color: #6b6457; margin: 4px 0 0; }

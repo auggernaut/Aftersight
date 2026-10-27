@@ -39,11 +39,12 @@
       <div id="hud" class="initialHidden">
         <div class="hudItem hudCity"><span id="name">Your Name Here</span><span id="cclass" class="hudSub">VILLAGE</span></div>
         <div class="hudItem"><label>Date</label><span id="date">Jan 1900</span></div>
-        <div class="hudItem"><label>Funds</label><span class="hudMoney">$<span id="funds">20000</span></span></div>
+        <div class="hudItem"><label>Funds</label><span class="hudMoney" id="fundsShown">$20,000</span><span id="funds" hidden>20000</span></div>
         <div class="hudItem hudPop"><label>Population</label><span id="population">0</span></div>
         <div class="hudItem hudApproval" data-tip="Your approval"><label>Approval</label><span id="alApproval">55%</span></div>
         <div class="hudItem hudPurpose" data-tip="Purpose: whether people feel needed. Falls with automation layoffs, rises with town projects and ownership; it feeds approval."><label>Purpose</label><span id="alPurposeHud">70</span></div>
         <div class="hudItem hudScore"><label>Score</label><span id="score">0</span></div>
+        <div class="hudItem hudIncome" data-tip="Household income: wages (grey), ownership from the Festus Fund (green) and transfers (amber). The number is ownership's share."><label>Income</label><span class="hudIncBar"><i id="hudIncW"></i><i id="hudIncO"></i><i id="hudIncT"></i></span><span id="hudOwn" class="hudOwn">0% own</span></div>
         <div id="speedButtons" class="hudItem" role="group" aria-label="Speed">
           <button class="speedButton" data-speed="0" data-tip="Pause"><svg viewBox="0 0 16 16"><rect x="3" y="3" width="3.5" height="10" rx="1"/><rect x="9.5" y="3" width="3.5" height="10" rx="1"/></svg></button>
           <button class="speedButton" data-speed="1" data-tip="Slow: about 20 s a game month"><svg viewBox="0 0 16 16"><path d="M5 3l8 5-8 5z"/></svg></button>

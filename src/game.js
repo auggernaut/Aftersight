@@ -320,6 +320,11 @@ function Game(gameMap, tileSet, snowTileSet, spriteSheet, difficulty, name) {
     force: function(what, v) { game.simulation.afterlight['_force' + what] = v; },
     election: function(i, vote) { var L = game.simulation.afterlight; if (vote !== undefined) L._forceVote = vote; L.election(i); L._forceVote = undefined; game.alPanel.refresh(true); },
     bump: function(d) { game.simulation.afterlight.bump(d); game.alPanel.refresh(true); },
+    // Aftersight: the town hall ask waiting in the ticker, the household income mix and the town's path
+    quickAsk: function() { var q = game.simulation.afterlight.s.quickAsk; return q ? JSON.parse(JSON.stringify(q)) : null; },
+    decideQuick: function(option) { var r = game.simulation.afterlight.decideQuick(option); game.alPanel.refresh(true); return r; },
+    income: function() { return game.simulation.afterlight.incomeMix(); },
+    path: function() { return game.simulation.afterlight.s.path; },
     date: function() { return game.simulation.getDate(); }
   };
 
@@ -557,7 +562,8 @@ Game.prototype.handleTool = function(data) {
 
   // Afterlight: later-tier buildings wait for their discovery; cheap solar halves the solar farm's price
   if (!layer.isUnlocked(toolName)) {
-    $('#toolOutput').text(toolName === 'fusion' ? 'Fusion has not been invented yet' : 'Needs the Cure discovery first');
+    $('#toolOutput').text(toolName === 'fusion' ? 'Fusion has not been invented yet' :
+                          toolName === 'dcCoop' ? 'A town-owned data center needs a co-op bond first' : 'Needs the Cure discovery first');
     return;
   }
   if (toolName === 'solar' && layer.toolCostMultiplier('solar') < 1)

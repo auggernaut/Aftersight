@@ -14,6 +14,7 @@ import { TileUtils } from '../tileUtils.js';
 import * as TV from '../tileValues.ts';
 import * as B from './buildings.js';
 import { installMayor, freshMayor, freshDev, freshResearch, RESEARCH } from './mayor.js';
+import { setRealDollars, money } from './money.js';
 
 export const AL_NEWS = 'Afterlight news';
 
@@ -104,8 +105,10 @@ AfterlightLayer.prototype.reset = function() {
 AfterlightLayer.prototype.setScenario = function(name) {
   var s = this.s;
   s.scenario = name;
+  setRealDollars(name === 'festus');
   if (name === 'festus') {
     B.NAMES[B.DC_HELIX] = 'Keystone Data Center';
+    B.NAMES[B.DC_COOP] = 'Festus Co-op Data Center';
     s.policies.helixExpansion = false;
     s.research.next = 5;      // lab-months: a lab built in the first month brings the first breakthrough around month 6
     this.makeOffer(0, 'first');
@@ -113,8 +116,9 @@ AfterlightLayer.prototype.setScenario = function(name) {
       body: 'Festus is a river town of about 12,000 people, thirty minutes south of St. Louis. A developer wants to build a $6 billion data center campus on farmland by I-55, between homes. ' +
             'The decision is yours alone, and the town wants an answer tonight. Your seat is up in April 2028: the voters are the only check on you.',
       rows: [['Approval', 'Built from five factions: residents, farmers, workers, business, and schools. Each choice moves them.', 'neutral'],
+             ['The tide', 'Machines will take more of the region\'s work every year, campus or no campus. What Festus owns decides whether dividends replace the wages.', 'neutral'],
              ['Elections', 'Every two years, from April 2028. Under 50% approval, you\'re out.', 'neutral'],
-             ['Goal', 'Win 3 elections, or win one with the town owning 25%+ of local compute and paying a dividend.', 'good']],
+             ['Goal', 'Win 3 elections, or win one with the town owning 25%+ of local compute and paying a real dividend ($1,000+ a resident a year).', 'good']],
       options: [{id: 'go', label: 'Open the meeting', tone: 'good'}]};
   } else {
     s.research.next = 5;
@@ -132,6 +136,8 @@ AfterlightLayer.prototype.load = function(saveData) {
     for (var k in loaded) fresh[k] = loaded[k];
   }
   this.s = fresh;
+  setRealDollars(this.s.scenario === 'festus');
+  if (this.s.scenario === 'festus') { B.NAMES[B.DC_HELIX] = 'Keystone Data Center'; B.NAMES[B.DC_COOP] = 'Festus Co-op Data Center'; }
 };
 
 // ---- Discovery-driven multipliers ----
@@ -143,6 +149,8 @@ AfterlightLayer.prototype.depotCapacity = function() { return DEPOT_CAPACITY * (
 AfterlightLayer.prototype.isUnlocked = function(toolName) {
   if (toolName === 'fusion') return this.has('fusion');
   if (toolName === 'clinic') return this.has('the_cure');
+  // Festus: the town builds a data center of its own only after voters back a co-op bond for it
+  if (toolName === 'dcCoop' && this.s.scenario === 'festus') return this.bondPermits() > 0;
   return true;
 };
 AfterlightLayer.prototype.toolCostMultiplier = function(toolName) {
@@ -312,8 +320,9 @@ AfterlightLayer.prototype.setPolicy = function(name, value) {
 // ---- Monthly update, called from the simulation when a census completes ----
 AfterlightLayer.prototype.monthly = function(simData) {
   if (this.paused) return;
-  var s = this.s, c = simData.census, p = s.policies;
+  var s = this.s, c = simData.census, p = s.policies, festus = s.scenario === 'festus';
   s.months++;
+  if (festus) p.dividend = false;   // Festus pays its dividend from the Festus Fund, not the old citizen-dividend policy
 
   // Compute: powered data centers, except one under protest blockade
   var protestKey = s.protest ? s.protest.x + ',' + s.protest.y : '';
@@ -351,8 +360,16 @@ AfterlightLayer.prototype.monthly = function(simData) {
   // Jobs shock: robots and compute take over a growing share of the work in commercial/industrial zones
   var jobs = (c.comPop + c.indPop) * 8;              // same job units Micropolis uses in its evaluation
   var workers = Math.max(1, c.resPop);
-  var labour = s.robots * 0.5 + s.compute * 0.15 + (this.has('cheap_solar') ? jobs * 0.05 : 0);
-  s.automation = jobs > 0 ? clamp(1 - Math.exp(-labour / Math.max(jobs, 1)), 0, 0.95) : 0;
+  if (festus) {
+    // Festus: automation is a regional tide that reaches the town whatever it hosts; only its own robot depots add to it
+    var local = jobs > 0 ? 1 - Math.exp(-(s.robots * 0.5) / Math.max(jobs, 1)) : 0;
+    var tide = this.tideTarget();
+    s.tide = s.tide === undefined ? tide : approach(s.tide, tide, 0.15);
+    s.automation = clamp(1 - (1 - s.tide) * (1 - local), 0, 0.95);
+  } else {
+    var labour = s.robots * 0.5 + s.compute * 0.15 + (this.has('cheap_solar') ? jobs * 0.05 : 0);
+    s.automation = jobs > 0 ? clamp(1 - Math.exp(-labour / Math.max(jobs, 1)), 0, 0.95) : 0;
+  }
   // Aftersight: the developer's promised jobs (and construction crews while the campus goes up)
   var dealJobs = (s.construction ? 25 : 0) + (s.deal && s.hallsBuilt ? s.deal.jobs * 0.4 * (s.mayor.localHire ? 1.3 : 1) : 0);
   var employed = Math.min(workers, jobs * (1 - s.automation) + dealJobs);
@@ -366,10 +383,10 @@ AfterlightLayer.prototype.monthly = function(simData) {
   if (p.dividend) {
     dividendPool = s.helixRevenue * 0.2 + s.coopRevenue * 0.5;
     cityIncome += s.coopRevenue * 0.5;
-  } else {
-    cityIncome += s.coopRevenue;
+  } else if (!festus) {
+    cityIncome += s.coopRevenue;     // Festus: co-op halls pay into the Festus Fund instead (mayor.js _dealMoney)
   }
-  var programCost = p.purposeProgram ? Math.round(30 + c.resPop * 0.3) : 0;
+  var programCost = p.purposeProgram ? (festus ? this.guildCost() : Math.round(30 + c.resPop * 0.3)) : 0;
   cityIncome -= programCost;
   dividendPool += s.fundDividend || 0;
   // Upkeep for buildings that breakthroughs unlock
@@ -378,9 +395,9 @@ AfterlightLayer.prototype.monthly = function(simData) {
   s.cityRevenue = cityIncome;
   if (Math.round(cityIncome) !== 0) simData.budget.spend(-Math.round(cityIncome));
 
-  // How much of the lost wage income the dividend replaces (0..1)
+  // How much of the lost wage income the dividend replaces (0..1); Festus measures it in real household dollars
   var lostWages = workers * s.unemployment * 0.4 + 1;
-  s.cover = clamp(dividendPool / lostWages, 0, 1);
+  s.cover = festus ? this.incomeMix().cover : clamp(dividendPool / lostWages, 0, 1);
 
   // Feed the jobs shock back into Micropolis's demand valves (see valves.js)
   c.alJobFactor = 1 - s.automation;
@@ -403,10 +420,15 @@ AfterlightLayer.prototype.monthly = function(simData) {
   var purposeTarget = 80 - s.unemployment * 100 * Math.max(0.1, meaning) + (p.purposeProgram ? 5 : 0) +
                       c.alClinicOn * 2 - (s.slump ? 10 : 0) - (this.has('the_cure') ? 8 : 0);
   // Festus: automation layoffs drain it even when the dividend pays the bills; projects and ownership build it back
-  if (s.scenario === 'festus')
-    purposeTarget += -s.automation * 25 * (1 - 0.5 * s.cover) + this.projectBoost() + this.townShare() * 20 - 4 +
-                     // with no campus coming, young people leave for work elsewhere, unless the town grows its own
-                     (!s.deal && s.dev.walks > 0 ? -8 + Math.min(3, s.mayor.homegrown || 0) * 2 : 0);
+  // Festus: a lost job stings less when a dividend replaces the wage, and less again with the guild; machines doing the
+  // work drain it a little on their own; projects, owning the engine and clinics build it back
+  if (festus) {
+    var sting = (1 - 0.6 * s.cover) * (p.purposeProgram ? 0.6 : 1);
+    purposeTarget = 70 - s.unemployment * 90 * sting - s.automation * 15 + (p.purposeProgram ? 6 : 0) + this.projectBoost() +
+                    this.incomeMix().ownShare * 40 + c.alClinicOn * 2 - (s.slump ? 8 : 0) - (this.has('the_cure') ? 6 : 0) +
+                    // with no campus coming, young people leave for work elsewhere, unless the town grows its own
+                    (!s.deal && s.dev.walks > 0 ? -6 + Math.min(2, s.mayor.homegrown || 0) * 2 : 0);
+  }
   var recentRiot = s.months - s.riotMonth < 6 ? 15 : 0;
   var hopeTarget = 45 + s.cover * 25 + c.alClinicOn * 4 + (s.milestones.basics_free ? 15 : 0) -
                    s.unemployment * 35 * (1 - s.cover) - recentRiot - s.backlash * 0.15 + coopShare * 10 -
@@ -486,6 +508,7 @@ AfterlightLayer.prototype._helixExpansion = function(simData) {
 
 AfterlightLayer.prototype._events = function(simData) {
   var s = this.s, p = s.policies, cd = s.cooldowns;
+  if (s.scenario === 'festus') { this._festusProtest(); this._slump(simData); return; }
 
   // Protest: ongoing
   if (s.protest) {
@@ -522,13 +545,41 @@ AfterlightLayer.prototype._events = function(simData) {
     this.strike();
   }
 
-  // The purposelessness slump
+  this._slump(simData);
+};
+
+// Festus: no riots or general strikes. Neighbors who are fed up with the campus blockade its gates instead; the
+// Residents faction decides it (shown in City pulse), and the blockade lifts when they calm down.
+AfterlightLayer.prototype._festusProtest = function() {
+  var s = this.s, cd = s.cooldowns, res = s.mayor.factions.res.v, dev = this.dev().short;
+  if (s.protest) {
+    var pr = s.protest;
+    pr.months++;
+    var stillThere = this.dataCenters().some(function(d) { return d.x === pr.x && d.y === pr.y; });
+    if (!stillThere || res >= 45 || pr.months > 6) {
+      this.news('good', 'Neighbors end the blockade at ' + dev + '\'s gates. The hall spins back up.', {x: pr.x, y: pr.y});
+      s.protest = null;
+      cd.protest = 12;
+    }
+    return;
+  }
+  var halls = this.devHalls().filter(function(d) { return d.powered; });
+  if (cd.protest > 0 || !halls.length || res >= 35 || Random.getRandom(100) >= 30) return;
+  this.startProtest(halls);
+  s.cooldowns.protest = 12;
+};
+
+// The purposelessness slump
+AfterlightLayer.prototype._slump = function(simData) {
+  var s = this.s;
   if (!s.slump && s.purpose < 35) {
     s.slump = true;
     this.news('bad', 'THE LONG AFTERNOON: with little work left, a malaise settles over the valley. People are leaving.',
               {paper: true, headline: 'THE LONG AFTERNOON', tone: 'bad',
                body: 'Surveys find most residents no longer know what their days are for. Bars are full at noon; volunteer rolls are empty.',
-               helps: 'Nothing, yet.', strains: 'People move away, crime rises, and hope sinks. Purpose programs or co-op ownership can lift it.'});
+               helps: 'Nothing, yet.', strains: 'People move away, crime rises, and hope sinks. ' +
+                 (s.scenario === 'festus' ? 'Town projects built with neighbors, the apprenticeship guild and owning part of the engine can lift it.' :
+                                            'Purpose programs or co-op ownership can lift it.')});
   } else if (s.slump && s.purpose > 45) {
     s.slump = false;
     this.news('good', 'The Long Afternoon lifts: people are finding new things worth doing.');

@@ -5,8 +5,9 @@
 
 import $ from "jquery";
 
-import { FACTIONS, ELECTIONS, WIN_TERMS, WIN_SHARE, RESEARCH, UTIL_TEXT, PROJECTS, PROJECT_ORDER } from './mayor.js';
+import { FACTIONS, ELECTIONS, WIN_TERMS, WIN_SHARE, RESEARCH, UTIL_TEXT, PROJECTS, PROJECT_ORDER, PATHS } from './mayor.js';
 import { LABELS } from './festus.js';
+import { money, usd, moneyText } from './money.js';
 
 var bar = function(id, label, colour) {
   return '<div class="alRow"><span class="alLabel">' + label + '</span>' +
@@ -31,12 +32,23 @@ function AfterlightPanel(game) {
       '<div class="alBody">' +
       '<div class="alSection alMayor"><div class="alSectionTitle">Mayor</div>' +
         '<div class="alApprovalRow"><span class="alApprovalBig" id="alApprovalBig"></span><span class="alApprovalSub" id="alElection"></span></div>' +
+        '<button class="alPath" id="alPath" data-tip="Which way the town is heading. It comes from household income, Purpose, and the strain on water, bills and air."></button>' +
+        '<button class="alTownHall hidden" id="alTownHall"></button>' +
         FACTIONS.map(function(f) { return bar('alF_' + f.id, f.short, '#d9b44a'); }).join('') +
         '<div class="alGoal" id="alGoal"></div>' +
         '<div class="alDeal" id="alDeal"></div>' +
         '<div class="alDeal" id="alResearch"></div>' +
       '</div>' +
-      // Festus only: the town fund and its dividend, and the purpose projects
+      // Festus only: the three numbers the game is about: approval (above), household income, and Purpose
+      '<div class="alSection alIncome" id="alIncomeBox"><div class="alSectionTitle">Household income <span id="alIncomeOwn"></span></div>' +
+        '<div class="alIncBar" data-tip="Where a resident\'s income comes from each year: wages, ownership (the Festus Fund\'s dividend) and transfers (unemployment pay, food aid). As machines take more of the work, the wage part shrinks; what the town owns decides whether ownership fills the gap.">' +
+          '<i class="incW" id="alIncW"></i><i class="incO" id="alIncO"></i><i class="incT" id="alIncT"></i></div>' +
+        '<div class="alIncLegend"><span><b class="kW"></b>Wages <em id="alIncWv"></em></span><span><b class="kO"></b>Ownership <em id="alIncOv"></em></span>' +
+          '<span><b class="kT"></b>Transfers <em id="alIncTv"></em></span></div>' +
+        '<div class="alRow alPurposeRow"><span class="alLabel">Purpose</span><span class="alBar"><span id="alPurpose2Bar" class="alFill" style="background:#5b8def"></span></span>' +
+          '<span id="alPurpose2Val" class="alVal"></span></div>' +
+        '<div class="alIncNote" id="alIncNote"></div>' +
+      '</div>' +
       '<div class="alSection alFund" id="alFundBox"><div class="alSectionTitle">Festus Fund</div>' +
         '<div class="alFundGrid"><div><span>In the fund</span><b id="alFundBal"></b></div>' +
         '<div><span>Last dividend</span><b id="alFundDiv"></b></div>' +
@@ -50,6 +62,9 @@ function AfterlightPanel(game) {
         PROJECT_ORDER.map(function(id) { return '<button class="alProj" data-proj="' + id + '"><span class="alProjName">' + PROJECTS[id].name +
           '</span><span class="alProjInfo" id="alProj_' + id + '"></span></button>'; }).join('') +
       '</div>' +
+      '<div class="alSection alNewsBox"><div class="alSectionTitle" id="alNewsTitle">Valley news</div><ul id="alNews"></ul></div>' +
+      '<button class="alMoreToggle" id="alMoreToggle" aria-expanded="false">More: demand, mood, power, policies</button>' +
+      '<div class="alMore" id="alMore">' +
       '<div class="alSection alDemand"><div class="alSectionTitle">Demand</div><div id="alRCI"></div></div>' +
       '<div class="alSection alMood"><div class="alSectionTitle">Mood</div>' +
         bar('alUnemp', 'Unemployment', '#e0574f') +
@@ -71,7 +86,7 @@ function AfterlightPanel(game) {
         policy('communityFirst', 'Community-first zoning', 'Every Helix site gives the town a 25% stake; Helix builds half as often.') +
         policy('purposeProgram', 'Purpose programs', 'City-funded guilds, apprenticeships and civic projects. Costs money each month.') +
       '</div>' +
-      '<div class="alSection alNewsBox"><div class="alSectionTitle" id="alNewsTitle">Valley news</div><ul id="alNews"></ul></div>' +
+      '</div>' +
       '</div>' +
     '</div>' +
     '<div class="hidden modal shadow" id="alPaper">' +
@@ -104,7 +119,25 @@ function AfterlightPanel(game) {
   });
   $('#alPaperRestart').on('click', function(e) { e.preventDefault(); window.location.reload(); });
   var festus = this.layer.s.scenario === 'festus';
-  $('#alFundBox, #alProjBox').toggle(festus);
+  $('#alFundBox, #alProjBox, #alIncomeBox, #alPath, #alMoreToggle').toggle(festus);
+  $('#alMore').toggleClass('open', !festus);
+  $('#alMoreToggle').on('click', function(e) {
+    e.preventDefault();
+    var open = !$('#alMore').hasClass('open');
+    $('#alMore').toggleClass('open', open); $(this).attr('aria-expanded', open ? 'true' : 'false');
+  });
+  // a town hall ask waiting in the ticker: open it from here too
+  $('#alTownHall').on('click', function(e) {
+    e.preventDefault();
+    var q = self.layer.s.quickAsk;
+    if (q && game.alAlert) game.alAlert.open({tone: 'neutral', text: 'Town hall: ' + q.card.title, ctx: {topic: 'townhall', quick: true, date: q.card.date}});
+  });
+  $('#alPath').on('click', function(e) {
+    e.preventDefault();
+    if (game.alAlert) game.alAlert.open({tone: PATHS[self.layer.s.path || 'early'].tone, text: 'Path: ' + PATHS[self.layer.s.path || 'early'].name,
+      ctx: {topic: 'path', why: self.layer.pathLine(true), lever: self.layer.newsContext('neutral', 'Path:', {alert: 'path'}).lever,
+            stats: self.layer.newsContext('neutral', 'Path:', {alert: 'path'}).stats, date: self.layer.dateString()}});
+  });
   $('#alFundPayout').on('input change', function() { self.layer.setFundPayout($(this).val() / 100); self.refresh(true); });
   $('#alPanel').on('click', '.alProj', function(e) {
     e.preventDefault();
@@ -113,7 +146,12 @@ function AfterlightPanel(game) {
   if (festus) {
     $('#alPaperHead').text('The River Ledger');
     $('#alNewsTitle').text('River news');
-    $('#alPol_helixExpansion, #alPol_communityFirst').closest('.alPolicy').hide();
+    // Festus runs on the deal, the Festus Fund and the guild: the starter town's Helix and dividend switches stay out of it
+    $('#alPol_helixExpansion, #alPol_communityFirst, #alPol_dividend').closest('.alPolicy').hide();
+    $('#alPol_purposeProgram').next('span').text('Apprenticeship guild');
+    $('#alPol_purposeProgram').closest('.alPolicy').attr('data-tip', 'Paid apprenticeships, repair crews and civic work for people whose jobs went to machines. Raises Purpose and takes some of the sting out of a lost job. Costs money each month.');
+    $('#alBacklashBar, #alHopeBar').closest('.alRow').hide();
+    $('#alDividend').parent().hide();
   }
   $('#alHelixLabel').text(this.layer.dev().short + ' owns');
   // a news line opens the same detail window as the ticker
@@ -187,13 +225,23 @@ AfterlightPanel.prototype.refresh = function(force) {
     $('#alF_' + f.id + 'Bar').css('background', col(v));
   });
   $('#alGoal').text('Goal: win ' + WIN_TERMS + ' elections (' + m.electionsWon + ' so far), or win one with the town owning ' +
-                    Math.round(WIN_SHARE * 100) + '%+ of local compute (now ' + Math.round(L.townShare() * 100) + '%) and paying a dividend.');
+                    Math.round(WIN_SHARE * 100) + '%+ of local compute (now ' + Math.round(L.townShare() * 100) + '%) and paying a dividend' +
+                    (L.festus() ? ' of $1,000+ a resident (last: ' + usd(s.dividendPerRes || 0) + ').' : '.'));
+  if (L.festus()) {
+    var path = PATHS[s.path || 'early'];
+    $('#alPath').html('<span class="alPathK">Path</span> ' + $('<div>').text(path.name).html()).attr('data-tone', path.tone);
+    var q = s.quickAsk;
+    $('#alTownHall').toggleClass('hidden', !q).html(q ? '<span class="alPathK">Town hall</span> ' + $('<div>').text(q.card.title).html() + ' <b>Decide \u203a</b>' : '');
+  }
   var d = s.deal, dev = L.dev();
   var dealText = '';
-  if (d) dealText = dev.short + ': ' + d.halls + ' halls' + (s.construction ? ' (building)' : '') + ' · abatement ' + d.abatePct + '% · PILOT $' + fmt(d.pilot) + '/yr' +
-                    ' · equity ' + (d.equity || 0) + '%' + (d.nda ? ' · NDA' : '') + (L.festus() ? ' · ' + {evap: 'evaporative', hybrid: 'hybrid', closed: 'closed-loop'}[d.cooling || 'evap'] + ' · ' + {grid: 'grid power', gas: 'gas power', clean: 'clean power'}[d.power || 'grid'] : '') + (s.fund ? ' · fund $' + fmt(s.fund) : '');
+  if (d) dealText = dev.short + ': ' + d.halls + ' halls' + (s.construction ? ' (building)' : '') + ' · abatement ' + d.abatePct + '% · PILOT ' + money(d.pilot) + '/yr' +
+                    ' · equity ' + (d.equity || 0) + '%' + (d.coop ? ' · co-op hall' : '') + (d.nda ? ' · NDA' : '') + (L.festus() ? ' · ' + {evap: 'evaporative', hybrid: 'hybrid', closed: 'closed-loop'}[d.cooling || 'evap'] + ' · ' + {grid: 'grid power', gas: 'gas power', clean: 'clean power'}[d.power || 'grid'] : '');
   else if (s.dev.status === 'review') dealText = dev.short + ' is reviewing your counter.';
   else if (s.dev.status === 'away') dealText = dev.short + ' walked away. It may be back.';
+  else if (s.dev.status === 'gone') dealText = dev.short + ' built across the river. It won\'t be back.';
+  if (L.festus() && L.bondedBuilt() + L.bondPermits() > 0)
+    dealText += (dealText ? ' · ' : '') + 'Town-owned halls: ' + L.bondedBuilt() + (L.bondPermits() ? ' (' + L.bondPermits() + ' more bonded: build from the Compute menu)' : '');
   else if (s.dev.status === 'offer') dealText = dev.short + '\'s offer is on the table.';
   $('#alDeal').text(dealText).toggle(!!dealText);
   var ra = s.research.active;
@@ -204,21 +252,35 @@ AfterlightPanel.prototype.refresh = function(force) {
   rText += ' · Town compute ' + L.townCompute() + '/mo';
   $('#alResearch').text(rText);
   if (L.festus()) {
-    var money = function(n) { return '$' + Math.round(n).toLocaleString('en-US'); };
+    // household income per resident a year: wages, ownership, transfers
+    var mix = L.incomeMix(), tot = Math.max(1, mix.total);
+    $('#alIncW').css('width', (mix.wages / tot * 100).toFixed(1) + '%');
+    $('#alIncO').css('width', (mix.own / tot * 100).toFixed(1) + '%');
+    $('#alIncT').css('width', (mix.transfers / tot * 100).toFixed(1) + '%');
+    $('#alIncWv').text(usd(mix.wages)); $('#alIncOv').text(usd(mix.own)); $('#alIncTv').text(usd(mix.transfers));
+    $('#alIncomeOwn').text('· ' + Math.round(mix.ownShare * 100) + '% from ownership');
+    setBar('alPurpose2', s.purpose);
+    $('#alIncNote').text('Machines do ' + pct(s.automation) + ' of the region\'s work; ' + pct(s.unemployment) + ' of residents are out of work. ' +
+                         (mix.lost > 1 ? 'Dividends replace ' + pct(mix.cover) + ' of the lost wages.' : ''));
     $('#alFundBal').text(money(s.fund || 0));
-    $('#alFundDiv').text(s.dividendPerRes ? money(s.dividendPerRes) + '/person' : 'none yet');
-    $('#alFundNext').text(money(L.dividendEstimate()) + '/person');
-    $('#alNetWorth').text('+' + money(s.netWorth || 0));
+    $('#alFundDiv').text(s.dividendPerRes ? usd(s.dividendPerRes) + ' a resident' : 'none yet');
+    $('#alFundNext').text(usd(L.dividendEstimate()) + ' a resident');
+    $('#alNetWorth').text('+' + usd(s.netWorth || 0));
     if (!$('#alFundPayout').is(':focus')) $('#alFundPayout').val(Math.round((s.fundPayout === undefined ? 0.5 : s.fundPayout) * 100));
-    $('#alFundNote').text('Pays out ' + Math.round(L.fundShare() * 100) + '% of the fund each January' +
-                          (s.fundIn ? '; ' + L.dev().short + ' and equity add ' + money(s.fundIn * 12) + ' a year.' : '. Keystone payments and equity dividends flow in.'));
+    $('#alFundNote').text('Pays out ' + Math.round(L.fundShare() * 100) + '% of the fund each January. ' + L.fundSources());
     $('#alAbund').text('· abundance ' + Math.round(L.abundance() * 100) + '%');
+    // built and building projects, then the next few the town could start (the catalog unlocks as abundance grows)
+    var shown = 0;
     PROJECT_ORDER.forEach(function(id) {
-      var st = L.projectState(id), pr = (s.projects || {})[id];
-      $('#alProj_' + id).text(st === 'built' ? 'Open · built by ' + (pr.who === 'neighbors' ? 'neighbors + robots' : 'robots') :
+      var st = L.projectState(id), pr = (s.projects || {})[id], renew = L.canRenew(id), open = st === 'open' && L.projectAvailable(id);
+      var show = st !== 'open' || (open && shown < 3);
+      if (open && show) shown++;
+      $('#alProj_' + id).text(st === 'built' ? (pr.renewing ? 'New season in ' + Math.max(0, pr.renewing.done - s.months) + ' mo' :
+                                                renew ? 'Fading · another season from ' + money(L.renewCost(id, 'robots')) :
+                                                'Open · ' + (pr.who === 'neighbors' ? 'neighbors + robots' : 'robots')) :
                               st === 'building' ? 'Building · ' + Math.max(0, pr.done - s.months) + ' mo left' :
                               'from ' + money(L.projectCost(id, 'robots')));
-      $('.alProj[data-proj="' + id + '"]').toggleClass('done', st !== 'open').prop('disabled', st !== 'open');
+      $('.alProj[data-proj="' + id + '"]').toggle(show).toggleClass('done', st !== 'open' && !renew).prop('disabled', !(open || renew));
     });
   }
   $('#alCompute').text(fmt(s.compute));
@@ -235,11 +297,14 @@ AfterlightPanel.prototype.refresh = function(force) {
   $('#alNews').html(items.join(''));
   for (var name in s.policies) $('#alPol_' + name).prop('checked', !!s.policies[name]);
   $('#alComputeChip').text(L.townCompute() + '/mo · ' + Math.round(L.townShare() * 100) + '% own');
-  $('#labButton').toggleClass('alLabIdle', !labs).attr('data-tip', 'Research Lab · $1,500. ' + (labs ? labs + ' running' + (s.labBill ? ', $' + s.labBill + '/mo for upkeep and compute' : '') + '. ' :
-    'None running: breakthroughs only turn up while a lab runs. ') + 'Each uses 10 town compute a month plus $10 upkeep; more labs and more town compute bring breakthroughs sooner.');
+  $('#labButton').toggleClass('alLabIdle', !labs).attr('data-tip', 'Research Lab · ' + money(1500) + '. ' + (labs ? labs + ' running' + (s.labBill ? ', ' + money(s.labBill) + '/mo for upkeep and compute' : '') + '. ' :
+    'None running: breakthroughs only turn up while a lab runs. ') + 'Each uses 10 town compute a month plus ' + money(10) + ' upkeep; more labs and more town compute bring breakthroughs sooner.');
   $('#clinicButton').toggleClass('alLocked', !this.layer.isUnlocked('clinic'));
   $('#fusionButton').toggleClass('alLocked', !this.layer.isUnlocked('fusion'));
-  $('#solarButton').attr('data-tip', this.layer.toolCostMultiplier('solar') < 1 ? 'Solar farm · $750 (cheap solar)' : 'Solar farm · $1,500');
+  if (L.festus()) $('#dcCoopButton').toggleClass('alLocked', !L.isUnlocked('dcCoop')).attr('data-tip', 'Town-owned data center · ' + money(4000) + ' down. ' +
+    (L.bondPermits() ? L.bondPermits() + ' bonded and ready to build: its revenue pays the bond first, the rest goes to the Festus Fund.' :
+                       'Needs a co-op bond first: back one when the trades bring it to City Hall.'));
+  $('#solarButton').attr('data-tip', this.layer.toolCostMultiplier('solar') < 1 ? 'Solar farm · ' + money(750) + ' (cheap solar)' : 'Solar farm · ' + money(1500));
 };
 
 // Protest camps drawn over the map: a pulsing ring of red placards around the blockaded data center

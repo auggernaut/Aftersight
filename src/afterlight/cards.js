@@ -40,6 +40,13 @@ function CardWindow(game) {
     if (asks.length) self.choose('counter', asks);
   });
   $('#alCard').on('click', '#alCounterBack', function(e) { e.preventDefault(); self.render(); });
+  // offers lead with the terms that matter most; the rest open on request
+  $('#alCard').on('click', '#alAllTerms', function(e) {
+    e.preventDefault();
+    self.allTerms = !self.allTerms;
+    $('#alCard .cardTerms').toggleClass('showAll', self.allTerms);
+    $(this).text(self.allTerms ? 'Fewer terms' : 'All ' + $('#alCard .cardTerms tr').length + ' terms');
+  });
 }
 
 CardWindow.prototype.open = function(card) {
@@ -54,9 +61,12 @@ CardWindow.prototype.open = function(card) {
 
 CardWindow.prototype.render = function() {
   var c = this.card;
+  // rows flagged as key (a fourth element) lead; when a card has some, the others fold under "All terms"
+  var keyed = (c.rows || []).some(function(r) { return r[3]; });
   var rows = (c.rows || []).map(function(r) {
-    return '<tr class="t-' + (r[2] || 'neutral') + '"><th>' + esc(r[0]) + '</th><td>' + esc(r[1]) + '</td></tr>';
+    return '<tr class="t-' + (r[2] || 'neutral') + (keyed && !r[3] ? ' minor' : '') + '"><th>' + esc(r[0]) + '</th><td>' + esc(r[1]) + '</td></tr>';
   }).join('');
+  var more = keyed ? '<button id="alAllTerms" class="cardMore">' + (this.allTerms ? 'Fewer terms' : 'All ' + c.rows.length + ' terms') + '</button>' : '';
   var opts = c.options.map(function(o) {
     return '<div class="cardOptWrap"><button class="cardOption tone-' + (o.tone || 'neutral') + (o.disabled ? ' disabled' : '') + '" data-option="' + o.id + '"' +
            (o.disabled ? ' aria-disabled="true"' : '') + '>' + esc(o.label) + '</button>' + chips(o.preview) +
@@ -66,7 +76,7 @@ CardWindow.prototype.render = function() {
     '<div class="cardKicker">' + esc(c.kicker) + (c.leverage !== undefined ? '<span class="cardLev">Leverage ' + c.leverage + '%</span>' : '') + '</div>' +
     '<h2 class="cardTitle">' + esc(c.title) + '</h2>' +
     (c.body ? '<p class="cardBody">' + esc(c.body) + '</p>' : '') +
-    (rows ? '<table class="cardTerms">' + rows + '</table>' : '') +
+    (rows ? '<table class="cardTerms' + (this.allTerms ? ' showAll' : '') + '">' + rows + '</table>' + more : '') +
     '<div class="cardOptions">' + opts + '</div>');
 };
 

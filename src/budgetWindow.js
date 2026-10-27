@@ -13,6 +13,8 @@
 
 import $ from "jquery";
 
+import { money } from './afterlight/money.js';   // Aftersight: real-dollar formatting in Festus
+
 import { BUDGET_WINDOW_CLOSED } from './messages.ts';
 import { MiscUtils } from './miscUtils.js';
 import { ModalWindow } from './modalWindow.js';
@@ -36,7 +38,8 @@ var budgetOKID = '#budgetOK';
 var setSpendRangeText = function(element, percentage, totalSpend) {
   var labelID = element + 'Label';
   var cash = Math.floor(totalSpend * (percentage / 100));
-  var text = [percentage, '% of $', totalSpend, ' = $', cash].join('');
+  // Aftersight: amounts in real dollars where the scenario uses them (Festus)
+  var text = [percentage, '% of ', money(totalSpend), ' = ', money(cash)].join('');
   $(MiscUtils.normaliseDOMid(labelID)).text(text);
 };
 
@@ -142,10 +145,10 @@ BudgetWindow.prototype.open = function(budgetData) {
 
   var cashFlow = taxesCollected - this.roadMaintenanceBudget - this.fireMaintenanceBudget - this.policeMaintenanceBudget;
   var currentFunds = previousFunds + cashFlow;
-  $('#taxesCollected').text('$' + taxesCollected);
-  $('#cashFlow').text((cashFlow < 0 ? '-$' : '$') + cashFlow);
-  $('#previousFunds').text((previousFunds < 0 ? '-$' : '$') + previousFunds);
-  $('#currentFunds').text('$' + currentFunds);
+  $('#taxesCollected').text(money(taxesCollected));
+  $('#cashFlow').text(money(cashFlow));
+  $('#previousFunds').text(money(previousFunds));
+  $('#currentFunds').text(money(currentFunds));
 
   this._toggleDisplay();
 };

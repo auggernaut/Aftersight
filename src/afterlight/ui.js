@@ -8,6 +8,7 @@ import $ from "jquery";
 import { TOOL_CLICKED } from '../messages.ts';
 
 import { makeP, box, quad, line, tree, poly, cylinder } from './iso/art.js';
+import { money, moneyText } from './money.js';
 import * as B from './iso/buildings.js';
 
 // ---- toolbar icons: tiny iso renders of what each tool builds ----
@@ -134,6 +135,10 @@ function AfterlightUI(game) {
   var touchUI = window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches;
   if (touchUI) $('body').addClass('touchUI');
   $('body').addClass('inGame');
+  // Festus: the top bar shows household income instead of the engine's score, and every price is in real dollars
+  var festus = game.simulation.afterlight.s.scenario === 'festus';
+  $('body').toggleClass('alFestus', festus);
+  if (festus) $('[data-tip]').each(function() { $(this).attr('data-tip', moneyText($(this).attr('data-tip'))); });
   var compact = window.matchMedia && window.matchMedia('(max-width: 760px), (max-height: 500px)');
   if (compact && compact.matches) $('#alPanel').addClass('collapsed');
   // stop iOS page pinch and double-tap zoom over the game; the map has its own pinch
@@ -209,7 +214,7 @@ AfterlightUI.prototype.frame = function(force) {
   var game = this.game;
   var speed = game.isPaused ? 0 : game.defaultSpeed;
   $('.speedButton').each(function() { $(this).toggleClass('active', +$(this).attr('data-speed') === speed); });
-  $('#funds').text(commas(game.simulation.budget.totalFunds));
+  $('#fundsShown').text(money(game.simulation.budget.totalFunds));
   var v = game.simulation._valves;
   if (v) [['res', v.resValve, 2000], ['com', v.comValve, 1500], ['ind', v.indValve, 1500]].forEach(function(p) {
     var f = Math.max(-1, Math.min(1, p[1] / p[2]));
@@ -222,6 +227,13 @@ AfterlightUI.prototype.frame = function(force) {
   $('#alApproval').text(a + '%').css('color', a >= 60 ? '#5ee07a' : a >= 50 ? '#f2d36b' : a >= 40 ? '#f5a54a' : '#ff6b5e');
   var pu = Math.round(L.s.purpose);
   $('#alPurposeHud').text(pu).css('color', pu >= 60 ? '#8fb6ff' : pu >= 45 ? '#f2d36b' : '#ff6b5e');
+  if (L.festus()) {
+    var mix = L.incomeMix(), tot = Math.max(1, mix.total);
+    $('#hudIncW').css('width', (mix.wages / tot * 100).toFixed(1) + '%');
+    $('#hudIncO').css('width', (mix.own / tot * 100).toFixed(1) + '%');
+    $('#hudIncT').css('width', (mix.transfers / tot * 100).toFixed(1) + '%');
+    $('#hudOwn').text(Math.round(mix.ownShare * 100) + '% own');
+  }
   var ne = L.nextElection();
   $('.hudApproval').attr('data-tip', m.gameOver ? 'You lost the ' + m.gameOver.year + ' election' :
     'Your approval. ' + (ne >= 0 ? 'Next election ' + L.monthName(ne) + ' (' + (ne - L.mi()) + ' months); under 50% and you\'re out.' : ''));
