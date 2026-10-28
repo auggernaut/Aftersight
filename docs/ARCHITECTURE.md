@@ -11,11 +11,13 @@ Core edits are small and marked with `Afterlight` or `Aftersight` comments:
 | File | Hook |
 |---|---|
 | `simulation.js` | Creates `this.afterlight = new AfterlightLayer(...)`; calls `afterlight.monthly(simData)` each game month, `beginScan()` and `registerHandlers()`; saves and loads layer state; the start year is 2026; the speed thresholds (see Pacing) |
-| `census.js` | `al*` counters filled by the layer's scanner handlers (`alDCCount`, `alLabOn`, `alClinicOn`, `alPowerDraw`, …) |
+| `census.js` | `al*` counters filled by the layer's scanner handlers (`alDCCount`, `alLabOn`, `alClinicOn`, `alPowerDraw`, …) and `alResPowered` (residential blocks with power) |
 | `powerManager.js` | Adds `afterlight.extraPower(census)`: solar and fusion supply minus data center, depot, lab and clinic draw |
-| `valves.js` | The automation jobs shock (`alJobFactor`) and Festus's demand-valve leak (`alValveLeak = 0.8`), which damps a 14-month boom-bust population cycle |
+| `valves.js` | The automation jobs shock (`alJobFactor`), jobs the zones don't show (`alIncomeSupport`), Festus's demand-valve leak (`alValveLeak = 0.8`, which damps a 14-month boom-bust cycle), the layer's per-step pushes on R, C and I (`alResPush`, `alComPush`, `alIndPush`) and a birth-rate override (`alBirthRate`, 0 in Festus) |
+| `residential.js` | Houses-only towns (`map.alHousesOnly`, Festus): a block holds eight houses and never becomes apartments; while the R valve is positive an empty lot on a powered block gets a house (chance ∝ demand), and while it's negative houses empty. Counts powered blocks for the census. |
+| `baseTool.js` | Every tool's charge is scaled by `buildScale()` from `afterlight/money.js` (robot construction crews), except tools marked `alFullPrice` (the data centers, in `gameTools.js`) |
 | `evaluation.js` | Automation joblessness and hope/backlash feed the engine's own approval and complaints |
-| `gameTools.js` | AfterSight building tools (`dcHelix`, `dcCoop`, `lab`, `solar`, `depotHelix`, `depotCoop`, `clinic`, `fusion`) |
+| `gameTools.js` | AfterSight building tools (`dcHelix`, `dcCoop`, `lab`, `solar`, `depotHelix`, `depotCoop`, `clinic`, `fusion`); the data centers pay full price (`alFullPrice`) |
 | `game.js` | Scenario setup (Festus, starter or empty); swaps in the iso canvas; panel, cards, alert window and UI; `window.__AL` test hooks; drops the engine's town/city/capital pop-ups; routes `AL_NEWS` messages to the ticker and newspaper |
 | `notification.js` | The ticker takes free text plus a context object; a click calls `onOpen(detail)`, which opens the alert window |
 | `budgetWindow.js` | Amounts go through `money()` from `afterlight/money.js`, so Festus shows real dollars |
@@ -26,16 +28,16 @@ Core edits are small and marked with `Afterlight` or `Aftersight` comments:
 
 | File | Role |
 |---|---|
-| `layer.js` | `AfterlightLayer`: the state object `s` (everything saves with the game), the monthly update (compute, robots, automation, unemployment, Purpose/Backlash/Hope, policies, events, milestones), map scanner handlers, `news()`, `findSite()`, `placeBuilding()`, the discovery effects (`discover`). In Festus, automation is the regional tide, Purpose has its own formula, and the events are resident blockades and the Long Afternoon only. `installMayor()` mixes `mayor.js` into its prototype. |
-| `mayor.js` | Everything the mayor decides (about 1,700 lines). Factions and approval, elections, Keystone offers and tiers, facility design, breakthroughs and the Research Lab, the automation tide, household income and paths, town hall asks (cards and the ticker lane), co-op bonds, the Festus Fund, town projects, status alerts, alert context and the card director. All tuning constants are at the top. |
-| `money.js` | Money formatting. `money()` shows game dollars as real dollars in Festus (one game dollar is $1,000: `$200k`, `$1.5M`, `$20M`) and plain dollars elsewhere; `usd()` formats amounts already in real dollars (per-resident dividends and income); `moneyText()` rewrites tool tips. `setRealDollars()` is switched by the scenario (on start and on load). |
-| `festus.js` | The Festus, MO map: seeded terrain, Mississippi, bluffs, I-55, Main Street, farm fields, the data center `SITE`, `HALL_SPOTS`, `PLANS` (370/520/700 acres, 2/4/6 halls) and map `LABELS` |
+| `layer.js` | `AfterlightLayer`: the state object `s` (everything saves with the game), the monthly update (compute, robots, automation, unemployment, Purpose/Backlash/Hope, policies, events, milestones), map scanner handlers, `news()`, `findSite()`, `placeBuilding()`, the discovery effects (`discover`). In Festus, automation is the regional tide, Purpose has its own formula, homes, rents and the R/C/I pushes come from `_homesMonthly()`, and the events are resident blockades and the Long Afternoon only. `installMayor()` mixes `mayor.js` into its prototype. |
+| `mayor.js` | Everything the mayor decides (about 1,700 lines). Factions and approval, elections, Keystone offers and tiers, facility design, breakthroughs and the Research Lab, the automation tide, household income and paths, construction crews and robot crews, homes and empty lots, the demand-bar tips, town hall asks (cards and the ticker lane), co-op bonds, the Festus Fund, town projects, status alerts, alert context and the card director. All tuning constants are at the top. |
+| `money.js` | Money formatting. `money()` shows game dollars as real dollars in Festus (one game dollar is $1,000: `$200k`, `$1.5M`, `$20M`) and plain dollars elsewhere; `usd()` formats amounts already in real dollars (per-resident dividends and income); `moneyText()` rewrites tool tips. `setRealDollars()` is switched by the scenario (on start and on load). `buildScale()`/`setBuildScale()` hold what building costs (1, or less with robot crews) and `buildText()` reprices a build tool tip. |
+| `festus.js` | The Festus, MO map: seeded terrain, Mississippi, bluffs, I-55, Main Street, farm fields, the data center `SITE`, `HALL_SPOTS`, `PLANS` (370/520/700 acres, 2/4/6 halls) and map `LABELS`. `NEIGHBOURHOODS` lays out the block grids: the old town (downtown, the half of the west subdivision by the site, a corner of the north-west one) is built out with six to eight houses a block; the rest are platted lots with streets and power but no zone (`PLATS`, nearest the old town first). `HOMES_PER_BLOCK` = 8. |
 | `starterTown.js` | The present-day starter town (with one Helix data center, a robot depot, solar and a Research Lab) and `prewarm()` |
 | `buildings.js` | Tile slots for AfterSight buildings: the seven unused 3x3 "church" slots (956–1018) plus the Research Lab at 884–892. Also `NAMES`, `isALTile`, `centreOf` and 2D pixel art for the legacy tile set. |
 | `cards.js` | `CardWindow`: one modal for every decision card (offer, research, ask, campaign, project, intro). Shows rows, options, faction-reaction chips and the counter-ask picker. Rows flagged as key (a fourth element) lead; the rest fold under "All terms". |
 | `alertModal.js` | `AlertWindow`: the detail window behind the ticker and River news. Shows the full text, "Why", "What you can do", faction values and changes, key numbers, "Show on map" and "Open City pulse". A town hall ask from the ticker is decided here (two answers with faction chips). Esc, X or a click outside closes it. |
-| `panel.js` | `AfterlightPanel`: the City pulse panel. Festus leads with the mayor (approval, path chip, a waiting town hall ask, factions, goal, deal line, research line), household income with Purpose, the Festus Fund with the payout slider, town projects and River news; demand, mood, stats and policies sit under "More". Also refreshes the Compute section chip and the tool lock states (the co-op hall locks until a bond). |
-| `ui.js` | `AfterlightUI`: top bar (date, funds in real dollars in Festus, population, approval, Purpose, and the household income mix in Festus or the engine's score elsewhere), speed buttons (`setSpeed`), rendered iso tool icons, tooltips, mobile sheet |
+| `panel.js` | `AfterlightPanel`: the City pulse panel. Festus leads with the mayor (approval, path chip, a waiting town hall ask, factions, goal, deal line, research line), a Homes chip (share of homes taken and rents; it opens the alert window), household income with Purpose, the Festus Fund with the payout slider, town projects and River news; mood, stats and policies sit under "More". Also refreshes the Compute section chip and the tool lock states (the co-op hall locks until a bond). |
+| `ui.js` | `AfterlightUI`: top bar (date, funds in real dollars in Festus, population, approval, Purpose, and the household income mix in Festus or the engine's score elsewhere), speed buttons (`setSpeed`), rendered iso tool icons, the R/C/I demand bars beside the zone tools (with `demandTips()`), tooltips (build tools keep their engine price in `data-tip0` so robot crews can reprice them), mobile sheet |
 | `iso/isoCanvas.js` | `IsoCanvas`, a drop-in for micropolisJS's `GameCanvas` (same public methods). 2:1 dimetric picking, 6 zoom levels, pan, touch (`_bindTouch`), chunk-cached ground, cached building sprites, live animation (cars, smoke, LEDs, fires, protests). `classify()` maps zone-centre tile values to building kinds. |
 | `iso/buildings.js`, `iso/ground.js`, `iso/art.js` | Procedural canvas art: buildings (including `dataCenter`, `depot`, `solar`, `fusion`, `clinic`, `lab`), terrain and roads, and drawing primitives. **No copied art.** |
 
@@ -43,7 +45,7 @@ Styles are in `css/afterlight-iso.css`. The phone layout is the media-query bloc
 
 ### The monthly loop
 
-`simulation.js` calls `layer.monthly(simData)` once a game month (4 city-time units, 64 sim frames). `monthly()` updates the economy and mood, then calls `mayorMonthly()`. That runs, in order: deal and ownership money → fund → projects → construction → faction targets and smoothing → approval → research and labs → city milestone → path → the scripted Festus events (April 2026 poll, December 2026 court ruling) → elections → developer → director (cards) → the ticker ask lane → alerts.
+`simulation.js` calls `layer.monthly(simData)` once a game month (4 city-time units, 64 sim frames). `monthly()` updates the economy and mood, then calls `mayorMonthly()`. That runs, in order: robot crews (build prices) → deal and ownership money → fund → projects → construction → faction targets and smoothing → approval → research and labs → city milestone → path → the scripted Festus events (April 2026 poll, December 2026 court ruling) → elections → developer → director (cards) → the ticker ask lane → alerts.
 
 ## 3. Festus systems (mayor.js)
 
@@ -88,6 +90,19 @@ Styles are in `css/afterlight-iso.css`. The phone layout is the media-query bloc
 
 - **`incomeMix()`** gives each resident's yearly income in real dollars: wages (`WAGE` $31,500 × employment), ownership (the Fund's last dividend per resident) and transfers (`TRANSFER` $11,000 × unemployment), plus `ownShare` and `cover` (dividends as a share of the wages lost to automation). It feeds factions, Purpose, the top bar and City pulse.
 - **`pathNow()`** names the path from income mix, Purpose and strain: `owners` (ownership 8%+ of income and Purpose 45+), `strain` (a deal plus water over 95%, bills over 0.3 or gas fumes), `decline` (no deal, a walk, and almost no stake), `checks` (Purpose under 40), `building` (ownership 4%+ of income or a fifth of local compute), `enclosure` (a deal and little stake), `early`. A new path counts after three months and is news (`_pathMonthly`, at most every 6 months). `PATHS` holds the names and one-line descriptions; `pathLine()` writes the sentence used on election night and in the alert window.
+
+### Homes, demand and building (Festus)
+
+The old town starts full and the platted lots start empty, so the town grows only where the player zones. Festus is zoned for houses: a block holds `HOMES_PER_BLOCK` = 8 and never turns into apartments (`residential.js`). `_homesMonthly()` (layer.js) sets what the R, C and I bars show:
+
+- **Homes (R).** People want to move in when there are jobs: shops and factories in town, commuters' jobs in the region (`COMMUTE`, which the tide reaches too), the campus's construction crews and staff, the town's own halls and home-grown plan. These go into the engine's employment (`alIncomeSupport`), so newcomers come with work. The local trades also hire residents while new homes go up (`s.trades`, `TRADES` per new home, cut by robot crews); they count against unemployment but don't draw newcomers. A dividend that replaces lost wages keeps people from leaving but doesn't bring jobless newcomers (it only fills the gap up to the residents already there); the dividend itself draws a few (`DRAW`, at most `DRAW_MAX` a step). Festus has no births (`alBirthRate` 0).
+- **Construction crews.** Signing (and each expansion) brings crews for `CREW_MONTHS` = 12: `CREW_BASE` + `CREW_PER_HALL` × new halls homes' worth of jobs (`crewHomes()`), about 550 workers for a first campus. When they finish they move on over `CREW_LEAVE` months (`crewsLeaving()`, a pull out on the R bar).
+- **Rents.** `s.homes.occ` is homes taken over powered blocks × 8. When more than 88% are taken and the R bar is up, rents climb toward `1 + RENT_UP × (R / RENT_FULL) × tight` (up to +45% and a bit more); when people want out they ease by up to `RENT_DOWN`. They rise fast and fall slowly. Rents above normal cost Residents (`RENT_RES`), Workers (`RENT_WORK`) and Schools (`RENT_SCHOOL`) and price some newcomers out (`RENT_DAMP`). A homes alert names an empty lot with power and shows it on the map.
+- **Shops (C)** follow household income against a normal year (`incomeIndex()`, `SHOP_PUSH`). **Factories (I)** stop growing and slowly fade as the tide rises (`FACTORY_PUSH`).
+- **Robot crews** (`crewScale()`, `_crewsMonthly()`): once robots build robots, roads, zones, power lines and buildings cost half if the town made the breakthrough (`CREWS_OWN`) or 25% less if it was made elsewhere (`CREWS_LEASED`, from month 54 in Festus). Data centers keep their price. Tool tips follow.
+- **Household water** is `PEOPLE_PER_WATER` people per unit of supply, so a bigger town draws more from the river wells.
+- **Reading it.** The R, C and I bars sit beside the zone tools; their tips (`demandTips()`) say what is pulling people in, what households spend and how much work the machines do. The Homes chip in City pulse shows `homesLine()`; `openLots(powered)` lists the empty platted lots.
+- **Warm-up.** `warmupHooks()` sets the commuters' jobs, the leak and the birth rate before the three hidden warm-up years (the layer is paused then).
 
 ### Breakthroughs and the Research Lab
 
@@ -136,7 +151,7 @@ At Fast, the whole game (January 2026 to the April 2032 election) takes about 4.
 
 ### Build menu
 
-The bottom toolbar (in `index.html`) has these groups: Inspect, Transport, Zones, Services, Power (coal, nuclear, solar), **Compute** (Keystone/Helix hall, co-op data center, Research Lab), and **AfterSight** (Helix and co-op robot depots, clinic, fusion). The Compute group label (`#alComputeChip`) shows the town's compute a month and its equity share. Locked tools show a padlock until their breakthrough; in Festus the co-op data center stays locked until voters back a bond. In Festus, tool tips show real dollars. On phones the strip scrolls sideways and both new sections show a label tile. On desktops narrower than 1,360px the buttons shrink and the strip scrolls.
+The bottom toolbar (in `index.html`) has these groups: Inspect, Transport, Zones (with the R, C and I demand bars, `#alRCI`), Services, Power (coal, nuclear, solar), **Compute** (Keystone/Helix hall, co-op data center, Research Lab), and **AfterSight** (Helix and co-op robot depots, clinic, fusion). The Compute group label (`#alComputeChip`) shows the town's compute a month and its equity share. Locked tools show a padlock until their breakthrough; in Festus the co-op data center stays locked until voters back a bond. In Festus, tool tips show real dollars, and every build price drops once robot crews arrive. On phones the strip scrolls sideways and both new sections show a label tile. On desktops narrower than 1,360px the buttons shrink and the strip scrolls.
 
 ## 4. Other scenarios
 
@@ -160,6 +175,7 @@ The bottom toolbar (in `index.html`) has these groups: Inspect, Transport, Zones
 - funds projects when it can afford them
 - says yes to affordable asks, on cards and in the ticker
 - builds a town-owned data center whenever voters have backed a bond and there's money and power for it
+- zones a block of homes a month on a powered platted lot while 90%+ of homes are taken and the R bar is well up or rents are up 4%+ (two while rents are up 6%+), and a block of shops every other month while the C bar is up, keeping $1.6M in hand
 
 The strategies differ only in how they answer offers:
 
@@ -167,8 +183,13 @@ The strategies differ only in how they answer offers:
 - **firm:** counters, then takes the firm offer
 - **yes:** accepts everything
 - **no:** rejects everything
+- **cards:** negotiates but never zones anything. If it wins as often as `negotiate`, building doesn't matter. `yes-cards`, `no-cards` and so on play the other strategies without building.
 
-It prints win rates, the gaps between cards (ticker asks excluded), and where each town stands in April 2032: unemployment, Purpose, ownership's share of household income, the dividend and the path. A mayor who loses keeps watching as a citizen, so every town is measured. Recent results at N=30 (the automation tide, October 2026): negotiate 30, firm 15, yes 15, no 11. In April 2032 negotiating towns are building a stake or thriving owners (8% of income from ownership, about $2,200 a resident a year), firm and yes towns are mostly rich few (2–3%), and no-deal towns are building a small stake of their own through bonds. Expect ±3 noise between runs; the yes strategy turns on whether it survives the 2028 vote, which depends on a reopened deal and the court ruling.
+It prints win rates, the gaps between cards (ticker asks excluded), and where each town stands in April 2032: unemployment, Purpose, ownership's share of household income, the dividend, the path, population, peak rent and how much it zoned. A mayor who loses keeps watching as a citizen, so every town is measured.
+
+Recent results at N=30 (city building, October 2026): negotiate 30, firm 19, yes 16 (16 again on a second run), no 15, cards 30, yes-cards 5 (7 on a second run). Building decides the marginal strategy: a yes-sayer that zones homes for the crews wins about half the time, one that doesn't about a fifth, with peak rents of +7% against +15%. For a negotiator it is roughly a wash by 2032: building keeps rents near normal (+6% against +17%) and grows the town (15,060 against 14,680 people), but the bigger town has more people out of work as the tide rises (23% against 19%), and the cards-only negotiator's 2032 vote is higher (median 79 against 69).
+
+Before city building (the automation tide alone): negotiate 30, firm 15, yes 15, no 11. In April 2032 negotiating towns are building a stake or thriving owners (8% of income from ownership, about $2,200 a resident a year), firm and yes towns are mostly rich few (2–3%), and no-deal towns are building a small stake of their own through bonds. Expect ±3 noise between runs; the yes strategy turns on whether it survives the 2028 vote, which depends on a reopened deal and the court ruling.
 
 Before the tide (old model, for comparison): negotiate about 24, firm 7–10, yes 8–12, no 10–12, with winning negotiators at about 48% unemployment and Purpose 18 by 2032.
 

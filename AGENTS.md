@@ -17,7 +17,7 @@ export NODE_PATH=<playwright install>/node_modules    # Playwright isn't a repo 
 OUT=shots node e2e/festus.cjs     # main end-to-end test (Festus through the real UI)
 OUT=shots node e2e/mobile.cjs     # phones
 OUT=shots node e2e/smoke.cjs      # starter town
-N=30 node e2e/balance.cjs         # win rates per offer strategy; rerun after any tuning change
+N=30 node e2e/balance.cjs         # win rates per offer strategy (and `cards`, which never builds); rerun after any tuning change
 ```
 
 Tests serve `dist/`, so rebuild after every change. Set `BASE_URL` only for one command at a time (festus and mobile can test the live site). An exported `BASE_URL` quietly points later local runs at production. The tests fail on any console error. Look at the screenshots in `shots/` after visual changes.

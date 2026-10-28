@@ -2,6 +2,27 @@
 
 A dated log, newest first. Each entry gives the decision and the reason for it. Commits are on `main` (developed on the former `festus` branch) unless a branch is named.
 
+## 2026-10-27 (city building, branch `city-building`)
+
+Augustin asked why the game felt less like city building than SimCity 3000. A check found that over half the Festus map was open land, but nothing asked the player to build: the old town's neighbourhoods were pre-zoned and mostly empty lots, so the town filled itself in, and the balance bots won without ever zoning a tile. These decisions bring building back and tie it to the story.
+
+- **The old town starts built out; the rest is platted.** Downtown, the half of the west subdivision by the site and a corner of the north-west one start full of houses. The north side, most of the north-west and the south side have streets and power but empty lots.
+  *Why:* the first thing to do on the map should be obvious (zone the empty lots), and the town should look like the 12,000-person town the intro describes.
+- **Festus is zoned for houses.** A block holds eight houses and never turns into apartments, so new homes need new blocks. Homes fill in a few months while people want to move in and empty when they want out.
+  *Why:* without a cap the engine packs growth into existing blocks and the player is never needed. An "allow apartments" policy is in [IDEAS.md](IDEAS.md).
+- **The deal creates demand you build for.** Keystone's construction crews stay a year (about 550 workers for a first campus) and its staff stay on; the town's own halls, the home-grown plan and the trades building new homes add jobs too. They bring people who need homes. When more than 88% of homes are taken and people still want in, rents climb, and Residents, Workers and Schools feel it. A homes alert points at an empty lot with power.
+  *Why:* real data center fights are land-use fights, and housing for the build-out is part of them.
+- **The bars tell the story.** Shops follow what households have to spend (wages plus ownership plus transfers), so an ownership town keeps Main Street busy and an enclosure town loses shops. Factories stop growing and slowly fade as the tide rises. Commuters' jobs in the region are counted, and the tide reaches them too. Festus has no births: it grows when people move in for work. A dividend keeps people from leaving but doesn't pull in jobless newcomers.
+- **Robots make building cheap.** Once robots build robots, roads, zones, power lines and buildings cost half if the town made the breakthrough, and 25% less if it was made elsewhere (from month 54 at the latest). Data centers keep their price. Tool tips follow.
+  *Why:* abundance should show up as a building boom you can use, and owning the breakthrough should pay.
+- **The demand bars sit with the zone tools**, with tips that say what is pulling people in. A Homes chip in City pulse shows homes taken and rents.
+- **Household water scales with the bigger starting town** (190 people per unit of supply), so the old town starts near 60% of the river wells, as before.
+- **Zoning is a permit.** In Festus a block costs $25k to zone (a quarter of the engine's price): the streets and power on the platted lots are already in, and builders put up the homes.
+  *Why:* at $100k a block, building cost the marginal strategies more than the rents it saved.
+- **Business likes real growth.** Business reads how many more homes the town has than a year ago (plus a little of the shop demand), instead of the shop demand bar alone, which rose highest when demand went unmet.
+- **The balance bots build.** Every strategy zones homes on powered platted lots when homes are tight and shops when shop demand is up. A new `cards` strategy negotiates but never builds, to check that building matters (`yes-cards` and so on for the others).
+- **Balance** (N=30): negotiate 30, firm 19, yes 16, no 15, cards 30, yes-cards 5–7. Building decides the marginal strategy (a yes-sayer that builds wins about half the time, one that doesn't about a fifth). For a negotiator it is roughly a wash by 2032: lower rents and a bigger town, but more people out of work as the tide rises.
+
 ## 2026-10-27 (playtest review, branch `playtest-review`)
 
 A headless playtest of 140 games found the rules arguing against the vision: the strategy that won most left half the town jobless with Purpose near 18, the town that refused every deal was the healthiest and lost, and ownership paid $80–190 a resident a year. These decisions answer that.

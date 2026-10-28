@@ -37,6 +37,17 @@ The trajectories the sim should drift toward, shown as the years pass rather tha
 4. **Boom and strain:** fast growth tied to one company, with evaporative cooling and gas; water, bill and health alerts; Keystone threatens to leave the way PPG and the smelter did.
 5. **No deal, decline:** sales tax erodes, young people leave, and the population and budget shrink.
 
+## City building
+
+The first step is built (October 2026): the old town starts full, the platted streets wait for zoning, the campus's crews and jobs push the R bar and rents, shops follow household income, factories fade with the tide, and robot crews make building cheaper. Next ideas, simplest first:
+
+- **An ownership map view.** A map overlay, like a pollution or land value view, coloring what the town owns, what Keystone owns and what residents own (halls, bonded halls, solar, depots, homes). The goal becomes watching the map turn green.
+- **Choose where the campus goes.** Place Keystone's parcel yourself: by the river (cheap water, more strain), next to homes (noise), out on farmland (land you can't zone later).
+- **An "Allow apartments" policy.** Festus is houses-only today; upzoning would add homes without farmland, and neighbors would grumble.
+- **Roads into farmland.** New subdivisions on the fields beyond the platted streets, which costs the Farmers (farm loss is already measured by `farmLost()`).
+- **A from-scratch start.** A second mode that starts from a crossroads on a generated map, with the AI era arriving as you grow. The engine already generates maps.
+- **Who owns the robot crews.** A town-owned construction co-op (after self-building robots) that builds cheaper and pays its earnings into the Fund, instead of only a price cut.
+
 ## Purpose and projects
 
 - **Built:** eight projects (garden, murals, market hall, tool library and makerspace, youth league, riverfront park, observatory, The Lantern) whose costs fall with abundance, a new season when one fades, and a patch of trees and a fountain on the map when one opens. **Not yet:** theater, festival, a little library; projects with their own art; letting the player choose where a project goes.
