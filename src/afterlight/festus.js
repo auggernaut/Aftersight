@@ -5,11 +5,16 @@
  * downtown, residential streets around it, farmland and low wooded hills at the edges, and the empty 370-acre
  * site by the interstate where a developer wants a data center campus. Built with the normal Micropolis tools
  * on a fixed (seeded) map, so every Festus game starts from the same town.
+ *
+ * Aftersight: the old town (around Main Street, and the subdivision by the site) starts built out, every block full
+ * of houses. The newer subdivisions to the north and north-west and the south side were platted (streets and power
+ * laid) but never built: their empty lots are where the player zones new homes and shops. Festus is zoned for
+ * houses, so a block holds eight homes and never turns into apartments (see residential.js).
  */
 
 import { GameMap } from '../gameMap.js';
 import { GameTools } from '../gameTools.js';
-import { BLBNBIT, BULLBIT } from '../tileFlags.ts';
+import { BLBNBIT, BLBNCNBIT, BULLBIT } from '../tileFlags.ts';
 import * as TV from '../tileValues.ts';
 import * as B from './buildings.js';
 
@@ -33,6 +38,39 @@ export const PLANS = [
 ];
 export const plan = function(i) { return PLANS[Math.max(0, Math.min(PLANS.length - 1, i || 0))]; };
 export const DOWNTOWN = {x: 83, y: 47};
+export const HOMES_PER_BLOCK = 8;   // a residential block in Festus holds eight houses
+
+// The neighbourhoods: a block grid of n zone columns with roads every 7 rows and a power spine down the middle.
+// `built(c, i)` says which residential blocks were built before 2026; the rest are empty platted lots.
+var NEIGHBOURHOODS = [
+  // the corner of the north-west subdivision that got built carries power from I-55 to its spine and on to the west
+  {name: 'North-west subdivision', ox: 30, oy: 12, rows: ['RRRRRR', 'RRRRRR', 'RRRRRR', 'RRRKRR'], built: function(c, i) { return i >= 2 && c >= 3; }},
+  {name: 'West subdivision', ox: 22, oy: 33, rows: ['RRRRRR', 'RRRRRR', 'RRKRRR', 'RRRRRR'], built: function(c) { return c >= 3; }},  // the half by the site
+  {name: 'North side', ox: 62, oy: 12, rows: ['RRRRRRRR', 'RRRRRRRR', 'RRRRKRRR', 'RRRRRRRR', 'RRRRRRRR', 'CRRRRRRR'], built: function() { return false; }},
+  {name: 'Downtown', ox: 70, oy: 40, rows: ['RRRRRRRR', 'CCCCCCCC', 'CCCPCCCF', 'RRRRRRRR', 'RRRKRRRR', 'RRRRRRRR'], built: function() { return true; }, downtown: true},
+  {name: 'South side', ox: 62, oy: 61, rows: ['RRRRRR', 'RRRRRR'], built: function() { return false; }},
+  {name: 'Riverside industry', ox: 89, oy: 68, rows: ['II', 'II'], built: function() { return true; }}
+];
+// Every block of a neighbourhood: its type, centre tile and whether it was built before 2026
+var blocks = function(nb) {
+  var n = nb.rows[0].length, half = Math.floor(n / 2), out = [];
+  var colX = function(c) { return c < half ? 1 + c * 3 : 2 + c * 3; };
+  nb.rows.forEach(function(types, i) {
+    var ty = nb.oy + Math.floor(i / 2) * 7 + (i % 2 ? 4 : 1);
+    for (var c = 0; c < n; c++) {
+      var t = types[c];
+      if (t === '.') continue;
+      out.push({type: t, x: nb.ox + colX(c) + 1, y: ty + 1, built: t !== 'R' || nb.built(c, i), where: nb.name});
+    }
+  });
+  return out;
+};
+// The empty platted lots (centre tiles), nearest the old town first
+export const PLATS = (function() {
+  var out = [];
+  NEIGHBOURHOODS.forEach(function(nb) { blocks(nb).forEach(function(b) { if (!b.built) out.push({x: b.x, y: b.y, where: b.where}); }); });
+  return out.sort(function(a, b) { return Math.hypot(a.x - DOWNTOWN.x, a.y - DOWNTOWN.y) - Math.hypot(b.x - DOWNTOWN.x, b.y - DOWNTOWN.y); });
+})();
 
 // Small seeded PRNG so the map is identical every game
 function rng(seed) {
@@ -161,6 +199,7 @@ export function festusTerrain() {
   smoothTrees(map);
   map.cityCentreX = DOWNTOWN.x; map.cityCentreY = DOWNTOWN.y;   // land value peaks on Main Street
   map.alScenario = 'festus';
+  map.alHousesOnly = true;     // Festus is zoned for houses: a block never turns into apartments (residential.js)
   return map;
 }
 
@@ -181,21 +220,20 @@ export function buildFestus(simulation, map) {
   var wireV = function(x, y0, y1) { for (var y = Math.min(y0, y1); y <= Math.max(y0, y1); y++) use('wire', x, y); };
   var names = {R: 'residential', C: 'commercial', I: 'industrial', F: 'fire', P: 'police', K: 'park'};
 
-  // A block grid: roads every 7 rows, n zone columns, a power spine down the middle
-  var grid = function(ox, oy, rows) {
+  // A block grid: roads every 7 rows, n zone columns, a power spine down the middle. Blocks built before 2026 are
+  // zoned (homes filled in below); platted lots get streets and power but stay empty.
+  var houses = rng(2026), homeBlocks = [];
+  var grid = function(nb) {
+    var ox = nb.ox, oy = nb.oy, rows = nb.rows;
     var n = rows[0].length, half = Math.floor(n / 2), w = 3 * n + 2;
-    var colX = function(c) { return c < half ? 1 + c * 3 : 2 + c * 3; };
     var bands = Math.ceil(rows.length / 2);
     for (var b = 0; b <= bands; b++) roadH(oy + b * 7, ox, ox + w);
     roadV(ox, oy, oy + bands * 7); roadV(ox + w, oy, oy + bands * 7);
-    rows.forEach(function(types, i) {
-      var ty = oy + Math.floor(i / 2) * 7 + (i % 2 ? 4 : 1);
-      for (var c = 0; c < n; c++) {
-        var t = types[c];
-        if (t === '.') continue;
-        if (t === 'K') { for (var py = 0; py < 3; py++) for (var px = 0; px < 3; px++) use('park', ox + colX(c) + px, ty + py); continue; }
-        use(names[t], ox + colX(c) + 1, ty + 1);
-      }
+    blocks(nb).forEach(function(k) {
+      if (k.type === 'K') { for (var py = -1; py <= 1; py++) for (var px = -1; px <= 1; px++) use('park', k.x + px, k.y + py); return; }
+      if (!k.built) return;
+      use(names[k.type], k.x, k.y);
+      if (k.type === 'R') homeBlocks.push(k);
     });
     wireV(ox + 1 + half * 3, oy, oy + bands * 7);
     return {x: ox, y: oy, w: w, h: bands * 7};
@@ -208,13 +246,19 @@ export function buildFestus(simulation, map) {
   // A country road and lane through the farms
   roadV(12, 8, 92); roadH(88, 12, 54);
 
-  // Neighbourhoods
-  grid(30, 12, ['RRRRRR', 'RRRRRR', 'RRRRRR', 'RRRKRR']);                        // north-west subdivision
-  grid(22, 33, ['RRRRRR', 'RRRRRR', 'RRKRRR', 'RRRRRR']);                        // west subdivision, by the site
-  grid(62, 12, ['RRRRRRRR', 'RRRRRRRR', 'RRRRKRRR', 'RRRRRRRR', 'RRRRRRRR', 'CRRRRRRR']); // north side
-  var downtown = grid(70, 40, ['RRRRRRRR', 'CCCCCCCC', 'CCCPCCCF', 'RRRRRRRR', 'RRRKRRRR', 'RRRRRRRR']); // Main Street at y=47
-  grid(62, 61, ['RRRRRR', 'RRRRRR']);                                           // south side
-  grid(89, 68, ['II', 'II']);                                                   // riverside industry
+  // Neighbourhoods (Main Street runs through downtown at y=47)
+  var downtown = null;
+  NEIGHBOURHOODS.forEach(function(nb) { var g = grid(nb); if (nb.downtown) downtown = g; });
+  // The old town's blocks are full of houses (six to eight each; the census settles them in the warm-up years)
+  homeBlocks.forEach(function(k) {
+    var lots = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
+    var n = 6 + Math.floor(houses() * 3);
+    for (var i = 0; i < lots.length && n > 0; i++) {
+      if (houses() < (lots.length - i - n) / (lots.length - i)) continue;   // pick n of the 8 lots at random
+      map.setTile(k.x + lots[i][0], k.y + lots[i][1], TV.HOUSE + Math.floor(houses() * 3) + 3 * (1 + Math.floor(houses() * 2)), BLBNCNBIT);
+      n--;
+    }
+  });
 
   // Streets that tie the neighbourhoods into one network
   roadV(30, 27, 32);                // north-west subdivision down to the west one
@@ -233,6 +277,7 @@ export function buildFestus(simulation, map) {
   wireV(60, 60, 79);                // north to the strip (its shops carry power to the interchange)
   wireV(60, 13, 47);                // and on past the state road
   wireH(14, 61, 62);                // north side
+  wireV(75, 34, 40);                // the north side's spine down to downtown, so its empty lots have power
   wireH(42, 61, 70);                // downtown
   wireH(63, 61, 62);                // south side
   wireH(24, 50, 59);                // across I-55 to the north-west subdivision
@@ -240,5 +285,6 @@ export function buildFestus(simulation, map) {
   wireH(35, 42, 43);                // feeder to the site's west edge
   wireH(49, 55, 58);                // under I-55 to the shops on the west side of the interchange
 
+  simulation.afterlight.warmupHooks();   // commuters' jobs and damped demand for the warm-up years (layer.js)
   return {x: downtown.x, y: downtown.y, w: downtown.w, h: downtown.h, site: SITE, festus: true};
 }

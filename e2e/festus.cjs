@@ -83,6 +83,14 @@ const months = async (page, n) => {
   if (!town.i55) fail('I-55 does not run the length of the map');
   if (!town.clear) fail('the data center site is not empty at the start');
   if (town.pop < 1500) fail('Festus did not grow into a town (pop ' + town.pop + ')');
+  // the old town is built out (houses only); the platted streets around it have empty lots to zone
+  const homes = await page.evaluate(() => { const L = __AL.layer, m = __AL.game.gameMap; let houses = 0, apts = 0;
+    for (let y = 0; y < m.height; y++) for (let x = 0; x < m.width; x++) { const v = m.getTileValue(x, y); if (v >= 249 && v <= 260) houses++; if (v >= 265 && v < 405 && m.getTile(x, y).isZone()) apts++; }
+    return { houses, apts, lots: L.openLots(false).length, powered: L.openLots(true).length, homesOnly: !!m.alHousesOnly, rci: !!document.querySelector('#controls #alRCI .rci_res') }; });
+  console.log('homes', JSON.stringify(homes));
+  if (homes.houses < 250 || homes.apts) fail('the old town should be full of houses, and no apartments (' + homes.houses + ' houses, ' + homes.apts + ' apartment blocks)');
+  if (homes.lots < 60 || homes.powered < 15 || !homes.homesOnly) fail('Festus should start with empty platted lots, many with power (' + homes.lots + ', ' + homes.powered + ')');
+  if (!homes.rci) fail('the R, C and I demand bars should sit with the zone tools');
 
   // ---- intro card, then the opening map with the card held back ----
   await page.waitForSelector('#alCard:not(.hidden)', { timeout: 5000 });
@@ -342,6 +350,9 @@ const months = async (page, n) => {
   const ms = await p3.evaluate(() => {
     const g = __AL.game, L = __AL.layer, ev = g.simulation.evaluation;
     ['Town', 'City', 'Capital', 'Metropolis', 'Megalopolis'].forEach(k => { g['_reached' + k] = false; });   // let the engine try
+    // start from a town: the real Festus may already have grown into a city by now (it starts near 11,000 and grows)
+    L.s.cityStatus = undefined; L.s.mayor.cityMonths = 0; L.s.log = L.s.log.filter(e => !/is now a/i.test(e.text));
+    document.getElementById('cclass').textContent = 'TOWN';
     L.autoDecide = function(c) { this.decide(c.options[c.options.length - 1].id); };
     if (L.s.card) L.autoDecide(L.s.card);
     g.alNoPaper = true;
@@ -531,6 +542,7 @@ const months = async (page, n) => {
       L._forceVote = 60;   // keep this mayor in office: the test is about the developer and the tide, not the vote
       for (let i = 0; i < 84 && L.s.dev.status !== 'gone'; i++) __AL.fastForward(1);
       __AL.fastForward(12);
+      while (L.mi() < 42) __AL.fastForward(1);   // far enough along that the tide has risen
       L._forceVote = undefined;
       return { status: L.s.dev.status, walks: L.s.dev.walks, due: L.s.dev.due, mi: L.mi(), card: L.s.card && L.s.card.type, last: L.s.mayor.lastCard, a0: a0, auto: +L.s.automation.toFixed(3), path: L.s.path, gone: L.s.log.some(e => /won't be back/.test(e.text)),
                income: L.incomeMix() }; });
@@ -578,6 +590,30 @@ const months = async (page, n) => {
     console.log('project on the map', JSON.stringify(proj));
     if (!proj.at || !(proj.tile === 840 || (proj.tile >= 40 && proj.tile <= 43))) fail('an opened project should appear on the map');
     if (!proj.renew || !proj.opened || !/^Another season/.test(proj.title || '')) fail('a faded project should offer another season');
+    // city building: a lot zoned for homes fills with houses (never apartments) while construction crews want in;
+    // rents climb when every home is taken; the Homes chip and the R bar say so; robot crews cut building prices
+    const city = await pg.evaluate(() => { const L = __AL.layer, g = __AL.game, m = g.gameMap; g.alNoPaper = true; L.s.card = null;
+      L.autoDecide = c => L.decide(c.options[c.options.length - 1].id); g.simulation.budget.setFunds(20000);
+      const crews0 = L.s.crews || 1, lot = L.openLots(true)[0]; const f0 = __AL.funds(); const zoned = lot ? __AL.build('residential', lot.x, lot.y) : 'no lot';
+      const zoneCost = f0 - __AL.funds();
+      L.s.mayor.crews = {until: L.s.months + 10, size: 200};   // a big campus phase: far more workers than homes
+      let houses = 0, apartments = false, rentMax = 1, rvMax = -9999;
+      for (let i = 0; i < 9; i++) { __AL.fastForward(1); rentMax = Math.max(rentMax, L.s.rent || 1); rvMax = Math.max(rvMax, g.simulation._valves.resValve);
+        let n = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const t = m.getTileValue(lot.x + dx, lot.y + dy); if (t >= 249 && t <= 260) n++; }
+        houses = Math.max(houses, n); if (m.getTileValue(lot.x, lot.y) !== 244) apartments = true; }
+      g.alPanel.refresh(true); g.alUI.frame(true);
+      const chip = document.getElementById('alHomes').textContent, tip = document.querySelector('#alRCI .rci_res').getAttribute('data-tip');
+      // robot crews: once robots build robots, building costs half for a town that owns them
+      L.s.discovered.robots_build_robots = L.s.months; __AL.fastForward(1); g.alPanel.refresh(true);
+      const road = L.openLots(true)[0]; const f1 = __AL.funds(); const roadOk = __AL.build('road', road.x, road.y); const roadCost = f1 - __AL.funds();
+      return { zoned, zoneCost, crews0, houses, apartments, rentMax: +rentMax.toFixed(3), rvMax, chip, tip, crews: L.s.crews, roadOk, roadCost,
+               roadTip: document.getElementById('roadButton').getAttribute('data-tip'), news: L.s.log.some(e => /Robot construction crews/.test(e.text)) }; });
+    console.log('city building', JSON.stringify(city));
+    if (city.zoned !== 'ok' || city.zoneCost !== Math.round(25 * city.crews0)) fail('zoning an empty lot should work and cost $25k (less with robot crews): ' + city.zoneCost);
+    if (city.houses < 4 || city.apartments) fail('a new block should fill with houses while people want in, and stay houses (' + city.houses + ')');
+    if (!(city.rvMax > 0) || !(city.rentMax > 1.01)) fail('crews with nowhere to live should push the R bar and rents up (R ' + city.rvMax + ', rent ' + city.rentMax + ')');
+    if (!/% taken/.test(city.chip) || !/^Homes \(R\)/.test(city.tip)) fail('the Homes chip and the R bar should explain homes: ' + city.chip + ' / ' + city.tip);
+    if (city.crews !== 0.5 || city.roadOk !== 'ok' || city.roadCost !== 5 || !/50% off/.test(city.roadTip) || !city.news) fail('robot crews should halve building prices, in the tool tips too');
     if (run.errors.length) fail('console errors (tide run):\n' + run.errors.join('\n'));
     await pg.close();
   }

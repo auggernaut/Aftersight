@@ -7,7 +7,7 @@ import $ from "jquery";
 
 import { FACTIONS, ELECTIONS, WIN_TERMS, WIN_SHARE, RESEARCH, UTIL_TEXT, PROJECTS, PROJECT_ORDER, PATHS } from './mayor.js';
 import { LABELS } from './festus.js';
-import { money, usd, moneyText } from './money.js';
+import { money, usd, moneyText, buildScale, buildText, zoneScale } from './money.js';
 
 var bar = function(id, label, colour) {
   return '<div class="alRow"><span class="alLabel">' + label + '</span>' +
@@ -33,6 +33,7 @@ function AfterlightPanel(game) {
       '<div class="alSection alMayor"><div class="alSectionTitle">Mayor</div>' +
         '<div class="alApprovalRow"><span class="alApprovalBig" id="alApprovalBig"></span><span class="alApprovalSub" id="alElection"></span></div>' +
         '<button class="alPath" id="alPath" data-tip="Which way the town is heading. It comes from household income, Purpose, and the strain on water, bills and air."></button>' +
+        '<button class="alPath alHomes" id="alHomes" data-tip="Homes and rents. Every block holds eight houses; when every home is taken and people still want to move in, rents climb until the town zones more."></button>' +
         '<button class="alTownHall hidden" id="alTownHall"></button>' +
         FACTIONS.map(function(f) { return bar('alF_' + f.id, f.short, '#d9b44a'); }).join('') +
         '<div class="alGoal" id="alGoal"></div>' +
@@ -63,9 +64,8 @@ function AfterlightPanel(game) {
           '</span><span class="alProjInfo" id="alProj_' + id + '"></span></button>'; }).join('') +
       '</div>' +
       '<div class="alSection alNewsBox"><div class="alSectionTitle" id="alNewsTitle">Valley news</div><ul id="alNews"></ul></div>' +
-      '<button class="alMoreToggle" id="alMoreToggle" aria-expanded="false">More: demand, mood, power, policies</button>' +
+      '<button class="alMoreToggle" id="alMoreToggle" aria-expanded="false">More: mood, power, policies</button>' +
       '<div class="alMore" id="alMore">' +
-      '<div class="alSection alDemand"><div class="alSectionTitle">Demand</div><div id="alRCI"></div></div>' +
       '<div class="alSection alMood"><div class="alSectionTitle">Mood</div>' +
         bar('alUnemp', 'Unemployment', '#e0574f') +
         bar('alPurpose', 'Purpose', '#5b8def') +
@@ -119,7 +119,7 @@ function AfterlightPanel(game) {
   });
   $('#alPaperRestart').on('click', function(e) { e.preventDefault(); window.location.reload(); });
   var festus = this.layer.s.scenario === 'festus';
-  $('#alFundBox, #alProjBox, #alIncomeBox, #alPath, #alMoreToggle').toggle(festus);
+  $('#alFundBox, #alProjBox, #alIncomeBox, #alPath, #alHomes, #alMoreToggle').toggle(festus);
   $('#alMore').toggleClass('open', !festus);
   $('#alMoreToggle').on('click', function(e) {
     e.preventDefault();
@@ -137,6 +137,12 @@ function AfterlightPanel(game) {
     if (game.alAlert) game.alAlert.open({tone: PATHS[self.layer.s.path || 'early'].tone, text: 'Path: ' + PATHS[self.layer.s.path || 'early'].name,
       ctx: {topic: 'path', why: self.layer.pathLine(true), lever: self.layer.newsContext('neutral', 'Path:', {alert: 'path'}).lever,
             stats: self.layer.newsContext('neutral', 'Path:', {alert: 'path'}).stats, date: self.layer.dateString()}});
+  });
+  $('#alHomes').on('click', function(e) {
+    e.preventDefault();
+    var ctx = self.layer.newsContext('neutral', 'Homes:', {alert: 'homes'});
+    if (game.alAlert) game.alAlert.open({tone: (self.layer.s.rent || 1) >= 1.08 ? 'bad' : 'neutral', text: 'Homes: ' + self.layer.homesLine(),
+      ctx: {topic: 'homes', why: ctx.why, lever: ctx.lever, stats: ctx.stats, date: self.layer.dateString()}});
   });
   $('#alFundPayout').on('input change', function() { self.layer.setFundPayout($(this).val() / 100); self.refresh(true); });
   $('#alPanel').on('click', '.alProj', function(e) {
@@ -230,6 +236,9 @@ AfterlightPanel.prototype.refresh = function(force) {
   if (L.festus()) {
     var path = PATHS[s.path || 'early'];
     $('#alPath').html('<span class="alPathK">Path</span> ' + $('<div>').text(path.name).html()).attr('data-tone', path.tone);
+    var rent = s.rent || 1;
+    $('#alHomes').toggle(!!s.homes).html('<span class="alPathK">Homes</span> ' + $('<div>').text(L.homesLine(true)).html())
+      .attr('data-tone', rent >= 1.08 ? 'bad' : rent <= 0.99 ? 'good' : 'neutral');
     var q = s.quickAsk;
     $('#alTownHall').toggleClass('hidden', !q).html(q ? '<span class="alPathK">Town hall</span> ' + $('<div>').text(q.card.title).html() + ' <b>Decide \u203a</b>' : '');
   }
@@ -299,14 +308,21 @@ AfterlightPanel.prototype.refresh = function(force) {
   if (newsHtml !== this._newsHtml) { this._newsHtml = newsHtml; $('#alNews').html(newsHtml); }
   for (var name in s.policies) $('#alPol_' + name).prop('checked', !!s.policies[name]);
   $('#alComputeChip').text(L.townCompute() + '/mo · ' + Math.round(L.townShare() * 100) + '% own');
-  $('#labButton').toggleClass('alLabIdle', !labs).attr('data-tip', 'Research Lab · ' + money(1500) + '. ' + (labs ? labs + ' running' + (s.labBill ? ', ' + money(s.labBill) + '/mo for upkeep and compute' : '') + '. ' :
+  $('#labButton').toggleClass('alLabIdle', !labs).attr('data-tip', 'Research Lab · ' + money(1500 * buildScale()) + '. ' + (labs ? labs + ' running' + (s.labBill ? ', ' + money(s.labBill) + '/mo for upkeep and compute' : '') + '. ' :
     'None running: breakthroughs only turn up while a lab runs. ') + 'Each uses 10 town compute a month plus ' + money(10) + ' upkeep; more labs and more town compute bring breakthroughs sooner.');
   $('#clinicButton').toggleClass('alLocked', !this.layer.isUnlocked('clinic'));
   $('#fusionButton').toggleClass('alLocked', !this.layer.isUnlocked('fusion'));
   if (L.festus()) $('#dcCoopButton').toggleClass('alLocked', !L.isUnlocked('dcCoop')).attr('data-tip', 'Town-owned data center · ' + money(4000) + ' down. ' +
     (L.bondPermits() ? L.bondPermits() + ' bonded and ready to build: its revenue pays the bond first, the rest goes to the Festus Fund.' :
                        'Needs a co-op bond first: back one when the trades bring it to City Hall.'));
-  $('#solarButton').attr('data-tip', this.layer.toolCostMultiplier('solar') < 1 ? 'Solar farm · ' + money(750) + ' (cheap solar)' : 'Solar farm · ' + money(1500));
+  var bs = buildScale(), crews = bs < 1 ? ' (robot crews: ' + Math.round((1 - bs) * 100) + '% off)' : '';
+  $('#solarButton').attr('data-tip', (this.layer.toolCostMultiplier('solar') < 1 ? 'Solar farm · ' + money(750 * bs) + ' (cheap solar)' : 'Solar farm · ' + money(1500 * bs)) + crews);
+  // build prices follow the robot crews (tool tips written in the engine's dollars are kept in data-tip0)
+  if (bs !== this._buildScale) {
+    this._buildScale = bs;
+    $('#controls .toolButton[data-tip0]').not('#solarButton, #labButton').each(function() {
+      $(this).attr('data-tip', buildText($(this).attr('data-tip0'), /^(residential|commercial|industrial)$/.test($(this).attr('data-tool')) ? zoneScale() : 1)); });
+  }
 };
 
 // Protest camps drawn over the map: a pulsing ring of red placards around the blockaded data center

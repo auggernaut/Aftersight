@@ -9,7 +9,7 @@ import $ from "jquery";
 var esc = function(t) { return $('<div>').text(t == null ? '' : '' + t).html(); };
 var TOPIC_NAMES = {water: 'Water', bills: 'Power bills', health: 'Health', jobs: 'Jobs', wealth: 'Household wealth', fund: 'Festus Fund',
                    mood: 'Mood', project: 'Town projects', election: 'Elections', deal: 'The data center', research: 'Breakthroughs',
-                   purpose: 'Purpose', path: 'Which way the town is heading', townhall: 'Town hall'};
+                   purpose: 'Purpose', path: 'Which way the town is heading', townhall: 'Town hall', homes: 'Homes'};
 var signed = function(n) { return (n > 0 ? '+' : n < 0 ? '\u2212' : '\u00b1') + Math.abs(n); };
 
 function AlertWindow(game) {

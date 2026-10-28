@@ -15,6 +15,7 @@ import { MiscUtils } from './miscUtils.js';
 import { TileUtils } from './tileUtils.js';
 import { DIRT, HBRIDGE, LASTTINYEXP, TINYEXP } from "./tileValues.ts";
 import { WorldEffects } from './worldEffects.js';
+import { buildScale, zoneScale } from './afterlight/money.js';
 
 var init = function(cost, map, shouldAutoBulldoze, isDraggable) {
   isDraggable = isDraggable || false;
@@ -64,6 +65,11 @@ var modifyIfEnoughFunding = function(budget) {
     this.clear();
     return false;
   }
+
+  // Aftersight: robot construction crews cut what building costs (money.js buildScale); data centers pay full price.
+  // Zoning in Festus is a permit and costs a quarter (zoneScale).
+  if (!this.alFullPrice && this._applicationCost > 0)
+    this._applicationCost = Math.max(1, Math.round(this._applicationCost * buildScale() * (this.alZone ? zoneScale() : 1)));
 
   if (budget.totalFunds < this._applicationCost) {
     this.result = this.TOOLRESULT_NO_MONEY;

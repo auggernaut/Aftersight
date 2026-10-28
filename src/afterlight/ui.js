@@ -8,7 +8,7 @@ import $ from "jquery";
 import { TOOL_CLICKED } from '../messages.ts';
 
 import { makeP, box, quad, line, tree, poly, cylinder } from './iso/art.js';
-import { money, moneyText } from './money.js';
+import { money, moneyText, buildText, zoneScale } from './money.js';
 import * as B from './iso/buildings.js';
 
 // ---- toolbar icons: tiny iso renders of what each tool builds ----
@@ -138,7 +138,10 @@ function AfterlightUI(game) {
   // Festus: the top bar shows household income instead of the engine's score, and every price is in real dollars
   var festus = game.simulation.afterlight.s.scenario === 'festus';
   $('body').toggleClass('alFestus', festus);
-  if (festus) $('[data-tip]').each(function() { $(this).attr('data-tip', moneyText($(this).attr('data-tip'))); });
+  // build tools keep their engine-dollar tip in data-tip0, so the price can follow the robot crews (panel.js)
+  $('#controls .toolButton[data-tip]').not('[data-tool^="dc"]').each(function() {
+    $(this).attr('data-tip0', $(this).attr('data-tip')).attr('data-tip', buildText($(this).attr('data-tip'), /^(residential|commercial|industrial)$/.test($(this).attr('data-tool')) ? zoneScale() : 1)); });
+  if (festus) $('[data-tip]:not([data-tip0])').each(function() { $(this).attr('data-tip', moneyText($(this).attr('data-tip'))); });
   var compact = window.matchMedia && window.matchMedia('(max-width: 760px), (max-height: 500px)');
   if (compact && compact.matches) $('#alPanel').addClass('collapsed');
   // stop iOS page pinch and double-tap zoom over the game; the map has its own pinch
@@ -174,7 +177,7 @@ function AfterlightUI(game) {
   syncCollapse();
   $('#alPanel .alTitle').on('click', function() { if (compact && compact.matches) $('#alPanel').toggleClass('collapsed'); syncCollapse(); });
 
-  // RCI demand meter
+  // RCI demand meter, beside the zone tools (tips say why: mayor.js demandTips)
   $('#alRCI').html(['res', 'com', 'ind'].map(function(k, i) {
     return '<div class="rciCol rci_' + k + '" data-tip="' + ['Residential', 'Commercial', 'Industrial'][i] + ' demand">' +
       '<div class="rciTrack"><div class="rciUp"><span id="rci_' + k + 'Up"></span></div><div class="rciDown"><span id="rci_' + k + 'Down"></span></div></div>' +
@@ -221,6 +224,8 @@ AfterlightUI.prototype.frame = function(force) {
     $('#rci_' + p[0] + 'Up').css('height', Math.round(Math.max(0, f) * 100) + '%');
     $('#rci_' + p[0] + 'Down').css('height', Math.round(Math.max(0, -f) * 100) + '%');
   });
+  var tips = game.simulation.afterlight.demandTips();
+  ['res', 'com', 'ind'].forEach(function(k) { $('.rci_' + k).attr('data-tip', tips[k]); });
   // Aftersight: approval in the top bar, and any decision card waiting for the mayor
   var L = game.simulation.afterlight, m = L.s.mayor;
   var a = Math.round(m.approval);

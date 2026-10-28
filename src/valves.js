@@ -84,6 +84,8 @@ Valves.prototype.setValves = function(gameLevel, census, budget) {
 
   // Given the employment rate, calculate expected migration, add in births, and project the new population.
   var migration = normalizedResPop * (employment - 1);
+  // Aftersight: a town can set its own birth rate (Festus: 0, so it grows only when people move in for work)
+  if (census.alBirthRate !== undefined) birthRate = census.alBirthRate;
   var births = normalizedResPop * birthRate;
   var projectedResPop = normalizedResPop + migration + births;
 
@@ -131,6 +133,12 @@ Valves.prototype.setValves = function(gameLevel, census, budget) {
   resRatio = (resRatio - 1) * taxTableScale + taxTable[z];
   comRatio = (comRatio - 1) * taxTableScale + taxTable[z];
   indRatio = (indRatio - 1) * taxTableScale + taxTable[z];
+
+  // Aftersight: pushes from the layer (Festus: rents hold housing demand back, shops follow household income,
+  // factories fade as the automation tide rises). Each is per step; with the leak below a push settles at 5x.
+  resRatio += census.alResPush || 0;
+  comRatio += census.alComPush || 0;
+  indRatio += census.alIndPush || 0;
 
   // Aftersight: the valves integrate demand with no decay, and zones answer them months later, so a town with far
   // more houses than jobs overshoots and crashes in a cycle of a year or so (Festus swung between roughly 6,500 and

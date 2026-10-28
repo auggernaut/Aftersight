@@ -37,3 +37,21 @@ export function moneyText(text) {
   if (!real || !text) return text;
   return text.replace(/\$([\d,]+)/g, function(all, num) { return money(+num.replace(/,/g, '')); });
 }
+
+// Aftersight: what building costs. Robot construction crews cut the price of roads, zones, power lines and
+// buildings (not data centers: those are mostly chips). 1 = the engine's prices. Set monthly by the layer.
+var build = 1, zone = 1;
+export function setBuildScale(f) { build = f > 0 ? f : 1; }
+export function buildScale() { return build; }
+// Zoning a block is a permit, not a building: Festus charges a quarter of the engine's price (zone tools, baseTool.js)
+export function setZoneScale(f) { zone = f > 0 ? f : 1; }
+export function zoneScale() { return zone; }
+// A build tool tip ("Residential zone · $100") at today's price; `mult` is any other scale on that tool (zoning)
+export function buildText(text, mult) {
+  if (!text) return text;
+  var scaled = text.replace(/\$([\d,]+)/g, function(all, num) {
+    var n = +num.replace(/,/g, '') * build * (mult || 1);
+    return real ? money(n) : (n < 0 ? '−' : '') + '$' + commas(Math.max(1, Math.round(Math.abs(n))));
+  });
+  return build < 1 ? scaled + ' (robot crews: ' + Math.round((1 - build) * 100) + '% off)' : scaled;
+}

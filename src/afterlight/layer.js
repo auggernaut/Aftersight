@@ -14,7 +14,8 @@ import { TileUtils } from '../tileUtils.js';
 import * as TV from '../tileValues.ts';
 import * as B from './buildings.js';
 import { installMayor, freshMayor, freshDev, freshResearch, RESEARCH } from './mayor.js';
-import { setRealDollars, money } from './money.js';
+import { setRealDollars, setBuildScale, setZoneScale, money } from './money.js';
+import { HOMES_PER_BLOCK } from './festus.js';
 
 export const AL_NEWS = 'Afterlight news';
 
@@ -28,6 +29,19 @@ var FUSION_STRENGTH = 6000;
 var VALVE_LEAK = 0.8;       // Festus: demand valves forget 20% a step, so population grows instead of cycling
 var DC_COMPUTE = 100;       // compute units per powered data center
 var DEPOT_CAPACITY = 150;   // robots a depot can house and maintain
+// Festus homes and demand (_homesMonthly). Job units are Micropolis's zone-population units.
+var COMMUTE = 10;           // jobs Festus residents hold elsewhere in the region (the tide reaches them too)
+var DRAW = 0.015;           // newcomers a dividend draws, per real dollar a resident a year (per step)
+var DRAW_MAX = 50;
+var RENT_UP = 0.45;         // how far rents climb when every home is taken and people still want in...
+var RENT_FULL = 800;        // ...this much (on the R bar's -2000..2000 scale)
+var RENT_DOWN = 0.1;        // how far they ease when people want out
+var CREW_OUT = 40;          // how hard finished crews pull out (per demand step, per job unit leaving)
+var TRADES = 3;             // trades jobs (worker units) for each new home going up a month
+var RENT_DAMP = 400;        // high rents price some newcomers out (per demand step, per 100% rise in rent)
+var SHOP_PUSH = 400;        // shops follow household income (per demand step, per 100% of a normal income)
+var ZONE_PRICE = 0.25;      // Festus: zoning a block costs a quarter of the engine's $100 ($25k): the builders build the homes
+var FACTORY_PUSH = [-130, -250];   // factories stop growing as the tide rises, and slowly fade: base, and per unit of tide
 
 export const DISCOVERIES = {
   cheap_solar: {
@@ -106,6 +120,9 @@ AfterlightLayer.prototype.setScenario = function(name) {
   var s = this.s;
   s.scenario = name;
   setRealDollars(name === 'festus');
+  setBuildScale(1);
+  setZoneScale(name === 'festus' ? ZONE_PRICE : 1);
+  this._map.alHousesOnly = name === 'festus';
   if (name === 'festus') {
     B.NAMES[B.DC_HELIX] = 'Keystone Data Center';
     B.NAMES[B.DC_COOP] = 'Festus Co-op Data Center';
@@ -117,6 +134,7 @@ AfterlightLayer.prototype.setScenario = function(name) {
             'The decision is yours alone, and the town wants an answer tonight. Your seat is up in April 2028: the voters are the only check on you.',
       rows: [['Approval', 'Built from five factions: residents, farmers, workers, business, and schools. Each choice moves them.', 'neutral'],
              ['The tide', 'Machines will take more of the region\'s work every year, campus or no campus. What Festus owns decides whether dividends replace the wages.', 'neutral'],
+             ['Build', 'The old town is full. Streets are laid on the north side, the north-west and the south side, but the lots are empty: zone homes and shops there when the R and C bars rise, or rents climb.', 'neutral'],
              ['Elections', 'Every two years, from April 2028. Under 50% approval, you\'re out.', 'neutral'],
              ['Goal', 'Win 3 elections, or win one with the town owning 25%+ of local compute and paying a real dividend ($1,000+ a resident a year).', 'good']],
       options: [{id: 'go', label: 'Open the meeting', tone: 'good'}]};
@@ -137,6 +155,9 @@ AfterlightLayer.prototype.load = function(saveData) {
   }
   this.s = fresh;
   setRealDollars(this.s.scenario === 'festus');
+  this._map.alHousesOnly = this.s.scenario === 'festus';
+  setBuildScale(this.s.crews || 1);
+  setZoneScale(this.s.scenario === 'festus' ? ZONE_PRICE : 1);
   if (this.s.scenario === 'festus') { B.NAMES[B.DC_HELIX] = 'Keystone Data Center'; B.NAMES[B.DC_COOP] = 'Festus Co-op Data Center'; }
 };
 
@@ -358,7 +379,8 @@ AfterlightLayer.prototype.monthly = function(simData) {
   s.helixShare = total > 0 ? s.helixRevenue / total : (c.alDCCount > 0 ? 1 : 0.5);
 
   // Jobs shock: robots and compute take over a growing share of the work in commercial/industrial zones
-  var jobs = (c.comPop + c.indPop) * 8;              // same job units Micropolis uses in its evaluation
+  // (Festus: plus the jobs its commuters hold elsewhere in the region, which the tide reaches too)
+  var jobs = (c.comPop + c.indPop + (festus ? COMMUTE : 0)) * 8;   // same job units Micropolis uses in its evaluation
   var workers = Math.max(1, c.resPop);
   if (festus) {
     // Festus: automation is a regional tide that reaches the town whatever it hosts; only its own robot depots add to it
@@ -370,10 +392,15 @@ AfterlightLayer.prototype.monthly = function(simData) {
     var labour = s.robots * 0.5 + s.compute * 0.15 + (this.has('cheap_solar') ? jobs * 0.05 : 0);
     s.automation = jobs > 0 ? clamp(1 - Math.exp(-labour / Math.max(jobs, 1)), 0, 0.95) : 0;
   }
-  // Aftersight: the developer's promised jobs (and construction crews while the campus goes up)
-  var dealJobs = (s.construction ? 25 : 0) + (s.deal && s.hallsBuilt ? s.deal.jobs * 0.4 * (s.mayor.localHire ? 1.3 : 1) : 0);
+  // Aftersight: the developer's promised jobs (and construction crews while the campus goes up; in Festus the crews
+  // stay on through the fit-out, and need homes while they're here: _homesMonthly)
+  var crews = festus ? this.crewHomes() : 0;
+  var crewJobs = s.construction || crews ? Math.max(25, crews) : 0;
+  var opsJobs = s.deal && s.hallsBuilt ? s.deal.jobs * 0.4 * (s.mayor.localHire ? 1.3 : 1) : 0;
   // Festus: the home-grown plan (community solar, Main Street grants, training) and the town's own halls employ people too
-  if (festus) dealJobs += (!s.deal ? Math.min(2, s.mayor.homegrown || 0) * 6 : 0) + this.bondedBuilt() * 5;
+  if (festus) opsJobs += (!s.deal ? Math.min(2, s.mayor.homegrown || 0) * 6 : 0) + this.bondedBuilt() * 5;
+  // ...and the local trades hire people already here while new homes go up (_homesMonthly; they don't draw newcomers)
+  var dealJobs = crewJobs + opsJobs + (festus ? s.trades || 0 : 0);
   var employed = Math.min(workers, jobs * (1 - s.automation) + dealJobs);
   var unempTarget = clamp(1 - employed / workers, 0, 1);
   if (s.strike > 0) unempTarget = Math.min(1, unempTarget + 0.05);
@@ -404,7 +431,9 @@ AfterlightLayer.prototype.monthly = function(simData) {
   // Feed the jobs shock back into Micropolis's demand valves (see valves.js)
   c.alJobFactor = 1 - s.automation;
   c.alValveLeak = s.scenario === 'festus' ? VALVE_LEAK : 1;   // damp the census boom-and-bust (see valves.js)
-  c.alIncomeSupport = (c.comPop + c.indPop) * s.automation * s.cover;
+  c.alBirthRate = festus ? 0 : undefined;                      // Festus grows when people move in for work
+  c.alIncomeSupport = (c.comPop + c.indPop + (festus ? COMMUTE : 0)) * s.automation * s.cover;
+  if (festus) this._homesMonthly(c, crewJobs, opsJobs);
   var coopShare = 1 - s.helixShare;
 
   // Mood
@@ -569,6 +598,47 @@ AfterlightLayer.prototype._festusProtest = function() {
   if (cd.protest > 0 || !halls.length || res >= 35 || Random.getRandom(100) >= 30) return;
   this.startProtest(halls);
   s.cooldowns.protest = 12;
+};
+
+// Festus: homes, rents and what the town wants built. People want to move in when there are jobs (shops and
+// factories in town, commuting jobs in the region, the campus and its construction crews) and when the Fund pays a
+// dividend; they want out when the jobs go. A block holds eight houses, so once the homes are taken and people still
+// want in, rents climb until the town zones more. Shops follow what households have to spend; factories fade with
+// the tide. These feed Micropolis's demand valves (valves.js), which the R, C and I bars show.
+AfterlightLayer.prototype._homesMonthly = function(c, crewJobs, opsJobs) {
+  var s = this.s, v = this._sim._valves;
+  var cap = Math.max(1, (c.alResPowered || 0) * HOMES_PER_BLOCK), occ = clamp(c.resPop / cap, 0, 1);   // blocks with power
+  // jobs the zones don't show, which bring people who need homes: commuters' jobs in the region (the tide reaches
+  // them too), the campus's construction crews and staff, and the town's own employers. A dividend that replaces lost
+  // wages keeps people from leaving, but it doesn't bring jobless newcomers: it only fills the gap up to the residents
+  // already here (newcomers it draws come through `pull.dividend` below).
+  // Crews that have finished move on over a few months: they don't count as residents a dividend keeps here.
+  var leaving = this.crewsLeaving() / 8;
+  var normRes = Math.max(1, c.resPop / 8 - leaving), jobUnits = (c.comPop + c.indPop + COMMUTE) * (1 - s.automation) + (crewJobs + opsJobs) / 8;
+  var stay = Math.min((c.comPop + c.indPop + COMMUTE) * s.automation * s.cover, Math.max(0, normRes * 0.98 - jobUnits));
+  c.alIncomeSupport = COMMUTE * (1 - s.automation) + (crewJobs + opsJobs) / 8 + stay;
+  // and newcomers a dividend draws; high rents price some of them out
+  var pull = {crews: crewJobs, jobs: opsJobs, dividend: Math.min(DRAW_MAX, (s.dividendPerRes || 0) * DRAW)};
+  var rv = v ? v.resValve : 0, pressure = clamp(rv / RENT_FULL, -1, 1.25), tight = clamp((occ - 0.88) / 0.1, 0, 1);
+  var target = pressure > 0 ? 1 + RENT_UP * pressure * tight : 1 + RENT_DOWN * pressure;
+  s.rent = s.rent === undefined ? target : approach(s.rent, target, target > s.rent ? 0.15 : 0.05);   // up fast, down slowly
+  // new homes going up employ the local trades; robot crews do part of that work once they exist (crews: 1, 0.75, 0.5)
+  var newHomes = s.homes ? Math.max(0, c.resPop - s.homes.built) : 0;
+  s.trades = approach(s.trades || 0, newHomes * TRADES * (s.crews || 1), 0.3);
+  s.homesHist = (s.homesHist || []).concat([c.resPop]).slice(-13);   // a year of homes, for business's sense of growth
+  s.homes = {occ: occ, cap: cap, built: c.resPop, blocks: c.alResPowered || 0, dark: Math.max(0, (c.resZonePop || 0) - (c.alResPowered || 0)),
+             pull: pull};
+  c.alResPush = pull.dividend - Math.max(0, s.rent - 1) * RENT_DAMP - leaving * CREW_OUT;
+  c.alComPush = (this.incomeIndex() - 1) * SHOP_PUSH;
+  c.alIndPush = FACTORY_PUSH[0] + FACTORY_PUSH[1] * (s.tide || 0);
+};
+
+// Festus: the warm-up years before January 2026 run with the layer paused, so set the hooks the valves read (the
+// commuters' jobs, the damped valves, factories that have stopped growing) before them
+AfterlightLayer.prototype.warmupHooks = function() {
+  var c = this._sim._census;
+  c.alJobFactor = 1; c.alValveLeak = VALVE_LEAK; c.alIncomeSupport = COMMUTE;
+  c.alResPush = 0; c.alComPush = 0; c.alIndPush = FACTORY_PUSH[0]; c.alBirthRate = 0;
 };
 
 // The purposelessness slump

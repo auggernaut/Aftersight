@@ -128,7 +128,8 @@ var growZone = function(map, x, y, blockMaps, population, lpValue, zonePower) {
       // Zone capacity not yet reached: build another house
       buildHouse(map, x, y, lpValue);
       ZoneUtils.incRateOfGrowth(blockMaps, x, y, 1);
-    } else if (blockMaps.populationDensityMap.worldGet(x, y) > 64) {
+    } else if (!map.alHousesOnly && blockMaps.populationDensityMap.worldGet(x, y) > 64) {
+      // Aftersight: Festus is zoned for houses (map.alHousesOnly), so a full block stays eight houses
       // There is local demand for higher density housing
       placeResidential(map, x, y, 0, lpValue, zonePower);
       ZoneUtils.incRateOfGrowth(blockMaps, x, y, 8);
@@ -222,6 +223,7 @@ var residentialFound = function(map, x, y, simData) {
   simData.census.resPop += population;
 
   var zonePower = map.getTile(x, y).isPowered();
+  if (zonePower) simData.census.alResPowered += 1;   // Aftersight: homes only count where the lights are on
 
   var trafficOK = Traffic.ROUTE_FOUND;
 
@@ -238,6 +240,24 @@ var residentialFound = function(map, x, y, simData) {
       degradeZone(map, x, y, simData.blockMaps, population, lpValue, zonePower);
       return;
     }
+  }
+
+  // Aftersight: a houses-only town (Festus). Builders answer demand, and families leave when it turns: while people
+  // want to move in (resValve > 0) an empty lot on a powered block gets a house, often enough that a new block fills
+  // in a few months; when they want out (resValve < 0) houses empty. Land value decides which blocks go first.
+  if (map.alHousesOnly && tileValue === TileValues.FREEZ) {
+    var rv = simData.valves.resValve, lp = ZoneUtils.getLandPollutionValue(simData.blockMaps, x, y);
+    if (!zonePower) {
+      if (population > 0 && Random.getRandom(100) < 4) degradeZone(map, x, y, simData.blockMaps, population, lp, zonePower);
+    } else if (rv > 0 && population < 8 && simData.blockMaps.pollutionDensityMap.worldGet(x, y) <= 128) {
+      if (Random.getRandom(1000) < rv * (0.5 + 0.1 * lp)) {
+        buildHouse(map, x, y, lp);
+        ZoneUtils.incRateOfGrowth(simData.blockMaps, x, y, 1);
+      }
+    } else if (rv < 0 && population > 0 && Random.getRandom(1000) < -rv * (0.08 - 0.015 * lp)) {
+      degradeZone(map, x, y, simData.blockMaps, population, lp, zonePower);
+    }
+    return;
   }
 
   // Sometimes we will randomly choose to assess this block. However, always assess it if it's empty or contains only

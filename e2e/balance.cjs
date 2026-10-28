@@ -2,15 +2,20 @@
 // (negotiate, firm = counter then take a firm offer, yes = accept everything, no = reject everything), all with the
 // same decent city management, at full speed, and prints win rates, the gaps between decision cards, and where each
 // town ends up in April 2032: unemployment, Purpose, ownership's share of household income, the dividend and the path.
+// `cards` negotiates like `negotiate` but never zones anything: if it wins as often, building doesn't matter
+// (and `yes-cards`, `no-cards`... play that strategy without building).
 //   NODE_PATH=/path/to/playwright/node_modules N=30 node e2e/balance.cjs
+//   STRATS=negotiate,cards N=30 node e2e/balance.cjs
 // Every strategy builds one Research Lab early, invests in breakthroughs when funds are over $2,500, funds projects
 // when it can afford them, says yes to affordable town hall asks (cards and ticker asks alike), and builds a
 // town-owned data center whenever voters have backed a co-op bond and there's money and power for it. The game
-// keeps going after a loss (as a private citizen) so every town is measured in April 2032.
+// keeps going after a loss (as a private citizen) so every town is measured in April 2032. Every strategy but `cards`
+// also builds like a city builder: it zones homes on the empty platted lots while homes are tight (or rents rise),
+// and a block of shops when shop demand is up.
 const { chromium } = require('playwright');const http=require('http'),fs=require('fs'),path=require('path');
 const DIST=path.join(__dirname,'..','dist');
 const srv=http.createServer((q,r)=>{const p=path.join(DIST,q.url.split('?')[0].replace(/\/$/,'/index.html'));if(!fs.existsSync(p)){r.writeHead(404);r.end();return;}r.writeHead(200,{'Content-Type':p.endsWith('.js')?'text/javascript':p.endsWith('.css')?'text/css':'text/html'});fs.createReadStream(p).pipe(r);}).listen(0);
-const N=+(process.env.N||6), STRATS=(process.env.STRATS||'negotiate,firm,yes,no').split(',');
+const N=+(process.env.N||6), STRATS=(process.env.STRATS||'negotiate,firm,yes,no,cards').split(',');
 const med=a=>{const s=a.slice().sort((x,y)=>x-y);return s.length?s[s.length>>1]:0;};
 (async()=>{const b=await chromium.launch(); const summary={};
 for (const strat of STRATS) for (let run=0; run<N; run++) {
@@ -18,7 +23,8 @@ const page=await b.newPage({viewport:{width:1000,height:700}});const errs=[];pag
 await page.route(/fonts\.(googleapis|gstatic)/,r=>r.abort());
 await page.goto('http://localhost:'+srv.address().port+'/index.html');await page.click('#splashFestus');await page.click('#playit');
 await page.waitForFunction(()=>window.__AL,null,{timeout:90000});
-const out = await page.evaluate(async strat => {
+const out = await page.evaluate(async strat0 => {
+  const builds = !/cards$/.test(strat0), strat = strat0 === 'cards' ? 'negotiate' : strat0.replace(/-cards$/, '');
   const g=__AL.game, L=__AL.layer; g.alNoPaper=true; ['Town','City','Capital','Metropolis','Megalopolis'].forEach(k=>g['_reached'+k]=true);
   const cards=[], rows=[];
   L.autoDecide = card => {
@@ -54,12 +60,22 @@ const out = await page.evaluate(async strat => {
   const buildLab = () => { if (L.labsOn() || L._labTried || __AL.funds() < 1500 + 2500) return; const s=plot(); if (s) { L._labTried = __AL.build('lab', s.x+1, s.y+1); } };
   // and a town-owned hall whenever the voters have backed a bond and there's money and power for it
   const buildCoop = () => { if (!L.isUnlocked('dcCoop') || __AL.funds() < 4000 + 2500 || g.simulation._powerManager.lastShort) return; const s=plot(); if (s) __AL.build('dcCoop', s.x+1, s.y+1); };
+  // the city builder: a block of homes a month on open platted lots (powered ones, nearest the old town) while 90% of
+  // homes are taken and people still want in (or rents are up), two while rents are up 6%+, shops when shop demand is
+  // up, keeping $1.6M in hand
+  let zoned=0, shops=0, rentMax=1;
+  const builder = () => { if (!builds) return; const v=g.simulation._valves, h=L.s.homes||{occ:0}, rent=L.s.rent||1;
+    if (h.occ>0.9 && (v.resValve>400 || rent>1.04)) { const lots=L.openLots(true), n=rent>1.06 ? 2 : 1;
+      for (let k=0;k<n&&k<lots.length&&__AL.funds()>1600;k++) if (__AL.build('residential',lots[k].x,lots[k].y)==='ok') zoned++; }
+    if (v.comValve>300 && L.mi()%2===0 && __AL.funds()>1600) { const lots=L.openLots(true), lot=lots[lots.length>3?3:0];
+      if (lot && __AL.build('commercial',lot.x,lot.y)==='ok') shops++; } };
   let result='timeout', end=null;
-  for (let i=0;i<84;i++){ buildLab(); buildCoop(); __AL.fastForward(1); const m=__AL.mayor(), s=L.s;
-    if (i%6===0) rows.push([m.mi, Math.round(m.approval), Object.values(m.factions).map(f=>Math.round(f.v)).join('/'), __AL.funds(), g.simulation.evaluation.cityPop, m.halls, Math.round(m.townShare*100)+'%', m.dev.status, 'u'+s.unemployment.toFixed(2), 'a'+s.automation.toFixed(2), 'tier'+(s.deal?L._dealTier():'-'), s.deal?(s.deal.cooling+'/'+s.deal.power):'', 'w'+Math.round(100*s.water.use/s.water.cap), 'p'+Math.round(s.purpose), 'own'+Math.round(L.incomeMix().ownShare*100)+'%', 'div$'+(s.dividendPerRes||0), s.path, Object.keys(s.projects||{}).join('+')].join(' '));
+  for (let i=0;i<84;i++){ buildLab(); buildCoop(); builder(); __AL.fastForward(1); const m=__AL.mayor(), s=L.s; rentMax=Math.max(rentMax, s.rent||1);
+    if (i%6===0) rows.push([m.mi, Math.round(m.approval), 'rent'+Math.round(((s.rent||1)-1)*100)+'%', 'homes'+Math.round(((s.homes||{}).occ||0)*100)+'%', Object.values(m.factions).map(f=>Math.round(f.v)).join('/'), __AL.funds(), g.simulation.evaluation.cityPop, m.halls, Math.round(m.townShare*100)+'%', m.dev.status, 'u'+s.unemployment.toFixed(2), 'a'+s.automation.toFixed(2), 'tier'+(s.deal?L._dealTier():'-'), s.deal?(s.deal.cooling+'/'+s.deal.power):'', 'w'+Math.round(100*s.water.use/s.water.cap), 'p'+Math.round(s.purpose), 'own'+Math.round(L.incomeMix().ownShare*100)+'%', 'div$'+(s.dividendPerRes||0), s.path, Object.keys(s.projects||{}).join('+')].join(' '));
     if (m.gameOver && !s.mayor.sandbox && result==='timeout') { result='LOST '+m.gameOver.year+' '+m.gameOver.vote; s.mayor.sandbox=true; }
     if (m.won && result==='timeout') result='WON '+m.won.year+' '+m.won.vote+' share'+m.won.share;
-    if (m.mi===75) { const mix=L.incomeMix(); end={unemp:s.unemployment, purpose:s.purpose, own:mix.ownShare, div:s.dividendPerRes||0, path:s.path, slump:!!s.slump}; }
+    if (m.mi===75) { const mix=L.incomeMix(); end={unemp:s.unemployment, purpose:s.purpose, own:mix.ownShare, div:s.dividendPerRes||0, path:s.path, slump:!!s.slump,
+                                             pop:g.simulation.evaluation.cityPop, rentMax, zoned, shops}; }
     if (m.mi>=75) break; }
   result += L.s.deal ? ' '+L.s.deal.cooling+'/'+L.s.deal.power : ' nodeal';
   return {cards, rows, result, end, last: __AL.mayor().mi};
@@ -76,5 +92,6 @@ all.sort((a,b)=>a-b); console.log('card gaps (months, ticker asks excluded): n',
 console.log('---- where the towns are in April 2032 (medians; paths are counts)');
 for (const s in summary) { const e=summary[s].map(o=>o.end).filter(Boolean); const paths={}; e.forEach(x=>paths[x.path]=(paths[x.path]||0)+1);
   console.log(s.padEnd(10), 'unemployment', Math.round(med(e.map(x=>x.unemp))*100)+'%', 'Purpose', Math.round(med(e.map(x=>x.purpose))), 'ownership', Math.round(med(e.map(x=>x.own))*100)+'% of income',
-              'dividend $'+med(e.map(x=>x.div)), 'slump', e.filter(x=>x.slump).length+'/'+e.length, JSON.stringify(paths)); }
+              'dividend $'+med(e.map(x=>x.div)), 'slump', e.filter(x=>x.slump).length+'/'+e.length, JSON.stringify(paths));
+  console.log(''.padEnd(10), 'population', med(e.map(x=>x.pop)), 'peak rent +'+Math.round((med(e.map(x=>x.rentMax))-1)*100)+'%', 'blocks zoned', med(e.map(x=>x.zoned)), 'shops', med(e.map(x=>x.shops))); }
 await b.close();srv.close();})();

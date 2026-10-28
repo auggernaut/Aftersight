@@ -21,8 +21,8 @@ import { Random } from '../random.ts';
 import * as TV from '../tileValues.ts';
 import * as TF from '../tileFlags.ts';
 import * as B from './buildings.js';
-import { SITE, PLANS, DOWNTOWN, plan as sitePlan, fieldAt, fieldTileCount } from './festus.js';
-import { money, usd, DOLLARS } from './money.js';
+import { SITE, PLANS, DOWNTOWN, PLATS, HOMES_PER_BLOCK, plan as sitePlan, fieldAt, fieldTileCount } from './festus.js';
+import { money, usd, DOLLARS, setBuildScale } from './money.js';
 
 var coolWater = function(c) { return COOLING[c || 'evap'].water; };
 var clamp = function(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); };
@@ -47,6 +47,11 @@ export const DEVELOPERS = {
 export const SPRING_POLL = 3, COURT_HEARING = 11;
 export const ELECTIONS = [27, 51, 75];
 export const WIN_TERMS = 3, WIN_SHARE = 0.25;
+// Robot construction crews (Festus and the starter town): building costs this share once robots build robots,
+// owned (the town made the breakthrough) or leased (it was made elsewhere; in Festus the world gets there by month 54)
+var CREWS_OWN = 0.5, CREWS_LEASED = 0.75;
+// Construction crews for a campus (Festus): they stay a year (through the fit-out) and need homes, in house units
+var CREW_MONTHS = 12, CREW_BASE = 15, CREW_PER_HALL = 6, CREW_LEAVE = 6;
 var CARD_GAP = 6;          // fewest months between two decision cards
 var GONE_AFTER = 3;        // walks after which the developer builds elsewhere for good
 var FREE_FADE = 42;        // months over which voters stop crediting a mayor for saying no
@@ -148,6 +153,12 @@ export const PATHS = {
 };
 // The water authority adds capacity for the deal: it covers this share of an evaporative hall's draw
 var WELL_UPGRADE = 0.6, GRID_STRAIN = 0.02, FUMES_RES = 6, FUMES_SCHOOL = 5;
+// What rising rents cost each faction (per 100% rise): renters, workers, and teachers who can't afford to live in town
+var RENT_RES = 50, RENT_WORK = 40, RENT_SCHOOL = 15;
+// Festus households' water: people per unit of the water authority's supply (the old town of ~11,000 starts near 60%)
+var PEOPLE_PER_WATER = 190;
+// Business's take on growth (Festus): per 100% more homes than a year ago (a 5% bigger town is +6, the cap)
+var GROWTH_BIZ = 120;
 
 // ---- Breakthroughs ----
 export const RESEARCH = {
@@ -163,8 +174,8 @@ export const RESEARCH = {
     passEffect: {work: -3, biz: -2}, dependent: true},
   robots_build_robots: {name: 'Self-building robot lines', cost: 2000, compute: 900, months: 5,
     found: 'Robots that assemble robots. A co-op line in town would own the machines that replace local work.',
-    unlocks: 'Robot depots house three times as many machines.',
-    pass: 'The machines get built elsewhere and leased to local firms. Automation comes anyway; the town owns none of it.',
+    unlocks: 'The town owns robot construction crews: roads, zones and buildings cost half. Robot depots house three times as many machines.',
+    pass: 'The machines get built elsewhere and leased to local firms. Automation comes anyway; the town owns none of it, and leased crews take only a quarter off building.',
     passEffect: {work: -4}, dependent: true},
   the_cure: {name: 'AI-designed therapies', cost: 3000, compute: 1500, months: 6,
     found: 'Models have designed therapies that slow aging and beat most cancers. Running the trials here would bring them home.',
@@ -412,6 +423,71 @@ export function installMayor(L) {
   P.guildCost = function() { return Math.round(10 + (this._sim._census.resPop || 0) * 0.06); };
   P.wellCost = function() { return this.s.deal && this.s.deal.utilities === 'developer' ? 0 : WELL_COST; };
 
+  // ---- building: robot crews, homes, empty lots ----
+  // What building costs now (1 = full price): robot crews come with robots that build robots
+  P.crewScale = function() {
+    var s = this.s, R = s.research || {};
+    if (this.has('robots_build_robots')) return CREWS_OWN;
+    var leased = (R.passed && R.passed.robots_build_robots !== undefined) || (this.festus() && s.months >= TIDE.world.robots_build_robots);
+    return leased ? CREWS_LEASED : 1;
+  };
+  // homes the campus's construction crews need this month
+  P.crewHomes = function() { var cr = this.s.mayor.crews; return cr && this.s.months < cr.until ? cr.size : 0; };
+  // ...and once they're done, the crews moving on (over CREW_LEAVE months)
+  P.crewsLeaving = function() {
+    var cr = this.s.mayor.crews, t = cr ? this.s.months - cr.until : -1;
+    return cr && t >= 0 && t < CREW_LEAVE ? cr.size : 0;
+  };
+  P._crewsMonthly = function() {
+    var s = this.s, f = this.crewScale();
+    setBuildScale(f);
+    if (s.crews === undefined) s.crews = f;
+    if (f === s.crews) return;
+    var owned = f === CREWS_OWN;
+    s.crews = f;
+    this.news('good', 'Robot construction crews: roads, zones and buildings now cost ' + (owned ? 'half' : 'a quarter less') + '. ' +
+              (owned ? this.townLabel() + ' owns the crews.' : 'The crews are leased from out of state; a town that owned them would pay half.'), {alert: 'homes'});
+  };
+  // A household's income against a normal year before the tide (1 = 2025); shops follow it
+  P.incomeIndex = function() { return this.incomeMix().total / (WAGE * (1 - BASE_JOBLESS) + TRANSFER * BASE_JOBLESS); };
+  // Festus's empty platted lots that are still clear, nearest the old town first; `powered` ones touch a power line
+  // or a zone along an edge, so a zone placed there gets power
+  P.openLots = function(poweredOnly) {
+    var map = this._map, out = [];
+    PLATS.forEach(function(p) {
+      for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) if (map.getTileValue(p.x + dx, p.y + dy) !== TV.DIRT) return;
+      var powered = false;
+      for (var k = -1; k <= 1 && !powered; k++)
+        [[k, -2], [k, 2], [-2, k], [2, k]].forEach(function(d) { if (map.getTile(p.x + d[0], p.y + d[1]).isConductive()) powered = true; });
+      if (powered || !poweredOnly) out.push({x: p.x, y: p.y, where: p.where, powered: powered});
+    });
+    return out;
+  };
+  // What the R, C and I bars mean right now, and what to do about them (tool tips on the demand meter)
+  P.demandTips = function() {
+    var v = this._sim._valves || {resValve: 0, comValve: 0, indValve: 0}, s = this.s, pct = function(x) { return Math.round(x * 100) + '%'; };
+    var word = function(x, range) { var f = x / range; return f > 0.5 ? 'strong' : f > 0.15 ? 'rising' : f > -0.15 ? 'flat' : f > -0.5 ? 'falling' : 'weak'; };
+    var r = word(v.resValve, 1200), c = word(v.comValve, 1200), i = word(v.indValve, 1200);
+    if (!this.festus()) return {res: 'Residential demand: ' + r + '. Zone homes by a road and a power line.',
+                                com: 'Commercial demand: ' + c + '. Shops add jobs.', ind: 'Industrial demand: ' + i + '. Factories add jobs and smog.'};
+    var h = s.homes || {}, pull = h.pull || {}, why = [];
+    if (pull.crews) why.push('construction crews');
+    if (pull.jobs) why.push(s.deal ? 'jobs at the campus' : 'jobs at the town\'s own employers');
+    if (pull.dividend > 5) why.push('the Fund\'s dividend');
+    return {
+      res: 'Homes (R): demand ' + r + '. ' + this.homesLine() + '.' + (why.length ? ' Drawing people in: ' + why.join(', ') + '.' : '') +
+           ' Zone homes on empty lots next to a road and a power line; a block holds eight houses.',
+      com: 'Shops (C): demand ' + c + '. Shops follow what households spend: income is ' + pct(this.incomeIndex()) + ' of a normal year. ' +
+           'New shops add jobs, though machines do ' + pct(s.automation || 0) + ' of the work.',
+      ind: 'Factories (I): demand ' + i + '. Machines do ' + pct(s.tide || 0) + ' of the region\'s work, so new factories hire few people.'
+    };
+  };
+  P.homesLine = function(short) {
+    var s = this.s, h = s.homes, r = Math.round(((s.rent || 1) - 1) * 100);
+    if (!h) return '';
+    return Math.round(h.occ * 100) + (short ? '% taken' : '% of homes taken') + ' · rents ' + (r > 0 ? 'up ' + r + '%' : r < 0 ? 'down ' + (-r) + '%' : 'steady');
+  };
+
   // ---- the automation tide: the share of work machines do across the region (Festus) ----
   P.tideTarget = function() {
     var s = this.s, m = s.months, R = s.research || {}, self = this, t = TIDE.start;
@@ -503,7 +579,7 @@ export function installMayor(L) {
     var bills = (deal ? utilBill[deal.utilities] * Math.min(2, online / 2) : 0) + shortage * 0.5 + gridStrain +
                 (s.dependence || 0) * 0.04 + (s.passedBills || 0) - (c.alFusionPop > 0 ? 0.15 : 0);
     var pop = this._sim.evaluation.cityPop || 0;
-    s.water.use = pop / 150 + online * HALL_WATER * coolWater(cooling) * (m.waterGuarantee ? 0.8 : 1);
+    s.water.use = pop / (this.festus() ? PEOPLE_PER_WATER : 150) + online * HALL_WATER * coolWater(cooling) * (m.waterGuarantee ? 0.8 : 1);
     var stress = Math.max(0, s.water.use / Math.max(1, s.water.cap) - 0.85) * 4;
     var noise = this.noise();
     var secrecy = deal && deal.nda ? 1 : 0;
@@ -527,17 +603,25 @@ export function installMayor(L) {
     // said no: people credit you for it at first, less as the months go by; and the town that grew its own way
     var free = !deal && s.dev.walks > 0 ? clamp(1 - (s.months - (s.dev.lastWalk || 0)) / FREE_FADE, 0, 1) : 0, home = Math.min(2, m.homegrown || 0);
     var growth = clamp((this._sim._valves ? this._sim._valves.comValve : 0) / 150, -8, 8);
+    // Festus: business likes a town that is actually growing (more homes than a year ago: more customers), more than
+    // demand it can't meet
+    if (this.festus()) { var hh = s.homesHist || [], then = hh.length ? hh[0] : 0, nowH = s.homes ? s.homes.built : 0;
+      growth = clamp(then > 0 ? (nowH / then - 1) * GROWTH_BIZ : 0, -6, 6) + clamp((this._sim._valves ? this._sim._valves.comValve : 0) / 300, -3, 3); }
     // purpose feeds approval (it already lags), and the fund's dividends add up to real household wealth
     var purp = this.festus() ? clamp((s.purpose - 60) / 10, -4, 3) : 0;
     var worth = this.festus() ? clamp((s.netWorth || 0) / 2500, 0, 4) : 0;
+    // rents: up when every home is taken and people still want in (zone more homes); a little relief when they fall
+    var rent = this.festus() ? (s.rent || 1) - 1 : 0, rentUp = Math.max(0, rent), rentDown = Math.max(0, -rent);
     s.bills = bills; s.waterStress = stress;
     return {
       res: 51 + fair * 5 + free * 6 - bills * 40 - stress * 12 - noise * 5 - secrecy * 10 - taxPain - jobless * 40 + div * 8 + equity * 12 + clinics * 2 -
-           fumes * FUMES_RES + cleanAir * 2 - riverWorry * 2 + purp * 2.5 + worth,
+           fumes * FUMES_RES + cleanAir * 2 - riverWorry * 2 + purp * 2.5 + worth - rentUp * RENT_RES + rentDown * 20,
       farm: 53 + fair * 2 + free * 4 - stress * 20 - lost * 80 - bills * 25 - taxPain * 1.2 + div * 4 + equity * 6 - fumes * 2 + cleanAir - riverWorry * 4,
-      work: 47 + fair * 2 - jobless * 90 + building * 12 + jobs * 11 + home * 2 + div * 10 + equity * 8 - s.automation * 15 * (1 - s.cover) + purp * 2.5,
+      work: 47 + fair * 2 - jobless * 90 + building * 12 + jobs * 11 + home * 2 + div * 10 + equity * 8 - s.automation * 15 * (1 - s.cover) + purp * 2.5 -
+            rentUp * RENT_WORK,
       biz: 49 + growth - taxPain * 1.5 - bills * 30 + (online ? 7 : 0) + jobs * 4 + home * 2 - (s.dependence || 0) * 2,
-      school: 50 + fair * 4 + free * 5 + schoolScore * 10 - secrecy * 8 - taxPain * 0.6 + clinics * 2 + div * 4 - fumes * FUMES_SCHOOL + cleanAir + purp * 1.5
+      school: 50 + fair * 4 + free * 5 + schoolScore * 10 - secrecy * 8 - taxPain * 0.6 + clinics * 2 + div * 4 - fumes * FUMES_SCHOOL + cleanAir + purp * 1.5 -
+              rentUp * RENT_SCHOOL
     };
   };
 
@@ -551,6 +635,7 @@ export function installMayor(L) {
   P.mayorMonthly = function(simData) {
     var s = this.s, m = s.mayor, mi = this.mi();
     if (!m.inited) { m.inited = true; this.initMayor(simData); }
+    this._crewsMonthly();
     this._dealMoney(simData);
     this._fundMonthly();
     this._projectsMonthly();
@@ -597,7 +682,7 @@ export function installMayor(L) {
     var s = this.s, m = s.mayor, c = this._sim._census;
     m.trend = m.trend || [];
     var snap = {jobless: m.jobless || 0, bills: s.bills || 0, stress: s.waterStress || 0, use: s.water.use / Math.max(1, s.water.cap),
-                div: s.fundDividend || 0, perRes: s.dividendPerRes || 0, auto: s.automation || 0, cover: s.cover || 0, f: {}};
+                div: s.fundDividend || 0, perRes: s.dividendPerRes || 0, auto: s.automation || 0, cover: s.cover || 0, rent: s.rent || 1, f: {}};
     FACTIONS.forEach(function(f) { snap.f[f.id] = m.factions[f.id].v; });
     m.trend.push(snap);
     if (m.trend.length > 7) m.trend.shift();
@@ -628,6 +713,13 @@ export function installMayor(L) {
     else if (now.auto > 0.25 && now.cover < 0.3)
       cands.push(['wealth', 'bad', 'Household wealth: machines do ' + pct(now.auto) + ' of the work across the region, and ' +
                   (now.cover > 0.02 ? 'dividends replace only ' + pct(now.cover) + ' of the lost wages.' : 'nothing the town owns replaces the lost wages.') + ' Savings are draining.']);
+    // homes and rents (Festus): point at an empty lot that would take homes today
+    if (this.festus() && s.homes) {
+      var lot = this.openLots(true)[0] || this.openLots(false)[0];
+      var where = lot ? ' Zone homes (R) on the empty lots in the ' + lot.where.replace(/^(North|South|West)/, function(w) { return w.toLowerCase(); }) + '.' : ' Zone homes (R) on open land by a road and a power line.';
+      if (now.rent >= 1.08) cands.push(['homes', 'bad', 'Homes: rents are up ' + pct(now.rent - 1) + '. ' + pct(s.homes.occ) + ' of the homes in town are taken and people still want to move in.' + where, lot]);
+      else if (then.rent >= 1.08 && now.rent < 1.04) cands.push(['homes', 'good', 'Homes: rents are easing, now ' + (now.rent >= 1 ? 'up ' + pct(now.rent - 1) : 'down ' + pct(1 - now.rent)) + '. New homes are filling in.']);
+    }
     // water
     var towers = dl && online && (dl.cooling || 'evap') === 'evap' && this.festus();
     if (now.use > 0.85) cands.push(['water', 'bad', 'Water: the town is drawing ' + pct(now.use) + ' of what the water authority\'s river wells can supply.' + (now.stress > 0.3 ? ' Lawn watering is banned.' : '') +
@@ -652,7 +744,7 @@ export function installMayor(L) {
     m.alertLast[a[0]] = s.months;
     m.alertLog.push({type: a[0], month: s.months, text: a[2]});
     if (m.alertLog.length > 30) m.alertLog.shift();
-    this.news(a[1], a[2], {alert: a[0]});
+    this.news(a[1], a[2], a[3] ? {alert: a[0], x: a[3].x, y: a[3].y, showable: true} : {alert: a[0]});
   };
 
   // ---- cards ----
@@ -934,7 +1026,10 @@ export function installMayor(L) {
     if (bill) budget.spend(Math.min(bill, budget.totalFunds));
     s.water.cap += HALL_WATER * WELL_UPGRADE * o.halls * (pl ? 0.85 : 1);   // the authority adds part of it; the bigger campus outruns it
     s.construction = {until: s.months + 4, from: prevHalls, to: halls};
+    // the crews stay on through the fit-out and need somewhere to live (Festus homes and rents, layer.js)
+    if (this.festus()) s.mayor.crews = {until: s.months + CREW_MONTHS, size: CREW_BASE + CREW_PER_HALL * (halls - prevHalls)};
     this.news('neutral', 'You sign with ' + dev.short + '. Graders roll onto the site; ' + (halls - prevHalls) + ' halls go up over the next four months.' + this._designNews(s.deal) +
+              (this.festus() ? ' About ' + Math.round(s.mayor.crews.size * 20 / 50) * 50 + ' construction workers will need places to live for a year.' : '') +
               (bill ? ' The town pays ' + money(bill) + ' toward water and power upgrades.' : ''), {x: SITE.x + 5, y: SITE.y + 8, showable: true});
   };
 
@@ -1404,9 +1499,10 @@ export function installMayor(L) {
     path: 'More ownership (equity, co-op halls, the royalty) moves the town toward thriving owners; projects and the guild keep Purpose up; cleaner designs ease the strain.',
     election: 'The campaign card before each vote and the angriest factions\' asks move approval most.',
     deal: 'Counter with one or two asks. Leverage grows with time, with your approval, and each time you walk away.',
-    research: 'Keep a Research Lab powered and paid. Town-owned compute makes breakthroughs cheaper and brings them sooner.'
+    research: 'Keep a Research Lab powered and paid. Town-owned compute makes breakthroughs cheaper and brings them sooner.',
+    homes: 'Zone homes (R) on empty lots next to a road and a power line: a block holds eight houses and fills in a few months while people want to move in. The platted streets on the north side, the north-west and the south side are ready. Shops (C) add jobs that bring more people; robot crews make building cheaper.'
   };
-  var TOPIC_WORDS = [['water', /water|well|drought|cooling/i], ['bills', /bill|ameren|rate increase|grid/i], ['health', /health|asthma|clinic|therap/i],
+  var TOPIC_WORDS = [['homes', /rents?\b|homes|housing|construction crews/i], ['water', /water|well|drought|cooling/i], ['bills', /bill|ameren|rate increase|grid/i], ['health', /health|asthma|clinic|therap/i],
                      ['jobs', /unemploy|jobs|layoff|hiring/i], ['fund', /festus fund|dividend/i], ['project', /garden|mural|riverfront|project/i],
                      ['election', /elect|vote|poll|campaign/i], ['purpose', /purpose|long afternoon|guild/i], ['path', /^path:/i],
                      ['deal', /keystone|campus|halls|offer|agreement|counter|bond/i], ['research', /research|breakthrough/i]];
@@ -1436,6 +1532,16 @@ export function installMayor(L) {
     else if (topic === 'election') why = 'Elections come every two years. Under 50% approval and you\'re out. Your approval is ' + Math.round(m.approval) + '%.';
     else if (topic === 'purpose') why = 'Purpose is whether people feel needed. It falls as machines take the work and rises with projects people build together, the guild, and owning part of the engine. Now ' + Math.round(s.purpose) + '.';
     else if (topic === 'path' && festus) why = this.pathLine(true);
+    else if (topic === 'homes' && festus && s.homes) {
+      var hm = s.homes, pulls = [];
+      if (hm.pull && hm.pull.crews) pulls.push(dev + '\'s construction crews');
+      if (hm.pull && hm.pull.jobs) pulls.push(d ? 'jobs at the campus' : 'jobs at the town\'s own employers');
+      if (hm.pull && hm.pull.dividend > 5) pulls.push('the Festus Fund\'s dividend');
+      pulls.push('jobs in town and across the region');
+      why = pct(hm.occ) + ' of the ' + Math.round(hm.cap / HOMES_PER_BLOCK) + ' residential blocks\' homes are taken (' + HOMES_PER_BLOCK + ' houses a block). ' +
+            'People want to move in for ' + pulls.join(', ') + '. When every home is taken, rents climb until new blocks fill in; when people want out, they ease. ' +
+            (s.crews && s.crews < 1 ? 'Robot crews take ' + Math.round((1 - s.crews) * 100) + '% off building.' : '');
+    }
     if (h) why = (why ? why + ' ' : '') + 'It follows your decision: ' + h.why.charAt(0).toLowerCase() + h.why.slice(1) + '.';
     var ne = this.nextElection();
     var stats = [['Approval', Math.round(m.approval) + '%', m.approval >= 50 ? 'good' : 'bad'],
@@ -1449,6 +1555,7 @@ export function installMayor(L) {
       stats.push(['Festus Fund', money(s.fund || 0) + (s.dividendPerRes ? ' · last dividend ' + usd(s.dividendPerRes) + ' a resident' : ''), 'neutral']);
       stats.push(['Household income', usd(mix.wages) + ' wages, ' + usd(mix.own) + ' ownership, ' + usd(mix.transfers) + ' transfers a resident a year', mix.ownShare >= 0.12 ? 'good' : 'neutral']);
       stats.push(['Path', PATHS[s.path || 'early'].name, PATHS[s.path || 'early'].tone]);
+      if (s.homes) stats.push(['Homes', this.homesLine(), (s.rent || 1) >= 1.08 ? 'bad' : 'neutral']);
     }
     if (ne >= 0) stats.push(['Next election', this.monthName(ne) + ' (' + (ne - this.mi()) + ' months)', 'neutral']);
     var factions = FACTIONS.map(function(f) { return {name: f.short, v: Math.round(m.factions[f.id].v), d: h && h.d[f.id] ? Math.round(h.d[f.id]) : 0}; });

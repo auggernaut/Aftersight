@@ -54,6 +54,11 @@ function GameTools(map) {
     lab: new BuildingTool(1500, AL.LAB, map, 3, false),
   });
 
+  // Aftersight: data centers are mostly chips, so robot crews don't make them cheaper (baseTool.js)
+  tools.dcHelix.alFullPrice = tools.dcCoop.alFullPrice = true;
+  // ...and zoning is priced as a permit where the scenario says so (money.js zoneScale)
+  tools.residential.alZone = tools.commercial.alZone = tools.industrial.alZone = true;
+
   tools.query.addEventListener(QUERY_WINDOW_NEEDED, MiscUtils.reflectEvent.bind(tools, QUERY_WINDOW_NEEDED));
 
   return tools;

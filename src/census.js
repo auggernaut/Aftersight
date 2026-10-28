@@ -80,6 +80,7 @@ Census.prototype.clearCensus = function() {
   this.coalPowerPop = 0;
   // Afterlight layer counters (filled by its map scanner handlers)
   this.alDCCount = 0;
+  this.alResPowered = 0;      // residential zones with power (Festus homes, residential.js)
   this.alDCHelixOn = 0;
   this.alDCCoopOn = 0;
   this.alDepotHelixOn = 0;
