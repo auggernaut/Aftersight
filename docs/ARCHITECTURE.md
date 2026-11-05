@@ -162,7 +162,7 @@ The bottom toolbar (in `index.html`) has these groups: Inspect, Transport, Zones
 
 ## 5. Data and assets
 
-- `assets/brand/`: poster, aSi mark, icons, manifest and the Festus thumbnail. `images/` and `sprites/` are upstream.
+- `assets/brand/`: the mark (`mark.svg`), icons and manifest, the start screen's backdrop (`start-wide.webp`, `start-phone.webp`) and the link preview (`og-1200x630.jpg`). `images/` and `sprites/` are upstream.
 - Festus map data is code (`festus.js`), not a data file.
 - The game saves to localStorage, with layer state under `saveData.afterlight`.
 

@@ -16,7 +16,7 @@ const DIST = path.join(__dirname, '..', 'dist');
 const OUT = process.env.OUT || path.join(__dirname, '..', 'shots');
 fs.mkdirSync(OUT, { recursive: true });
 
-const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png' };
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml' };
 function serve() {
   return new Promise(resolve => {
     const srv = http.createServer((req, res) => {

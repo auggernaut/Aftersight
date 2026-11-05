@@ -90,36 +90,33 @@
     </header>
     <div id="wrapper">
       <main id="canvasContainer">
-        <div id="alPoster" aria-hidden="true"></div>
+        <div id="alHero" aria-hidden="true"></div>
         <div class="hidden" id="opaque"></div>
         <div data-hasscript="false" id="loadingBanner" class="alignCenter padding10 mintcream chunk shadow centred">Loading</div>
         <div id="splash" class="awaitGeneration open centred intro">
-          <div class="introHead">
-            <h2>Welcome to After<span class="si">S</span>ight</h2>
-            <p>Run a real town through the arrival of AI, robots and abundance. Who owns the machines decides who gains.</p>
-          </div>
-          <div id="continueBox" class="continueBox hidden">
-            <div class="continueText"><span class="townTag">Saved game</span><b id="continueName">Your town</b><span id="continueDate"></span></div>
-            <button id="splashLoad" class="loadSave splashButton primary" disabled>Continue</button>
-          </div>
-          <div class="townCards">
-            <div class="townCard townHero" id="townFestus">
-              <div class="townThumb"><img src="assets/brand/festus-thumb.webp" width="480" height="316" alt="Festus, Missouri: I-55, Main Street and the empty data center site"></div>
-              <div class="townBody">
-                <span class="townTag">Real town &middot; 2026</span>
-                <h3>Festus, Missouri</h3>
-                <p>A river town of 12,000 south of St. Louis. A developer wants a $6 billion data center by the interstate, and you're the mayor. A game runs to April 2032, about half an hour.</p>
-                <div class="townBtns"><button id="splashFestus" class="splashButton primary">Play Festus, MO</button></div>
-                <p class="townNote">Festus is real. Keystone, its offers and everyone you meet are fictional: this is a simulation, not a prediction.</p>
-              </div>
+          <div class="introCol">
+            <div class="introHead">
+              <h2>Run a real town through the arrival of AI and robots.</h2>
+              <p>Who owns the machines decides who gains.</p>
             </div>
-          </div>
-          <div id="splashButtonContainer">
-            <div id="splashButtons"><button id="splashSandbox" class="splashButton ghost">Sandbox: a random map or an empty valley &rsaquo;</button></div>
-            <p class="introCredit">Built on micropolisJS, a JavaScript port of the open-source city simulator <cite>Micropolis</cite>. <a href="https://github.com/auggernaut/Aftersight" target="_blank" rel="noopener">Source code</a></p>
+            <div id="continueBox" class="continueBox hidden">
+              <div class="continueText">Saved game: <b id="continueName">Your town</b><span id="continueDate"></span></div>
+              <button id="splashLoad" class="loadSave splashButton primary" disabled>Continue</button>
+            </div>
+            <div class="townPitch" id="townFestus">
+              <h3>Festus, Missouri</h3>
+              <p>A river town of 12,000 south of St. Louis. In 2026 a developer wants a $6 billion data center by the interstate, and you're the mayor. A game runs to April 2032, about half an hour.</p>
+              <div class="townBtns"><button id="splashFestus" class="splashButton primary">Play Festus, MO</button></div>
+              <p class="townNote">Festus is real. Keystone, its offers and everyone you meet are fictional: this is a simulation, not a prediction.</p>
+            </div>
+            <div id="splashButtonContainer">
+              <div id="splashButtons"><button id="splashSandbox" class="splashButton ghost">Sandbox: a random map or an empty valley &rsaquo;</button></div>
+              <p class="introCredit">Built on micropolisJS, a JavaScript port of the open-source city simulator <cite>Micropolis</cite>. <a href="https://github.com/auggernaut/Aftersight" target="_blank" rel="noopener">Source code</a></p>
+            </div>
           </div>
         </div>
         <div id="start" class="open centred intro">
+          <div class="introCol">
           <h2>Sandbox</h2>
           <p class="startSub">A made-up town on a random map, or an empty valley to build from scratch.</p>
           <div class="sandboxMap"><div class="townThumb"><div id="splashContainer"></div></div>
@@ -147,6 +144,7 @@
               <input id="playit" type="submit" value="Start">
             </div>
           </form>
+          </div>
         </div>
         <div id="RCIContainer" class="controlShadow leftedge width140 padding10 mintcream z1 initialHidden"></div>
         <div id="controls" class="initialHidden">

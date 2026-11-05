@@ -77,7 +77,7 @@ function SplashScreen(tileSet, snowTileSet, spriteSheet) {
   if (saved) {
     var meta = saved.alMeta || {};
     $('#continueName').text(meta.town || saved.name || 'Your town');
-    $('#continueDate').text(meta.date ? ' \u00b7 ' + meta.date : '');
+    $('#continueDate').text(meta.date ? ', ' + meta.date : '');
     $('#continueBox').removeClass('hidden');
     $('#splashFestus').removeClass('primary').addClass('secondary');
   }

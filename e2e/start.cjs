@@ -7,7 +7,7 @@
 //   NODE_PATH=/path/to/playwright/node_modules OUT=shots node e2e/start.cjs
 const { chromium, devices } = require('playwright'); const http = require('http'), fs = require('fs'), path = require('path');
 const DIST = path.join(__dirname, '..', 'dist'), OUT = path.join(process.env.OUT || path.join(__dirname, '..', 'shots'), 'start'); fs.mkdirSync(OUT, {recursive: true});
-const srv = http.createServer((q, r) => { const p = path.join(DIST, decodeURIComponent(q.url.split('?')[0]).replace(/\/$/, '/index.html')); if (!p.startsWith(DIST) || !fs.existsSync(p)) { r.writeHead(404); r.end(); return; } const ext = path.extname(p); r.writeHead(200, {'Content-Type': {'.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg'}[ext] || 'application/octet-stream'}); fs.createReadStream(p).pipe(r); }).listen(0);
+const srv = http.createServer((q, r) => { const p = path.join(DIST, decodeURIComponent(q.url.split('?')[0]).replace(/\/$/, '/index.html')); if (!p.startsWith(DIST) || !fs.existsSync(p)) { r.writeHead(404); r.end(); return; } const ext = path.extname(p); r.writeHead(200, {'Content-Type': {'.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml'}[ext] || 'application/octet-stream'}); fs.createReadStream(p).pipe(r); }).listen(0);
 const URL = process.env.BASE_URL || ('http://localhost:' + srv.address().port + '/index.html');
 const fails = []; const fail = m => { fails.push(m); console.log('FAIL: ' + m); };
 (async () => { const b = await chromium.launch();

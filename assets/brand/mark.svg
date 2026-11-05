@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- AfterSight mark: the "Si" of the wordmark (Inter ExtraBold outlines), the i's dot a circuit node. The glyphs are in
+       font units (y-up), hence the flipped group and the S gradient running bottom to top. tools/make-brand-icons.cjs
+       builds the favicon and app icons from this file; the header uses it as is. -->
+  <defs>
+    <linearGradient id="asBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dff1ff"/><stop offset="1" stop-color="#fff0d9"/></linearGradient>
+    <linearGradient id="asS" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#163e6b"/><stop offset="1" stop-color="#2f7fd1"/></linearGradient>
+  </defs>
+  <rect id="asTile" width="512" height="512" rx="112" fill="url(#asBg)"/>
+  <g transform="translate(35.9 425.7) scale(0.1960 -0.1960)">
+    <path d="M691 -20C1060 -20 1280 149 1280 432C1280 670 1113 814 825 877L696 907C563 937 476 981 476 1073C476 1156 549 1217 690 1217C832 1217 911 1154 921 1046H1260C1256 1322 1036 1510 691 1510C353 1510 111 1325 111 1049C111 825 267 696 524 637L682 600C845 563 923 518 923 433C923 338 833 273 687 273C526 273 419 347 411 492H72C78 148 318 -20 691 -20Z" fill="url(#asS)"/>
+    <path d="M115 0H464V1118H115Z" transform="translate(1322 0)" fill="#1d2a36"/>
+    <g id="asTraces"><path d="M1731 1520 L1871 1660 L2041 1660" stroke="#e79b25" stroke-width="72" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="2081" cy="1660" r="92" fill="#e79b25"/></g>
+    <circle cx="1611" cy="1400" r="172" fill="#e79b25"/>
+  </g>
+</svg>

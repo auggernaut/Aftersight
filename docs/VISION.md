@@ -23,6 +23,7 @@ It is not a utopia and not a doom story. A town can come out rich and empty, com
 
 ## Name and brand
 
-- **AfterSight** means *seeing what happens after SI*: superintelligence, or the singularity. It is always written with a capital **S** in the middle, and the "S" sits in the "SI" wordmark. The project was called Afterlight before that, and code, folder and file names still say `afterlight`.
-- The menu mark is **"aSi"**, a small circuit-style mark (`assets/brand/si-mark.webp`, app icons `si-*.png`; `tools/make-brand-icons.py` makes them).
-- The key art is a **sunny poster**: a bright, optimistic city skyline with the AfterSight wordmark (`assets/brand/poster.webp`, used on the splash and intro). The tone is hopeful and bright, not grim. The game should make the good paths look worth fighting for.
+- **AfterSight** means *seeing what happens after SI*: superintelligence, or the singularity. It is always written with a capital **S** in the middle. The project was called Afterlight before that, and code, folder and file names still say `afterlight`.
+- **One wordmark:** "AfterSight" in Inter ExtraBold (800), dark ink with a blue **S**. The top bar, the start screen and the link preview all use it.
+- **One mark:** **"Si"**, the S and i of the wordmark, with the i's dot drawn as an amber circuit node, on a sky-to-cream tile (`assets/brand/mark.svg`). The top bar uses the SVG; `tools/make-brand-icons.cjs` builds the favicon and app icons (`si-*.png`, `apple-touch-icon.png`, `favicon.ico`) from it.
+- **The key art is the game itself.** The start screen shows Festus in January 2026 from the iso renderer, with the proposed data center site and Main Street (`assets/brand/start-wide.webp` and `start-phone.webp`, made by `tools/make-start-art.cjs`). The link preview (`og-1200x630.jpg`) uses the same layout: words on a pale wash at the left, the town on the right. The tone is hopeful and bright, not grim. The game should make the good paths look worth fighting for.
