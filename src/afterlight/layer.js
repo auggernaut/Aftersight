@@ -130,14 +130,12 @@ AfterlightLayer.prototype.setScenario = function(name) {
     s.research.next = 5;      // lab-months: a lab built in the first month brings the first breakthrough around month 6
     this.makeOffer(0, 'first');
     s.card = {type: 'intro', kicker: 'Festus, Missouri · January 2026', title: 'You are the mayor',
-      body: 'Festus is a river town of about 12,000 people, thirty minutes south of St. Louis. A developer wants to build a $6 billion data center campus on farmland by I-55, between homes. ' +
-            'The decision is yours alone, and the town wants an answer tonight. Your seat is up in April 2028: the voters are the only check on you.',
-      rows: [['Approval', 'Built from five factions: residents, farmers, workers, business, and schools. Each choice moves them.', 'neutral'],
-             ['The tide', 'Machines will take more of the region\'s work every year, campus or no campus. What Festus owns decides whether dividends replace the wages.', 'neutral'],
-             ['Build', 'The old town is full. Streets are laid on the north side, the north-west and the south side, but the lots are empty: zone homes and shops there when the R and C bars rise, or rents climb.', 'neutral'],
-             ['Elections', 'Every two years, from April 2028. Under 50% approval, you\'re out.', 'neutral'],
-             ['Goal', 'Win 3 elections, or win one with the town owning 25%+ of local compute and paying a real dividend ($1,000+ a resident a year).', 'good']],
-      options: [{id: 'go', label: 'Open the meeting', tone: 'good'}]};
+      body: 'Festus is a river town of 12,000, half an hour south of St. Louis. A developer wants a $6 billion data center campus on the farmland by I-55, and the town wants your answer tonight.',
+      rows: [['Your job', 'Stay above 50% approval at each election, every two years from April 2028. Residents, farmers, workers, business and schools each weigh in.', 'neutral'],
+             ['What\'s coming', 'Machines take more of the region\'s work every year, campus or no campus. What the town owns decides who gains.', 'neutral'],
+             ['Goal', 'Win 3 elections, or win one while the town owns 25%+ of local compute and pays a $1,000+ dividend a resident.', 'good']],
+      options: [{id: 'go', label: 'Open the meeting', tone: 'good',
+                 note: 'Festus is real. Keystone, its offers and everyone you meet are fictional: this is a simulation, not a prediction.'}]};
   } else {
     s.research.next = 5;
   }

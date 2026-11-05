@@ -22,7 +22,7 @@ async function run(browser, url, strategy) {
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.goto(url);
-  await page.click('#splashPlay');
+  await page.click('#splashSandbox');
   await page.fill('#nameForm', 'Compare');
   await page.click('#playit');
   await page.waitForFunction(() => window.__AL);

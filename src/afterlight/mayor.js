@@ -23,6 +23,7 @@ import * as TF from '../tileFlags.ts';
 import * as B from './buildings.js';
 import { SITE, PLANS, DOWNTOWN, PLATS, HOMES_PER_BLOCK, plan as sitePlan, fieldAt, fieldTileCount } from './festus.js';
 import { money, usd, DOLLARS, setBuildScale } from './money.js';
+import { track } from './track.js';
 
 var coolWater = function(c) { return COOLING[c || 'evap'].water; };
 var clamp = function(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); };
@@ -47,6 +48,12 @@ export const DEVELOPERS = {
 export const SPRING_POLL = 3, COURT_HEARING = 11;
 export const ELECTIONS = [27, 51, 75];
 export const WIN_TERMS = 3, WIN_SHARE = 0.25;
+// First-game tips (Festus): the month each shows, its text, and the alert topic its window explains
+var TIPS = [
+  [1, 'Tip: the R, C and I bars beside the zone tools show what Festus wants built. When R rises and homes run short, zone homes (R) on the empty lots by the roads.', 'homes'],
+  [3, 'Tip: click any news line, like this one, to see why it happened and what you can do about it.', null],
+  [6, 'Tip: a Research Lab (Compute menu) brings breakthrough cards. Compute the town owns makes them cheaper.', 'research']
+];
 // Robot construction crews (Festus and the starter town): building costs this share once robots build robots,
 // owned (the town made the breakthrough) or leased (it was made elsewhere; in Festus the world gets there by month 54)
 var CREWS_OWN = 0.5, CREWS_LEASED = 0.75;
@@ -431,6 +438,18 @@ export function installMayor(L) {
     var leased = (R.passed && R.passed.robots_build_robots !== undefined) || (this.festus() && s.months >= TIDE.world.robots_build_robots);
     return leased ? CREWS_LEASED : 1;
   };
+  // First-game tips in the ticker (Festus): what the bars mean, that news explains itself, where breakthroughs come from
+  P._tipsMonthly = function() {
+    var s = this.s, m = s.mayor, mi = this.mi();
+    if (!this.festus() || s.card && s.card.type === 'intro') return;
+    m.tips = m.tips || {};
+    var lot = this.openLots(true)[0];
+    TIPS.forEach(function(t) {
+      if (mi < t[0] || m.tips[t[0]]) return;
+      m.tips[t[0]] = true;
+      this.news('neutral', t[1], t[2] && lot ? {alert: t[2], x: lot.x, y: lot.y, showable: true} : t[2] ? {alert: t[2]} : {});
+    }, this);
+  };
   // homes the campus's construction crews need this month
   P.crewHomes = function() { var cr = this.s.mayor.crews; return cr && this.s.months < cr.until ? cr.size : 0; };
   // ...and once they're done, the crews moving on (over CREW_LEAVE months)
@@ -636,6 +655,7 @@ export function installMayor(L) {
     var s = this.s, m = s.mayor, mi = this.mi();
     if (!m.inited) { m.inited = true; this.initMayor(simData); }
     this._crewsMonthly();
+    this._tipsMonthly();
     this._dealMoney(simData);
     this._fundMonthly();
     this._projectsMonthly();
@@ -910,8 +930,8 @@ export function installMayor(L) {
     var asks = this.asksFor(o.terms);
     var self = this;
     var body = o.kind === 'first' ?
-      dev.name + ', the data center arm of a St. Louis builder, wants about 370 acres between the west subdivisions and I-55. It won\'t name the tenant. Festus buys its water from the county water authority\'s collector wells on the Mississippi, one main well and an older backup, and its power from Ameren Missouri. At full build the campus wants 1 GW. ' +
-      'The town packs the high school gym tonight to hear your answer.' :
+      dev.name + ', the data center arm of a St. Louis builder, wants about 370 acres between the west subdivisions and I-55, and won\'t name the tenant. ' +
+      'The high school gym is packed to hear your answer.' :
       o.kind === 'expansion' ? 'The campus is full. ' + dev.short + ' wants two more halls on the site and offers to re-sign the whole agreement on these terms.' :
       o.kind === 'reopen' ? 'You asked, and ' + dev.short + ' would rather re-sign than fight. Same halls. Say no and the old agreement stands.' :
       o.kind === 'return' ? 'The deal across the river fell through. ' + dev.short + ' wants more this time: ' + o.halls + ' halls on about ' + sitePlan(o.plan).acres +
@@ -938,6 +958,7 @@ export function installMayor(L) {
     if (!o) return;
     asks = asks.filter(function(a) { return ASKS[a]; }).slice(0, 2);
     if (option === 'counter' && !asks.length) asks = [this.asksFor(o.terms)[0]];
+    track('offer', {kind: o.kind || 'first', choice: option, month: mi});
     if (option === 'accept') {
       var r = this._reaction(o.terms, 'accept');
       if ((o.kind === 'reopen' || o.kind === 'renegotiate') && s.deal) {   // the same campus on new terms: people react to what changed
@@ -1235,7 +1256,7 @@ export function installMayor(L) {
       body: 'You are at ' + Math.round(m.approval) + '%. You need 50. ' + order[0].name + ' (' + Math.round(m.factions[order[0].id].v) + ') and ' +
             order[1].name + ' (' + Math.round(m.factions[order[1].id].v) + ') are the least happy with City Hall.',
       rows: [],
-      options: [{id: 'tour', label: 'Town hall tour ($' + CAMPAIGN_COST + ')', tone: 'good', disabled: this._sim.budget.totalFunds < CAMPAIGN_COST,
+      options: [{id: 'tour', label: 'Town hall tour (' + money(CAMPAIGN_COST) + ')', tone: 'good', disabled: this._sim.budget.totalFunds < CAMPAIGN_COST,
                  preview: this.preview(tour), note: 'Sit down with the angriest groups in the high school gym.'},
                 {id: 'freeze', label: 'Promise a property tax freeze', tone: 'neutral', preview: this.preview(this.campaign.freeze),
                  note: 'Homeowners love it. The school budget doesn\'t.'},
@@ -1254,6 +1275,7 @@ export function installMayor(L) {
     var year = 2028 + 2 * i;
     m.lastVote = Math.round(vote);
     this.drama();
+    track('election', {year: year, kept: Math.round(vote) >= 50, vote: Math.round(vote / 5) * 5, path: s.path || 'early', scenario: s.scenario});
     if (Math.round(vote) < 50) {
       m.gameOver = {year: year, vote: Math.round(vote)};
       var worst = FACTIONS.slice().sort(function(a, b) { return m.factions[a.id].v - m.factions[b.id].v; })[0];

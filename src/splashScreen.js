@@ -54,30 +54,46 @@ function SplashScreen(tileSet, snowTileSet, spriteSheet) {
   this.spriteSheet = spriteSheet;
   this.map = MapGenerator();
 
-  // Set up listeners on buttons. When play is clicked, we will move on to get the player's desired
-  // difficulty level and city name before launching the game properly
+  // Aftersight: Festus starts in one click (its map, name and tuning are fixed); the sandbox (a random map or an
+  // empty valley) gets the name, difficulty and map form; a saved game (the game saves itself) can be continued.
+  $('#splashFestus').click(playFestus.bind(this));
+  $('#splashSandbox').click(acquireNameAndDifficulty.bind(this));
   $('#splashGenerate').click(regenerateMap.bind(this));
-  $('#splashPlay').click(function(e) { $('#alStarter').prop('checked', true); acquireNameAndDifficulty.call(this, e); }.bind(this));
-  // Aftersight: the Festus scenario has its own map, so it skips straight to the new-game form
-  $('#splashFestus').click(function(e) {
-    $('#alScenFestus').prop('checked', true);
-    if (!$('#nameForm').val()) $('#nameForm').val('Festus');
-    acquireNameAndDifficulty.call(this, e);
-  }.bind(this));
+  $('#splashBack').click(backToSplash.bind(this));
   $('#splashLoad').click(handleLoad.bind(this));
+  $('#playForm').submit(play.bind(this));
+  // the start screen's About opens AfterSight's own About window (the game wires it up again once it starts)
+  $('#splashAbout').on('click.splash', function(e) { e.preventDefault(); $('#opaque, #aboutWindow').removeClass('hidden'); });
+  $('#aboutForm').on('submit.splash', function(e) { e.preventDefault(); $('#opaque, #aboutWindow').addClass('hidden'); });
 
-  // Conditionally enable load/save buttons
+  // Conditionally enable load/save buttons; show what Continue would load
   $('#saveRequest').prop('disabled', !Storage.canStore);
-  $('#splashLoad').prop('disabled', !(Storage.canStore && Storage.getSavedGame() !== null));
+  var saved = null;
+  try { saved = Storage.canStore ? Storage.getSavedGame() : null; } catch (err) { saved = null; }
+  $('#splashLoad').prop('disabled', !saved);
+  if (saved) {
+    var meta = saved.alMeta || {};
+    $('#continueName').text(meta.town || saved.name || 'Your town');
+    $('#continueDate').text(meta.date ? ' \u00b7 ' + meta.date : '');
+    $('#continueBox').removeClass('hidden');
+    $('#splashFestus').removeClass('primary').addClass('secondary');
+  }
 
-  // Paint the minimap
+  // Paint the minimap (the sandbox's map preview)
   this.splashCanvas = new SplashCanvas('splashContainer', tileSet);
   this.splashCanvas.paint(this.map);
 
   // Let's get some bits on screen!
   $('.awaitGeneration').toggle();
   // Aftersight: focus without scrolling the card on small screens
-  if ($('#splashPlay')[0]) $('#splashPlay')[0].focus({preventScroll: true});
+  var first = saved ? $('#splashLoad')[0] : $('#splashFestus')[0];
+  if (first) first.focus({preventScroll: true});
+
+  // Aftersight: ?play=festus (Play again, or a shared link) starts a new Festus game straight away
+  if (/[?&]play=festus\b/.test(window.location.search)) {
+    if (window.history && window.history.replaceState) window.history.replaceState(null, '', window.location.pathname);
+    playFestus.call(this, {preventDefault: function() {}});
+  }
 }
 
 
@@ -87,6 +103,14 @@ var regenerateMap = function(e) {
 
   this.map = MapGenerator();
   this.splashCanvas.paint(this.map);
+  sandboxThumbs.call(this);
+};
+
+
+var offAll = function() {
+  $('#splashFestus, #splashSandbox, #splashLoad, #splashGenerate, #splashBack').off('click');
+  $('#playForm').off('submit');
+  $('#splashAbout').off('click.splash'); $('#aboutForm').off('submit.splash');
 };
 
 
@@ -100,49 +124,57 @@ var handleLoad = function(e) {
     return;
 
   // Remove installed event listeners
-  $('#splashFestus').off('click');
-  $('#splashLoad').off('click');
-  $('#splashGenerate').off('click');
-  $('#splashPlay').off('click');
+  offAll();
 
   // Hide the splashscreen UI
-  $('#splash').toggle();
+  $('#splash').hide();
 
   // Launch
-  var g = new Game(savedGame, this.tileSet, this.snowTileSet, this.spriteSheet, Simulation.LEVEL_EASY, name);
+  var g = new Game(savedGame, this.tileSet, this.snowTileSet, this.spriteSheet, Simulation.LEVEL_EASY, savedGame.name);
 };
 
 
-// After a map has been selected, call this function to display a form asking the user for
-// a city name and difficulty level.
-var acquireNameAndDifficulty = function(e) {
+// Aftersight: Festus has its own map, name and tuning (easy), so it starts straight away
+var playFestus = function(e) {
   e.preventDefault();
+  offAll();
+  $('#splash').hide();
+  $('#alScenFestus').prop('checked', true);
+  var g = new Game(this.map, this.tileSet, this.snowTileSet, this.spriteSheet, Simulation.LEVEL_EASY, 'Festus');
+};
 
-  // Remove the initial event listeners
-  $('#splashFestus').off('click');
-  $('#splashLoad').off('click');
-  $('#splashGenerate').off('click');
-  $('#splashPlay').off('click');
 
-  // Get rid of the initial splash screen
-  $('#splash').toggle();
-
-  // Aftersight: the town picker shows this map as the thumbnail for the starter town and the empty valley
+// The sandbox's town picker shows this map as the thumbnail for the starter town and the empty valley
+var sandboxThumbs = function() {
   if (this.splashCanvas && this.splashCanvas._canvas) {
     var thumb = this.splashCanvas._canvas.toDataURL();
     $('#alStarterThumb, #alEmptyThumb').attr('src', thumb);
   }
+};
+
+
+// The sandbox: show the form asking for a map, a town name and a difficulty level
+var acquireNameAndDifficulty = function(e) {
+  e.preventDefault();
+
+  $('#splash').hide();
+  sandboxThumbs.call(this);
+  if (!$('input[name=alScenario]:checked').val() || $('#alScenFestus').prop('checked')) $('#alStarter').prop('checked', true);
 
   // As a convenience, the city name is not mandatory in debug mode
   if (Config.debug)
     $('#nameForm').removeAttr('required');
 
-  // When the form is submitted, we'll be ready to launch the game
-  $('#playForm').submit(play.bind(this));
-
   // Display the name and difficulty form
-  $('#start').toggle();
+  $('#start').show();
   if ($('#nameForm')[0]) $('#nameForm')[0].focus({preventScroll: true});
+};
+
+
+var backToSplash = function(e) {
+  e.preventDefault();
+  $('#start').hide();
+  $('#splash').show();
 };
 
 
@@ -152,8 +184,8 @@ var play = function(e) {
   e.preventDefault();
 
   // As usual, uninstall event listeners, and hide the UI
-  $('#playForm').off('submit');
-  $('#start').toggle();
+  offAll();
+  $('#start').hide();
 
   // What values did the player specify?
   var difficulty = $('.difficulty:checked').val() - 0;

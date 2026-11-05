@@ -7,7 +7,7 @@ const srv=http.createServer((q,r)=>{const p=path.join(DIST,decodeURIComponent(q.
 for (const [tag,vp] of [['desktop',{width:1400,height:900}],['mobile',{width:390,height:844}]]) {
 const page=await b.newPage({viewport:vp});
 await page.goto('http://localhost:'+srv.address().port+'/index.html');
-await page.click('#splashFestus');await page.click('#playit');
+await page.click('#splashFestus');
 await page.waitForFunction(()=>window.__AL,null,{timeout:90000});
 await page.evaluate(()=>{const g=__AL.game,L=__AL.layer;['Town','City','Capital','Metropolis','Megalopolis'].forEach(k=>g['_reached'+k]=true);
   g.alNoPaper=true; L.autoDecide=c=>{const o=c.options.filter(x=>!x.disabled); const pick=o.find(x=>x.id==='accept')||o.find(x=>x.id==='neighbors')||o[0]; L.decide(pick.id);};

@@ -42,6 +42,7 @@ import { TouchWarnWindow } from './touchWarnWindow.js';
 import { AL_NEWS } from './afterlight/layer.js';
 import { AfterlightPanel } from './afterlight/panel.js';
 import { CardWindow } from './afterlight/cards.js';
+import { track } from './afterlight/track.js';
 import { AlertWindow } from './afterlight/alertModal.js';
 import * as ALB from './afterlight/buildings.js';
 import { buildStarterTown, prewarm } from './afterlight/starterTown.js';
@@ -93,6 +94,23 @@ function Game(gameMap, tileSet, snowTileSet, spriteSheet, difficulty, name) {
 
   if (savedGame)
     this.load(savedGame);
+
+  // Aftersight: the game saves itself to this browser once a game month (at most every 10 s) and whenever the page is
+  // hidden or closed, so a player can close the tab and Continue from the start screen
+  var self = this;
+  this._alAutosave = function(force) {
+    if (!Storage.canStore || !self.simulation) return false;
+    var d = self.simulation.getDate(), key = d.year * 12 + d.month;
+    if (!force && (key === self._alSavedMonth || Date.now() - (self._alSavedAt || 0) < 10000)) return false;
+    try { self.save(); } catch (err) { return false; }   // storage full or blocked: keep playing
+    self._alSavedMonth = key; self._alSavedAt = Date.now();
+    return true;
+  };
+  this._alSavedMonth = savedGame ? (function() { var d = self.simulation.getDate(); return d.year * 12 + d.month; })() : null;
+  setInterval(function() { self._alAutosave(false); }, 4000);
+  track(savedGame ? 'game_continue' : 'game_start', {scenario: this.simulation.afterlight.s.scenario});
+  document.addEventListener('visibilitychange', function() { if (document.visibilityState === 'hidden') self._alAutosave(true); });
+  window.addEventListener('pagehide', function() { self._alAutosave(true); });
 
   this.rci = new RCI('RCIContainer', this.simulation);
 
@@ -349,6 +367,9 @@ function Game(gameMap, tileSet, snowTileSet, spriteSheet, difficulty, name) {
 
 Game.prototype.save = function() {
   var saveData = {name: this.name, everClicked: this.everClicked};
+  // Aftersight: what the start screen's Continue shows
+  var L = this.simulation.afterlight;
+  saveData.alMeta = {town: this.name, date: L.dateString(), scenario: L.s.scenario};
   BaseTool.save(saveData);
   this.simulation.save(saveData);
 

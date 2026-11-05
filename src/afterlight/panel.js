@@ -100,7 +100,7 @@ function AfterlightPanel(game) {
         '<div class="paperCols"><p id="alPaperBody"></p>' +
           '<div class="paperFacts"><div class="paperHelps"><b>Helps</b><span id="alPaperHelps"></span></div>' +
           '<div class="paperStrains"><b>Strains</b><span id="alPaperStrains"></span></div></div></div>' +
-        '<form id="alPaperForm" class="alignCenter"><button type="button" id="alPaperRestart" class="dialogOK hidden">Start over</button>' +
+        '<form id="alPaperForm" class="alignCenter"><button type="button" id="alPaperRestart" class="dialogOK hidden">Play again</button>' +
         '<input type="submit" id="alPaperOK" class="dialogOK" value="Back to the city"></form>' +
       '</div>' +
     '</div>';
@@ -117,7 +117,11 @@ function AfterlightPanel(game) {
     if (self._paperData && self._paperData.gameOver) self.layer.s.mayor.sandbox = true;   // keep watching as a citizen
     self.paperWindow.close();
   });
-  $('#alPaperRestart').on('click', function(e) { e.preventDefault(); window.location.reload(); });
+  // Play again: a new Festus game straight away (?play=festus, see splashScreen.js); the sandbox goes to the start screen
+  $('#alPaperRestart').on('click', function(e) {
+    e.preventDefault();
+    window.location.href = window.location.pathname + (self.layer.s.scenario === 'festus' ? '?play=festus' : '');
+  });
   var festus = this.layer.s.scenario === 'festus';
   $('#alFundBox, #alProjBox, #alIncomeBox, #alPath, #alHomes, #alMoreToggle').toggle(festus);
   $('#alMore').toggleClass('open', !festus);
@@ -169,7 +173,7 @@ function AfterlightPanel(game) {
   this.paperWindow = {
     open: function(data) {
       self._paperData = data;
-      $('#alPaperRestart').toggleClass('hidden', !data.gameOver);
+      $('#alPaperRestart').toggleClass('hidden', !data.gameOver && !data.win);
       $('#alPaperOK').val(data.gameOver ? 'Keep watching' : data.win ? 'Keep playing' : 'Back to the city');
       $('#alPaper').toggleClass('alWin', !!data.win).toggleClass('alGameOver', !!data.gameOver);
       $('#alPaperDate').text('· ' + self.layer.dateString());
@@ -296,7 +300,7 @@ AfterlightPanel.prototype.refresh = function(force) {
   $('#alRobots').text(fmt(s.robots));
   $('#alAuto').text(pct(s.automation));
   $('#alHelix').text(s.compute + s.robots > 0 ? pct(s.helixShare) : '-');
-  $('#alDividend').text(s.policies.dividend ? '$' + fmt(s.dividendPool) + '/mo' : 'off');
+  $('#alDividend').text(s.policies.dividend ? money(s.dividendPool) + '/mo' : 'off');
   var known = Object.keys(s.discovered).length;
   $('#alMini').text('Approval ' + Math.round(m.approval) + '% · Jobless ' + pct(s.unemployment));
   $('#alEra').text(['· The Before', '· Cheap Power', '· Thinking Machines', '· Self-Building', '· The Cure', '· Abundance'][Math.min(5, known)]);

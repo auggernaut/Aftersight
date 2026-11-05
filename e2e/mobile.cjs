@@ -68,12 +68,12 @@ async function play(browser, url, phone) {
   };
 
   await page.goto(url);
-  await page.waitForSelector('#splashPlay:visible', { timeout: 20000 });
+  await page.waitForSelector('#splashSandbox:visible', { timeout: 20000 });
   if (await page.isVisible('#tooSmall')) fail(who, 'the "screen too small" blocker is showing');
   const sw = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
   if (sw > 1) fail(who, 'page is ' + sw + 'px wider than the screen');
   await shot('1-splash');
-  await page.tap('#splashPlay');
+  await page.tap('#splashSandbox');
   await page.waitForSelector('#nameForm:visible', { timeout: 15000 });
   await page.fill('#nameForm', 'Pocket');
   await page.tap('#playit');
@@ -190,7 +190,7 @@ async function play(browser, url, phone) {
 
   // menu and newspaper
   await page.tap('#menuToggle');
-  if (!(await page.isVisible('#budgetRequest'))) fail(who, 'menu did not open');
+  if (!(await page.isVisible('#budgetRequest')) || !(await page.isVisible('#saveRequest')) || !(await page.isVisible('#feedbackLink'))) fail(who, 'menu did not open with every item');
   await page.tap('#menuToggle');
   await page.evaluate(() => { __AL.game.alNoPaper = false; const l = __AL.layer; delete l.s.discovered.the_cure; __AL.discover('the_cure'); });
   await page.waitForSelector('#alPaper:not(.hidden)', { timeout: 10000 }).catch(async e => { throw new Error('newspaper never opened: ' + JSON.stringify(await page.evaluate(() => ({ cls: document.getElementById('alPaper') && document.getElementById('alPaper').className, dialog: __AL.game.dialogOpen, vis: [...document.querySelectorAll('.open, [style*="display: block"]')].map(n => n.id).filter(Boolean) })))); });
@@ -224,8 +224,6 @@ async function festus(browser, url, phone) {
   await page.goto(url);
   await page.waitForSelector('#splashFestus:visible', { timeout: 20000 });
   await page.tap('#splashFestus');
-  await page.waitForSelector('#playit:visible', { timeout: 15000 });
-  await page.tap('#playit');
   await page.waitForFunction(() => window.__AL, null, { timeout: 90000 });
   await page.waitForSelector('#alCard:not(.hidden)', { timeout: 10000 });
   await fits();

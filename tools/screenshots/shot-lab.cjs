@@ -7,7 +7,7 @@ const srv=http.createServer((q,r)=>{const p=path.join(DIST,decodeURIComponent(q.
 for (const [tag,vp,touch] of [['desktop',{width:1400,height:900},false],['mobile',{width:390,height:844},true]]) {
 const page=await b.newPage({viewport:vp, hasTouch:touch, isMobile:touch}); const errs=[]; page.on('pageerror',e=>errs.push(e.message));
 await page.goto(process.env.BASE_URL||('http://localhost:'+srv.address().port+'/index.html'));
-await page.click('#splashFestus');await page.click('#playit');
+await page.click('#splashFestus');
 await page.waitForFunction(()=>window.__AL,null,{timeout:90000});
 const before=await page.evaluate(()=>{const g=__AL.game,L=__AL.layer;['Town','City','Capital','Metropolis','Megalopolis'].forEach(k=>g['_reached'+k]=true);
   g.alNoPaper=true; const types=[]; L.autoDecide=c=>{types.push(L.mi()+':'+c.type); const o=c.options.filter(x=>!x.disabled); const pick=o.find(x=>x.id==='accept')||o.find(x=>x.id==='invest')||o[o.length-1]; L.decide(pick.id);};

@@ -3,7 +3,7 @@ const { chromium } = require('playwright');
   const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = []; p.on('console', m => { if (m.type() === 'error') errors.push(m.text()); }); p.on('pageerror', e => errors.push('pageerror: ' + e.message));
   const r = await p.goto(process.argv[2]); console.log('status', r.status(), 'robots', r.headers()['x-robots-tag']);
-  await p.waitForSelector('#splashPlay:visible'); await p.click('#splashPlay');
+  await p.waitForSelector('#splashSandbox:visible'); await p.click('#splashSandbox');
   await p.fill('#nameForm', 'Afterlight'); await p.click('#playit');
   await p.waitForFunction(() => window.__AL, null, { timeout: 60000 }); await p.waitForTimeout(2500);
   console.log('census', JSON.stringify(await p.evaluate(() => __AL.census())), 'date', JSON.stringify(await p.evaluate(() => __AL.date())));

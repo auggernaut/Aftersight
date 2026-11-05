@@ -21,7 +21,21 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#141c22">
-    <meta name="description" content="AfterSight: a city builder about living through the shift to a post-labor economy. A modified version of micropolisJS, the HTML5 port of Micropolis.">
+    <meta name="description" content="AfterSight: you're the mayor of Festus, Missouri, and a developer wants a $6 billion data center. A free city builder in your browser about who owns AI, robots and compute. A modified version of micropolisJS, the HTML5 port of Micropolis.">
+    <!-- link previews (the live site's address: change these if it moves) -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="AfterSight">
+    <meta property="og:title" content="AfterSight: run a real town through the arrival of AI">
+    <meta property="og:description" content="You're the mayor of Festus, Missouri, and a developer wants a $6 billion data center. A free city builder about who owns AI, robots and compute.">
+    <meta property="og:url" content="https://aftersight-zeta.vercel.app/">
+    <meta property="og:image" content="https://aftersight-zeta.vercel.app/assets/brand/og-1200x630.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="AfterSight: an isometric river town with a data center campus beside Main Street">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="AfterSight: run a real town through the arrival of AI">
+    <meta name="twitter:description" content="You're the mayor of Festus, Missouri, and a developer wants a $6 billion data center. Who owns the machines decides who gains.">
+    <meta name="twitter:image" content="https://aftersight-zeta.vercel.app/assets/brand/og-1200x630.jpg">
     <link rel="icon" href="assets/brand/favicon.ico" sizes="any">
     <link rel="icon" type="image/png" sizes="32x32" href="assets/brand/si-32.png">
     <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
@@ -48,24 +62,30 @@
         <div id="speedButtons" class="hudItem" role="group" aria-label="Speed">
           <button class="speedButton" data-speed="0" data-tip="Pause"><svg viewBox="0 0 16 16"><rect x="3" y="3" width="3.5" height="10" rx="1"/><rect x="9.5" y="3" width="3.5" height="10" rx="1"/></svg></button>
           <button class="speedButton" data-speed="1" data-tip="Slow: about 20 s a game month"><svg viewBox="0 0 16 16"><path d="M5 3l8 5-8 5z"/></svg></button>
-          <button class="speedButton" data-speed="2" data-tip="Normal: about 12 s a game month (like SimCity)"><svg viewBox="0 0 16 16"><path d="M2 3l6 5-6 5zM8 3l6 5-6 5z"/></svg></button>
+          <button class="speedButton" data-speed="2" data-tip="Normal: about 12 s a game month"><svg viewBox="0 0 16 16"><path d="M2 3l6 5-6 5zM8 3l6 5-6 5z"/></svg></button>
           <button class="speedButton" data-speed="3" data-tip="Fast: about 3.5 s a game month"><svg viewBox="0 0 16 16"><path d="M1 3l5 5-5 5zM6 3l5 5-5 5zM11 3l4 5-4 5z"/></svg></button>
         </div>
       </div>
       <button id="menuToggle" class="initialHidden" aria-label="Menu">&#9776;</button>
       <nav id="menuButtons" class="initialHidden">
         <button id="budgetRequest" class="miscButton" data-tip="Budget and taxes">Budget</button>
-        <button id="evalRequest" class="miscButton" data-tip="What residents think">Evaluation</button>
-        <button id="disasterRequest" class="miscButton" data-tip="Unleash a disaster">Disasters</button>
-        <button id="saveRequest" class="miscButton loadSave" disabled data-tip="Save to this browser">Save</button>
-        <button id="settingsRequest" class="miscButton" data-tip="Speed, autobudget, disasters">Settings</button>
-        <button id="screenshotRequest" class="miscButton" data-tip="Take a picture of the city">Photo</button>
-        <button id="pauseRequest" class="miscButton">Pause</button>
-        <button id="aboutRequest" class="miscButton" data-tip="Credits and licenses">About</button>
+        <button id="saveRequest" class="miscButton loadSave" disabled data-tip="Save to this browser (the game also saves itself every month)">Save</button>
+        <button id="moreRequest" class="miscButton" aria-haspopup="true" aria-expanded="false">More &#9662;</button>
+        <div id="menuMore">
+          <button id="evalRequest" class="miscButton" data-tip="What residents think">Evaluation</button>
+          <button id="disasterRequest" class="miscButton" data-tip="Unleash a disaster">Disasters</button>
+          <button id="settingsRequest" class="miscButton" data-tip="Speed, autobudget, disasters">Settings</button>
+          <button id="screenshotRequest" class="miscButton" data-tip="Take a picture of the city">Photo</button>
+          <button id="pauseRequest" class="miscButton">Pause</button>
+          <a id="feedbackLink" class="miscButton" href="https://x.com/augman" target="_blank" rel="noopener" data-tip="Tell the maker what you think: message @augman on X">Feedback</a>
+          <button id="aboutRequest" class="miscButton" data-tip="Credits and licenses">About</button>
+          <button id="newGameRequest" class="miscButton" data-tip="Back to the start screen (this game is saved)">New game</button>
+        </div>
       </nav>
       <nav id="headerLinks">
-        <a href="about.html" target="_blank">About</a>
-        <a href="https://github.com/graememcc/micropolisJS" target="_blank">micropolisJS on GitHub</a>
+        <a href="about.html" id="splashAbout" target="_blank">About</a>
+        <a href="https://github.com/auggernaut/Aftersight" target="_blank" rel="noopener">Source code</a>
+        <a href="https://x.com/augman" target="_blank" rel="noopener">Feedback</a>
       </nav>
     </header>
     <div id="wrapper">
@@ -76,35 +96,34 @@
         <div id="splash" class="awaitGeneration open centred intro">
           <div class="introHead">
             <h2>Welcome to After<span class="si">S</span>ight</h2>
-            <p>Run a present-day town through the arrival of AI, robots and abundance. Pick a town to start.</p>
+            <p>Run a real town through the arrival of AI, robots and abundance. Who owns the machines decides who gains.</p>
+          </div>
+          <div id="continueBox" class="continueBox hidden">
+            <div class="continueText"><span class="townTag">Saved game</span><b id="continueName">Your town</b><span id="continueDate"></span></div>
+            <button id="splashLoad" class="loadSave splashButton primary" disabled>Continue</button>
           </div>
           <div class="townCards">
-            <div class="townCard" id="townFestus">
+            <div class="townCard townHero" id="townFestus">
               <div class="townThumb"><img src="assets/brand/festus-thumb.webp" width="480" height="316" alt="Festus, Missouri: I-55, Main Street and the empty data center site"></div>
               <div class="townBody">
                 <span class="townTag">Real town &middot; 2026</span>
                 <h3>Festus, Missouri</h3>
-                <p>A river town of 12,000 south of St. Louis. A developer wants a $6 billion data center by the interstate, and you're the mayor.</p>
+                <p>A river town of 12,000 south of St. Louis. A developer wants a $6 billion data center by the interstate, and you're the mayor. A game runs to April 2032, about half an hour.</p>
                 <div class="townBtns"><button id="splashFestus" class="splashButton primary">Play Festus, MO</button></div>
-              </div>
-            </div>
-            <div class="townCard" id="townStarter">
-              <div class="townThumb"><div id="splashContainer"></div></div>
-              <div class="townBody">
-                <span class="townTag">Random map</span>
-                <h3>A present-day town</h3>
-                <p>An ordinary valley town on a fresh map. Helix already runs a data center here, and the robots are coming.</p>
-                <div class="townBtns"><button id="splashPlay" class="splashButton primary">Play this map</button><button id="splashGenerate" class="splashButton secondary">New map</button></div>
+                <p class="townNote">Festus is real. Keystone, its offers and everyone you meet are fictional: this is a simulation, not a prediction.</p>
               </div>
             </div>
           </div>
           <div id="splashButtonContainer">
-            <div id="splashButtons"><button id="splashLoad" class="loadSave splashButton ghost" disabled>Load saved game</button></div>
-            <p class="introCredit">Built on micropolisJS, a JavaScript port of the open-source city simulator <cite>Micropolis</cite>.</p>
+            <div id="splashButtons"><button id="splashSandbox" class="splashButton ghost">Sandbox: a random map or an empty valley &rsaquo;</button></div>
+            <p class="introCredit">Built on micropolisJS, a JavaScript port of the open-source city simulator <cite>Micropolis</cite>. <a href="https://github.com/auggernaut/Aftersight" target="_blank" rel="noopener">Source code</a></p>
           </div>
         </div>
         <div id="start" class="open centred intro">
-          <h2>New game</h2>
+          <h2>Sandbox</h2>
+          <p class="startSub">A made-up town on a random map, or an empty valley to build from scratch.</p>
+          <div class="sandboxMap"><div class="townThumb"><div id="splashContainer"></div></div>
+            <div class="sandboxMapBtns"><button id="splashGenerate" type="button" class="splashButton secondary">New map</button></div></div>
           <form id="playForm">
             <div class="formRow">
               <label for="nameForm">Town name</label>
@@ -119,11 +138,12 @@
               </div>
             </div>
             <fieldset id="alScenarios"><legend class="formLabel">Town</legend>
-              <label class="alScen"><input type="radio" name="alScenario" id="alScenFestus" value="festus"><img class="scenThumb" src="assets/brand/festus-thumb.webp" alt=""><span><b>Festus, Missouri (2026)</b><small>A real river town, a $6B data center offer, and an election coming</small></span></label>
+              <label class="alScen hidden"><input type="radio" name="alScenario" id="alScenFestus" value="festus"><span><b>Festus, Missouri (2026)</b></span></label>
               <label class="alScen"><input type="radio" name="alScenario" id="alStarter" value="starter" checked="checked"><img class="scenThumb" id="alStarterThumb" alt=""><span><b>A present-day town on this map</b><small>Helix already runs a data center here</small></span></label>
               <label class="alScen"><input type="radio" name="alScenario" id="alScenEmpty" value="empty"><img class="scenThumb scenEmpty" id="alEmptyThumb" alt=""><span><b>An empty valley</b><small>The classic Micropolis start: just the land</small></span></label>
             </fieldset>
             <div id="playSubmitDiv">
+              <button id="splashBack" type="button" class="splashButton secondary">Back</button>
               <input id="playit" type="submit" value="Start">
             </div>
           </form>
@@ -214,7 +234,9 @@
         <div class="padding10 open aboutBody">
           <p><b>AfterSight</b> is a city builder about living through the shift to a post-labor economy: who owns the energy, the compute and the robots, and what happens to work, purpose and hope when machines can do most jobs.</p>
           <p>It is a modified version of <a href="https://github.com/graememcc/micropolisJS" target="_blank">micropolisJS</a> by Graeme McCutcheon and contributors, the HTML5 port of Micropolis, which is based on the original city simulator by Will Wright and Maxis, open-sourced by Electronic Arts. The simulation engine is micropolisJS; the isometric view, the interface and the AfterSight layer (compute, robots, ownership, mood and events) are new and drawn procedurally in code.</p>
-          <p>AfterSight and micropolisJS are free software released under the <a href="LICENSE" target="_blank">GNU General Public License v3</a> with additional terms; see <a href="LICENSE" target="_blank">LICENSE</a> and <a href="COPYING" target="_blank">COPYING</a>. You are entitled to the source code of this modified version.</p>
+          <p>AfterSight and micropolisJS are free software released under the <a href="LICENSE" target="_blank">GNU General Public License v3</a> with additional terms; see <a href="LICENSE" target="_blank">LICENSE</a> and <a href="COPYING" target="_blank">COPYING</a>. You are entitled to the source code of this modified version: it is at <a href="https://github.com/auggernaut/Aftersight" target="_blank" rel="noopener">github.com/auggernaut/Aftersight</a>.</p>
+          <p><b>Festus is a real town.</b> Keystone Compute Partners, its offers and everyone you meet in the game are fictional, and the game is a simulation, not a prediction or a comment on any real person.</p>
+          <p>Your game saves itself in this browser and stays there. The live site may count visits and game milestones anonymously, with no cookies and no personal data. Feedback is welcome: message <a href="https://x.com/augman" target="_blank" rel="noopener">@augman on X</a>.</p>
           <p>Micropolis is a registered trademark of <a href="https://www.micropolis.com" target="_blank">Micropolis Corporation (Micropolis GmbH)</a> and is licensed here as a courtesy of the owner under the <a href="name_license.html" target="_blank">Micropolis Public Name License</a>. AfterSight is not SimCity and is not affiliated with or endorsed by Electronic Arts or Maxis.</p>
           <p class="aboutMore"><a href="about.html" target="_blank">The original micropolisJS about page</a></p>
           <form id="aboutForm" class="alignCenter margin10"><input type="submit" id="aboutOK" class="dialogOK" value="Close"></form>

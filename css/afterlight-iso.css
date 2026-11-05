@@ -721,3 +721,63 @@ body:not(.alFestus) .hudIncome { display: none; }
 .alRCIbar .rciTrack { width: 10px; height: 30px; border-radius: 3px; }
 .alRCIbar .rciLetter { font-size: 9px; line-height: 10px; }
 .alHomes { margin-top: 6px; }
+
+/* Aftersight: the header keeps Budget and Save in view and folds the rest under More, so it fits a 1280px laptop.
+   The brand's "a modified micropolisJS" line shows on the start screen; in game the footer and About carry it. */
+#menuButtons { position: relative; align-items: center; }
+#menuMore { display: none; }
+#menuButtons.moreOpen #menuMore { display: flex; position: absolute; top: 40px; right: 0; z-index: 40; flex-direction: column; gap: 4px; padding: 8px;
+  min-width: 170px; background: var(--glass2); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,0.5); }
+#menuMore .miscButton { display: flex; align-items: center; justify-content: flex-start; text-align: left; text-decoration: none; font: inherit; font-size: 13px; }
+body.inGame #brand .alSub { display: none; }
+body.alFestus #evalRequest, body.alFestus #disasterRequest { display: none !important; }
+@media (max-width: 760px), (max-height: 500px) {
+  #moreRequest { display: none !important; }
+  #menuButtons.open #menuMore { display: contents; }
+  #menuButtons.open #menuMore .miscButton { height: 42px; min-width: 160px; font-size: 14px; }
+}
+
+/* Aftersight: the counter's Back and Send buttons stay in view while the list of asks scrolls */
+#alCard .cardAskButtons { position: sticky; bottom: -16px; margin: 10px -4px -16px; padding: 10px 4px 16px; background: #f6f3ec;
+  box-shadow: 0 -10px 14px -12px rgba(0, 0, 0, 0.35); z-index: 1; }
+@media (max-width: 760px), (max-height: 500px) { #alCard .cardAskButtons { bottom: -12px; margin-bottom: -12px; padding-bottom: 12px; } }
+#alCard .cardLev { cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; }
+
+/* Aftersight: the start screen leads with Festus (one card, with Continue above it when a game is saved); the
+   random map and the empty valley sit behind the Sandbox link */
+.continueBox { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0 0 14px; padding: 12px 14px 12px 16px;
+  border-radius: 16px; background: #fff; border: 2px solid var(--blue); box-shadow: 0 8px 22px rgba(47, 127, 209, 0.16); }
+.continueBox.hidden { display: none; }
+.continueText { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 16px; color: var(--introInk); }
+.continueText #continueDate { color: var(--ink2); }
+#splashLoad.primary { flex: none; min-width: 140px; height: 44px !important; }
+.townHero { display: grid; grid-template-columns: 1.1fr 1fr; }
+.townHero .townThumb { aspect-ratio: auto; min-height: 100%; }
+.townNote { font-size: 12px !important; color: #7d8b97 !important; margin-top: 6px !important; line-height: 1.4; flex: none !important; }
+#splashFestus.secondary { background: #eef4fa !important; color: var(--blueDark) !important; border: 1px solid #d5e4f2; box-shadow: none; }
+.intro .splashButton.ghost:not(:disabled) { cursor: pointer; }
+.introCredit a { color: var(--blueDark); }
+.startSub { margin: 0 0 12px; color: var(--ink2); font-size: 14px; }
+.sandboxMap { display: flex; gap: 12px; align-items: flex-end; }
+.sandboxMap .townThumb { flex: 1; border-radius: 14px; aspect-ratio: 480 / 220; }
+.sandboxMapBtns { display: flex; flex-direction: column; gap: 8px; }
+#playSubmitDiv { gap: 10px; }
+#splashBack { flex: none; }
+@media (max-width: 760px) and (orientation: portrait) {
+  .townHero { grid-template-columns: 112px 1fr; }
+  .townNote { display: none; }
+  .continueBox { padding: 10px 10px 10px 12px; margin-bottom: 10px; }
+  .continueText { font-size: 14px; gap: 6px; }
+  #splashLoad.primary { min-width: 104px; height: 40px !important; }
+  .sandboxMap .townThumb { aspect-ratio: 480 / 260; }
+}
+#alScenarios .alScen.hidden { display: none !important; }
+/* the open menu sits above the news ticker; Pause is the speed buttons' job; menu links look like the buttons */
+body:has(#menuButtons.open) header#header, body:has(#menuButtons.moreOpen) header#header { z-index: 100; }
+#menuButtons.open, #menuButtons.moreOpen #menuMore { z-index: 101 !important; }
+#menuMore #pauseRequest { display: none !important; }
+#menuMore a.miscButton { box-sizing: border-box; font-weight: 600; font-size: 12.5px; height: 32px; padding: 0 11px; }
+@media (max-width: 760px), (max-height: 500px) {
+  #menuButtons.open #menuMore a.miscButton { height: 42px; min-width: 160px; font-size: 14px; }
+  .townBody .townNote { display: none !important; }
+}

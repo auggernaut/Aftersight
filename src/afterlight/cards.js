@@ -73,7 +73,7 @@ CardWindow.prototype.render = function() {
            (o.note ? '<div class="cardNote">' + esc(o.note) + '</div>' : '') + '</div>';
   }).join('');
   $('#alCard').attr('data-type', c.type).html(
-    '<div class="cardKicker">' + esc(c.kicker) + (c.leverage !== undefined ? '<span class="cardLev">Leverage ' + c.leverage + '%</span>' : '') + '</div>' +
+    '<div class="cardKicker">' + esc(c.kicker) + (c.leverage !== undefined ? '<span class="cardLev" tabindex="0" data-tip="Leverage: how hard you can push. It grows the longer you hold out, the more popular you are, and each time you walk away. More leverage, better counters.">Leverage ' + c.leverage + '%</span>' : '') + '</div>' +
     '<h2 class="cardTitle">' + esc(c.title) + '</h2>' +
     (c.body ? '<p class="cardBody">' + esc(c.body) + '</p>' : '') +
     (rows ? '<table class="cardTerms' + (this.allTerms ? ' showAll' : '') + '">' + rows + '</table>' + more : '') +

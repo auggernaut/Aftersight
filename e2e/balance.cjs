@@ -21,7 +21,7 @@ const med=a=>{const s=a.slice().sort((x,y)=>x-y);return s.length?s[s.length>>1]:
 for (const strat of STRATS) for (let run=0; run<N; run++) {
 const page=await b.newPage({viewport:{width:1000,height:700}});const errs=[];page.on('pageerror',e=>errs.push(e.message));
 await page.route(/fonts\.(googleapis|gstatic)/,r=>r.abort());
-await page.goto('http://localhost:'+srv.address().port+'/index.html');await page.click('#splashFestus');await page.click('#playit');
+await page.goto('http://localhost:'+srv.address().port+'/index.html');await page.click('#splashFestus');
 await page.waitForFunction(()=>window.__AL,null,{timeout:90000});
 const out = await page.evaluate(async strat0 => {
   const builds = !/cards$/.test(strat0), strat = strat0 === 'cards' ? 'negotiate' : strat0.replace(/-cards$/, '');

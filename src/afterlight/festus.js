@@ -60,7 +60,7 @@ var blocks = function(nb) {
     for (var c = 0; c < n; c++) {
       var t = types[c];
       if (t === '.') continue;
-      out.push({type: t, x: nb.ox + colX(c) + 1, y: ty + 1, built: t !== 'R' || nb.built(c, i), where: nb.name});
+      out.push({type: t, x: nb.ox + colX(c) + 1, y: ty + 1, built: t === 'K' || nb.built(c, i), where: nb.name});   // a platted neighbourhood's corner shop is an empty lot too
     }
   });
   return out;
@@ -68,7 +68,7 @@ var blocks = function(nb) {
 // The empty platted lots (centre tiles), nearest the old town first
 export const PLATS = (function() {
   var out = [];
-  NEIGHBOURHOODS.forEach(function(nb) { blocks(nb).forEach(function(b) { if (!b.built) out.push({x: b.x, y: b.y, where: b.where}); }); });
+  NEIGHBOURHOODS.forEach(function(nb) { blocks(nb).forEach(function(b) { if (!b.built && b.type !== 'K') out.push({x: b.x, y: b.y, where: b.where}); }); });
   return out.sort(function(a, b) { return Math.hypot(a.x - DOWNTOWN.x, a.y - DOWNTOWN.y) - Math.hypot(b.x - DOWNTOWN.x, b.y - DOWNTOWN.y); });
 })();
 

@@ -44,8 +44,8 @@ const POSITIVE = /SOLAR NOW CHEAPER|FRONTIER MODEL|ROBOTS NOW BUILD|THE CURE|FUS
   const shot = async (name, opts) => { const f = path.join(OUT, name); await page.screenshot({ path: f, ...opts }); console.log('screenshot', f); };
 
   await page.goto(url);
-  await page.waitForSelector('#splashPlay:visible');
-  await page.click('#splashPlay');
+  await page.waitForSelector('#splashSandbox:visible');
+  await page.click('#splashSandbox');
   await page.fill('#nameForm', 'Afterlight');
   await page.click('#playit');
   await page.waitForFunction(() => window.__AL, null, { timeout: 60000 });
@@ -189,6 +189,7 @@ const POSITIVE = /SOLAR NOW CHEAPER|FRONTIER MODEL|ROBOTS NOW BUILD|THE CURE|FUS
   if (!(await page.evaluate(() => __AL.game.isPaused))) fail('pause button did not pause');
   await page.click('.speedButton[data-speed="2"]');
   if (await page.evaluate(() => __AL.game.isPaused)) fail('play button did not resume');
+  await page.click('#moreRequest');   // About sits under More
   await page.click('#aboutRequest');
   const about = await page.textContent('#aboutWindow');
   if (!(await page.isVisible('#aboutWindow')) || !/GNU General Public License/.test(about) || !/Micropolis Public Name License/.test(about)) fail('About panel missing license text');

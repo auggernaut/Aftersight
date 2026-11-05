@@ -7,7 +7,7 @@ const srv=http.createServer((q,r)=>{const p=path.join(DIST,decodeURIComponent(q.
 for (const [tag,vp] of [['desktop',{width:1400,height:900}],['mobile',{width:390,height:844}]]) {
 const page=await b.newPage({viewport:vp});
 await page.goto('http://localhost:'+srv.address().port+'/index.html');
-await page.click('#splashFestus');await page.click('#playit');
+await page.click('#splashFestus');
 await page.waitForFunction(()=>window.__AL,null,{timeout:90000});
 await page.waitForSelector('#alCard:visible');
 await page.click('#alCard .cardOption[data-option=go]');

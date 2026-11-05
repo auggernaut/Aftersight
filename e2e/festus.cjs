@@ -40,11 +40,10 @@ async function startFestus(browser, url) {
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   await page.goto(url);
   await page.waitForSelector('#splashFestus:visible', { timeout: 20000 });
-  await page.click('#splashFestus');
-  await page.waitForSelector('#start:visible');
-  if (!(await page.isChecked('#alScenFestus'))) fail('Festus button did not pick the Festus scenario');
-  await page.click('#playit');
+  await page.click('#splashFestus');   // one click: no new-game form for Festus
   await page.waitForFunction(() => window.__AL, null, { timeout: 90000 });
+  if (await page.isVisible('#start')) fail('the new-game form should not show for Festus');
+  if ((await page.evaluate(() => __AL.layer.s.scenario)) !== 'festus') fail('Festus button did not pick the Festus scenario');
   await page.evaluate(() => { ['Town', 'City', 'Capital', 'Metropolis', 'Megalopolis'].forEach(k => { __AL.game['_reached' + k] = true; }); });
   return { page, errors };
 }
@@ -438,7 +437,7 @@ const months = async (page, n) => {
   console.log('design closed+gas', JSON.stringify(green));
   console.log('design evap+grid', JSON.stringify(cheap));
   if (!green.rows.some(r => /^Cooling: Evaporative/.test(r)) || !green.rows.some(r => /^Power: Ameren grid: about 300 MW/.test(r))) fail('first offer should state evaporative cooling and grid power');
-  if (!/collector wells on the Mississippi/.test(green.body)) fail('first offer should name the river collector wells');
+  if (!green.rows.some(r => /county's river wells/.test(r))) fail('first offer should say the water comes from the county\'s river wells');
   if (['cooling', 'clean', 'gas'].some(a => !green.designAsks.includes(a))) fail('design asks missing from the counter: ' + green.designAsks);
   if (green.deal !== 'closed/gas') fail('counter did not win closed-loop cooling and gas power: ' + green.deal);
   if (!/closed-loop cooling, but to pay for it takes/.test(green.trade)) fail('the better offer should say what closed-loop cost');

@@ -147,7 +147,18 @@ function AfterlightUI(game) {
   // stop iOS page pinch and double-tap zoom over the game; the map has its own pinch
   ['gesturestart', 'gesturechange'].forEach(function(t) { document.addEventListener(t, function(e) { e.preventDefault(); }, {passive: false}); });
   $('#menuToggle').on('click', function(e) { e.preventDefault(); $('#menuButtons').toggleClass('open'); });
-  $('#menuButtons').on('click', '.miscButton', function() { $('#menuButtons').removeClass('open'); });
+  $('#menuButtons').on('click', '.miscButton', function() { if (this.id !== 'moreRequest') $('#menuButtons').removeClass('open moreOpen'); $('#moreRequest').attr('aria-expanded', 'false'); });
+  // New game: this game is already saved (Continue brings it back), so go back to the start screen
+  $('#newGameRequest').on('click', function(e) { e.preventDefault(); if (game._alAutosave) game._alAutosave(true); window.location.reload(); });
+  // More: the less-used buttons (desktop); a click anywhere else closes it
+  $('#moreRequest').on('click', function(e) {
+    e.preventDefault(); e.stopPropagation();
+    var open = !$('#menuButtons').hasClass('moreOpen');
+    $('#menuButtons').toggleClass('moreOpen', open); $(this).attr('aria-expanded', open ? 'true' : 'false');
+  });
+  $(document).on('click', function(e) {
+    if (!$(e.target).closest('#menuButtons, #menuToggle').length) { $('#menuButtons').removeClass('moreOpen open'); $('#moreRequest').attr('aria-expanded', 'false'); }
+  });
 
   // zoom buttons
   $('#canvasContainer').append(
