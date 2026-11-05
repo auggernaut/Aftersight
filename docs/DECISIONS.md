@@ -2,6 +2,24 @@
 
 A dated log, newest first. Each entry gives the decision and the reason for it. Commits are on `main` (developed on the former `festus` branch) unless a branch is named.
 
+## 2026-11-05 (ready to share, branch `mvp-polish`)
+
+Getting AfterSight to the point where Augustin can send people a link. A first-minutes playthrough on a laptop and a phone found the game itself in shape and the way in cluttered.
+
+- **The source is public.** The repo is public, and the game links to it from the start screen, the header and About.
+  *Why:* AfterSight is GPL: anyone who gets the game is entitled to its source.
+- **One click into Festus.** The start screen leads with Festus and a Continue button when a game is saved. Play Festus skips the new-game form (a real town needs no name field, and the game is tuned at Easy). The random map and the empty valley sit behind a Sandbox link with their form, a map preview and Back.
+- **A disclaimer where players see it.** "Festus is real. Keystone, its offers and everyone you meet are fictional: this is a simulation, not a prediction," on the Festus card, under the intro's button and in About.
+  *Why:* Festus is in the middle of a real fight.
+- **Shorter openings.** The intro card has three rows (your job, what's coming, the goal) and fits a phone; the first offer's opening is two sentences, since its terms already cover water and power. Leverage explains itself on hover. The counter's Back and Send buttons stay in view while the asks scroll.
+- **First-game tips in the ticker:** the demand bars (showing an empty lot), that news lines explain themselves, and the Research Lab.
+- **The top bar fits a laptop.** Budget and Save stay in view; Settings, Photo, Feedback, About and New game sit under More. Festus hides Evaluation (the engine's score) and Disasters. Pause is the speed buttons' job.
+  *Why:* at 1280px, Save and everything after Evaluation fell off the screen.
+- **Autosave and Continue.** The game saves itself once a game month and whenever the tab is hidden or closed; the start screen offers Continue with the town and date. New game (under More) goes back to the start screen with the game saved.
+- **Play again** on the game-over paper and on the paper of a final win starts a new Festus game (`?play=festus`, which also works as a shared link).
+- **Sharing.** Link previews (title, description, a 1200x630 image of the town); Feedback goes to augman on X; Vercel Web Analytics (anonymous, no cookies) when a deploy asks for it, with a few milestone events.
+- **The north side's corner shop is an empty lot.** It was the only zone left in a platted neighbourhood and had no power.
+
 ## 2026-10-27 (city building, branch `city-building`)
 
 Augustin asked why the game felt less like city building than SimCity 3000. A check found that over half the Festus map was open land, but nothing asked the player to build: the old town's neighbourhoods were pre-zoned and mostly empty lots, so the town filled itself in, and the balance bots won without ever zoning a tile. These decisions bring building back and tie it to the story.

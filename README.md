@@ -2,7 +2,8 @@
 
 AfterSight is a city-builder sim about living through the arrival of AI, robots and abundance. You are the mayor of a real, contested town in 2026, and a developer wants a $6B AI data center campus there. Your choices decide **who owns the engine** (compute, robots, energy) and whether the town ends up thriving, enclosed, idle, strained or shrinking.
 
-- **Play:** https://aftersight-zeta.vercel.app (unlisted, noindex)
+- **Play:** https://aftersight-zeta.vercel.app (unlisted, noindex). `?play=festus` skips the start screen. The game saves itself in your browser; Continue picks it up.
+- **Feedback:** message augman on X (x.com/augman), or open an issue here.
 - **Start here:** [docs/README.md](docs/README.md) (run, test, deploy, branch map), [AGENTS.md](AGENTS.md) for AI agents
 - **Docs:** [Vision](docs/VISION.md) · [Architecture](docs/ARCHITECTURE.md) · [Decisions](docs/DECISIONS.md) · [Ideas](docs/IDEAS.md) · [Open questions](docs/OPEN_QUESTIONS.md) · [Research](docs/RESEARCH.md)
 
@@ -21,7 +22,7 @@ More tests and tools: [docs/README.md](docs/README.md#tests) and [tools/README.m
 
 ## License
 
-micropolisJS is GPL-3.0 with additional terms (see [LICENSE](LICENSE) and [COPYING](COPYING)); the name "Micropolis" is covered by the [Micropolis Public Name License](MicropolisPublicNameLicense.md). Everything in this branch, including the Afterlight layer, is therefore GPL-3.0: a released version must ship its source under the same terms. The repo itself is private, which the GPL allows.
+micropolisJS is GPL-3.0 with additional terms (see [LICENSE](LICENSE) and [COPYING](COPYING)); the name "Micropolis" is covered by the [Micropolis Public Name License](MicropolisPublicNameLicense.md). Everything here, including the AfterSight layer, is therefore GPL-3.0: anyone who gets the game is entitled to its source under the same terms. This repo is that source, and the game links to it (header, start screen and About).
 
 ## Festus, Missouri (2026)
 
@@ -36,7 +37,8 @@ The main scenario, picked from the splash ("Play Festus, MO") or the new-game To
 - **Breakthroughs** are decisions, and they only come while a **Research Lab** runs: each card shows the cost in dollars and compute. Compute comes from the town's equity in the data centers; the rest is bought on the market. Finished research unlocks a building (Healing Clinic, Fusion Plant) that you then place, pay for and keep up. Passing hands it to someone else.
 - **Festus Fund and Purpose.** Keystone's payments, the town's equity share of what the halls earn ($1.5M a hall a month, three times that after a frontier model), the deal's co-op hall and any town-owned halls go into a fund that pays every resident a dividend each January (payout slider in City pulse). Purpose (top bar) drains as machines take the work and rises with ownership, the apprenticeship guild and town projects built by robots or by neighbors with robots. Eight projects, from a garden to The Lantern, show up on the map and can get another season when they fade.
 - **Co-op bonds.** When voters back a bond, the town can build a data center of its own from the Compute menu; its revenue pays the bond first and the rest goes to the Fund.
-- **Alerts.** The news ticker carries short status alerts (health, jobs, wealth, homes, water, bills, mood, path); click one for why it happened, what you can do, faction changes and the numbers.
+- **Alerts.** The news ticker carries short status alerts (health, jobs, wealth, homes, water, bills, mood, path); click one for why it happened, what you can do, faction changes and the numbers. A first game also gets three tips there (the demand bars, clickable news, the Research Lab).
+- **Starting and saving.** The start screen leads with Festus (one click in) and a Continue button when a game is saved; the random map and the empty valley sit behind a Sandbox link. The game saves itself to the browser once a game month and whenever the tab is hidden or closed. The top bar keeps Budget and Save in view; Settings, Photo, Feedback, About and New game sit under More (Evaluation and Disasters too, outside Festus). Losing, or winning for good, offers Play again.
 - Between those, factions come to City Hall with asks (a sound wall, a water guarantee, local hiring, publishing the deal, a tax cut, a school levy, spending the surplus, growing the town without a campus, an apprenticeship guild, a co-op bond, new river wells). Everyday asks wait in the ticker and don't stop the game; reopening a bad deal and a furious faction get a card. A declined ask comes back louder; the yearly ones repeat. Each election opens with a campaign choice.
 - Money is shown in real dollars: one game dollar is $1,000.
 - Pacing: at most one decision card every 6 game months (about 70 s at Normal speed), unless it answers something you just did. All four offer strategies can win; negotiating wins most, and building homes helps the strategies that win narrowly (see `e2e/balance.cjs`).

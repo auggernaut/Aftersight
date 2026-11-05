@@ -35,7 +35,7 @@ On the splash, choose **Play Festus, MO**, or open the new-game card and pick a 
 
 ## Tests
 
-The end-to-end tests use Playwright from a separate install. Point `NODE_PATH` at its `node_modules`, and run `npm run build` first. Each test serves `dist/` itself, or tests a deployed build when `BASE_URL` is set (festus and mobile only).
+The end-to-end tests use Playwright from a separate install. Point `NODE_PATH` at its `node_modules`, and run `npm run build` first. Each test serves `dist/` itself, or tests a deployed build when `BASE_URL` is set (festus, mobile and start).
 
 ```
 export NODE_PATH=/path/to/playwright/node_modules      # on the agent box: /workspace/pw/node_modules
@@ -44,6 +44,9 @@ OUT=shots node e2e/festus.cjs     # Festus through the real UI: intro, offer, co
                                   # real dollars, the automation tide, Keystone leaving for good, a ticker ask, a co-op
                                   # bond, a project on the map, the built-out old town and empty lots, a new block filling
                                   # with houses while crews push rents up, robot crews halving build prices
+OUT=shots node e2e/start.cjs      # what a new player meets: the start screen (Festus first, Sandbox link, disclaimer), one
+                                  # click into Festus, the top bar fitting 1280-1920px, the More menu, the counter's buttons in
+                                  # view, first tips, autosave, Continue, ?play=festus, the sandbox form, the phone menu
 OUT=shots node e2e/mobile.cjs     # emulated iPhone 14 and Pixel 7: tap, pan, pinch, toolbar, sheet, Festus cards, alert window
 OUT=shots node e2e/smoke.cjs      # starter town: tools, zoom/pan, policies, 4 game years, events, save
 N=30 node e2e/balance.cjs         # headless Festus balance: win rates for negotiate / firm / yes / no autoplayers (all of
@@ -74,7 +77,12 @@ Test hooks live on `window.__AL` (defined in `src/game.js`):
 
 ```
 bash tools/deploy/aftersight-redeploy.sh        # defaults to main
+ANALYTICS=1 bash tools/deploy/aftersight-redeploy.sh   # also adds Vercel Web Analytics (turn it on in the project first)
 ```
+
+**Analytics** is off unless the deploy adds it. With `ANALYTICS=1` the page loads Vercel Web Analytics (anonymous, no cookies). Page views work on any plan. The game also sends a few milestone events through `src/afterlight/track.js` (a game started or continued, each Keystone offer answered, each election with its result, vote and path); Vercel records custom events only on a paid plan, and elsewhere they do nothing.
+
+**Link previews** (`og:` and `twitter:` tags in `index.html`) point at `https://aftersight-zeta.vercel.app/` and `assets/brand/og-1200x630.jpg`. Change them if the site moves to its own domain.
 
 The script checks out the branch and pulls. It builds, copies `dist/` into a deploy folder linked to the Vercel project, and writes `vercel.json` with an `X-Robots-Tag: noindex, nofollow` header. It also adds a robots meta tag to every HTML file, then runs `vercel deploy --prod`. It deploys by itself, so run it once and don't run a separate `vercel deploy` afterwards. After a deploy, check that `curl -sI https://aftersight-zeta.vercel.app/ | grep -i robots` still shows noindex, and run `e2e/festus.cjs` and `e2e/mobile.cjs` with `BASE_URL`.
 

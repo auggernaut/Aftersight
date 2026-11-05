@@ -15,6 +15,7 @@ AfterSight is a city-builder sim on the micropolisJS engine about who owns AI, r
 npm install && npm run build
 export NODE_PATH=<playwright install>/node_modules    # Playwright isn't a repo dependency
 OUT=shots node e2e/festus.cjs     # main end-to-end test (Festus through the real UI)
+OUT=shots node e2e/start.cjs      # start screen, top bar, autosave and Continue
 OUT=shots node e2e/mobile.cjs     # phones
 OUT=shots node e2e/smoke.cjs      # starter town
 N=30 node e2e/balance.cjs         # win rates per offer strategy (and `cards`, which never builds); rerun after any tuning change
@@ -25,6 +26,7 @@ Tests serve `dist/`, so rebuild after every change. Set `BASE_URL` only for one 
 ## Conventions
 
 - AfterSight code lives in `src/afterlight/`. Mayor-scenario logic is in `mayor.js`, with tuning constants at the top. The economy, mood and events are in `layer.js`. The Festus map is in `festus.js`. Cards, the alert window, the panel and the UI each have their own file.
+- The top bar has to fit a 1280px laptop: Budget and Save stay in view, and new buttons go under More (`#menuMore`). Check with `e2e/start.cjs`.
 - Money shown to the player goes through `money.js`: in Festus one game dollar is $1,000, so show `money(n)` (game dollars) or `usd(n)` (already real dollars), never a bare `'$' + n`.
 - Engine edits stay small and are marked with an `Afterlight` or `Aftersight` comment. Prefer a hook into the layer over changing engine logic.
 - All state that must survive a save lives in `layer.s` (it's saved under `saveData.afterlight`). Test hooks go on `window.__AL` in `game.js`.
