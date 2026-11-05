@@ -1,7 +1,8 @@
 // AfterSight start screen and sharing test. Run `npm run build` first. Serves dist/ (or BASE_URL) and checks what a
 // new player meets: the start screen (Festus first, the sandbox behind a link, the disclaimer), one click into
 // Festus, the top bar fitting a 1280px laptop, the More menu, the counter's buttons in view, the first tips, autosave,
-// Continue, ?play=festus (Play again), the sandbox form, and the phone menu, with no console errors.
+// Continue, asking before a new game replaces the save (?play=festus, Play Festus, the sandbox; not Play again), the
+// sandbox form, and the phone menu, with no console errors.
 //
 //   NODE_PATH=/path/to/playwright/node_modules OUT=shots node e2e/start.cjs
 const { chromium, devices } = require('playwright'); const http = require('http'), fs = require('fs'), path = require('path');
@@ -72,12 +73,29 @@ const fails = []; const fail = m => { fails.push(m); console.log('FAIL: ' + m); 
   await page.click('#splashLoad'); await page.waitForFunction(() => window.__AL && __AL.layer, null, {timeout: 90000}); await page.waitForTimeout(800);
   const loaded = await page.evaluate(() => ({date: __AL.layer.dateString(), scen: __AL.layer.s.scenario, town: document.getElementById('name').textContent}));
   console.log('loaded', JSON.stringify(loaded)); if (loaded.date !== st.date || loaded.scen !== 'festus') fail('Continue should load the saved game');
-  // ?play=festus starts a new Festus game straight away
-  await page.goto(URL + '?play=festus'); await page.waitForSelector('#alCard', {state: 'visible', timeout: 90000});
-  const pf = await page.evaluate(() => ({date: __AL.layer.dateString(), kind: __AL.layer.s.card && __AL.layer.s.card.type, url: location.search}));
-  console.log('play again', JSON.stringify(pf)); if (pf.date !== 'Jan 2026' || pf.kind !== 'intro' || pf.url) fail('?play=festus should start a fresh game');
-  // the sandbox still starts
+  // a shared ?play=festus link over a saved game asks first; Keep my save leaves the save alone
+  const savedDate = () => page.evaluate(() => { const j = JSON.parse(localStorage.getItem('micropolisJSGame') || 'null'); return j && j.alMeta && j.alMeta.date; });
+  await page.evaluate(() => __AL.game.alUI.setSpeed(0));
+  await page.goto(URL + '?play=festus'); await page.waitForSelector('#replaceWindow', {state: 'visible', timeout: 30000}); await page.waitForTimeout(300);
+  await page.screenshot({path: OUT + '/8-replace.png'});
+  const before = await savedDate(); const rq = await page.evaluate(() => ({text: document.getElementById('replaceWindow').innerText.replace(/\s+/g, ' '), game: !!window.__AL, url: location.search}));
+  console.log('replace asks', JSON.stringify(rq), before); if (rq.game || rq.url || rq.text.indexOf(before) < 0) fail('?play=festus over a save should ask first, naming the save');
+  await page.click('#replaceCancel'); await page.waitForTimeout(5000);
+  const kept = {date: await savedDate(), game: await page.evaluate(() => !!window.__AL), cont: await page.isVisible('#splashLoad'), dialog: await page.isVisible('#replaceWindow')};
+  console.log('keep save', JSON.stringify(kept)); if (kept.date !== before || kept.game || !kept.cont || kept.dialog) fail('Keep my save should leave the save and show Continue');
+  // Play Festus over a saved game asks too; Start new game starts it
+  await page.click('#splashFestus'); await page.waitForSelector('#replaceWindow', {state: 'visible'});
+  await page.click('#replaceOK'); await page.waitForSelector('#alCard', {state: 'visible', timeout: 90000});
+  const pf = await page.evaluate(() => ({date: __AL.layer.dateString(), kind: __AL.layer.s.card && __AL.layer.s.card.type}));
+  console.log('start new', JSON.stringify(pf)); if (pf.date !== 'Jan 2026' || pf.kind !== 'intro') fail('Start new game should start a fresh Festus game');
+  // Play again on the final paper starts a new game without asking
+  await page.evaluate(() => { __AL.game.alUI.setSpeed(0); __AL.game.alPanel.paperWindow.open({gameOver: true, tone: 'bad', headline: 'VOTERS OUST MAYOR', text: 'VOTERS OUST MAYOR', body: 'The mayor won 41% of the vote.', helps: '', strains: 'Game over.'}); });
+  await page.click('#alPaperRestart'); await page.waitForFunction(() => window.__AL && __AL.layer && __AL.layer.s.card && __AL.layer.s.card.type === 'intro', null, {timeout: 90000});
+  const pa = await page.evaluate(() => ({date: __AL.layer.dateString(), url: location.search, asked: !document.getElementById('replaceWindow').classList.contains('hidden')}));
+  console.log('play again', JSON.stringify(pa)); if (pa.date !== 'Jan 2026' || pa.url || pa.asked) fail('Play again should start a fresh game without asking');
+  // the sandbox still starts (confirming over the save)
   await page.goto(URL); await page.waitForSelector('#splashSandbox', {state: 'visible'}); await page.click('#splashSandbox'); await page.fill('#nameForm', 'Testville'); await page.click('#playit');
+  await page.waitForSelector('#replaceWindow', {state: 'visible'}); await page.click('#replaceOK');
   await page.waitForFunction(() => window.__AL && __AL.layer && __AL.layer.s.scenario, null, {timeout: 90000}); await page.waitForTimeout(500);
   console.log('sandbox started', await page.evaluate(() => __AL.layer.s.scenario));
   console.log('errors', JSON.stringify(errs)); if (errs.length) fail('console errors');

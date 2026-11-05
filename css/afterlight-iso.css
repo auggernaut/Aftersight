@@ -781,3 +781,7 @@ body:has(#menuButtons.open) header#header, body:has(#menuButtons.moreOpen) heade
   #menuButtons.open #menuMore a.miscButton { height: 42px; min-width: 160px; font-size: 14px; }
   .townBody .townNote { display: none !important; }
 }
+/* Aftersight: starting a new game over a saved one asks first (splashScreen.js confirmNew) */
+#replaceWindow { width: min(440px, 92vw) !important; }
+#replaceWindow p { margin: 4px 0 14px; font-size: 14px; line-height: 1.5; }
+#replaceWindow .replaceBtns { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }

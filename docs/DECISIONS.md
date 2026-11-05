@@ -15,7 +15,8 @@ Getting AfterSight to the point where Augustin can send people a link. A first-m
 - **First-game tips in the ticker:** the demand bars (showing an empty lot), that news lines explain themselves, and the Research Lab.
 - **The top bar fits a laptop.** Budget and Save stay in view; Settings, Photo, Feedback, About and New game sit under More. Festus hides Evaluation (the engine's score) and Disasters. Pause is the speed buttons' job.
   *Why:* at 1280px, Save and everything after Evaluation fell off the screen.
-- **Autosave and Continue.** The game saves itself once a game month and whenever the tab is hidden or closed; the start screen offers Continue with the town and date. New game (under More) goes back to the start screen with the game saved.
+- **Autosave and Continue.** The game saves itself once a game month and whenever the tab is hidden or closed; the start screen offers Continue with the town and date. New game (under More) goes back to the start screen with the game saved. The browser keeps one save, so starting a new game over it (Play Festus, the sandbox or a `?play=festus` link) asks first; Play again on the final paper doesn't, because the player just chose it.
+  *Why:* a shared link or one misclick would otherwise autosave a fresh January 2026 over a game in progress (caught by Cursor Bugbot on PR #3).
 - **Play again** on the game-over paper and on the paper of a final win starts a new Festus game (`?play=festus`, which also works as a shared link).
 - **Sharing.** Link previews (title, description, a 1200x630 image of the town); Feedback goes to augman on X; Vercel Web Analytics (anonymous, no cookies) when a deploy asks for it, with a few milestone events.
 - **The north side's corner shop is an empty lot.** It was the only zone left in a platted neighbourhood and had no power.

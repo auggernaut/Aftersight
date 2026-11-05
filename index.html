@@ -242,6 +242,13 @@
           <form id="aboutForm" class="alignCenter margin10"><input type="submit" id="aboutOK" class="dialogOK" value="Close"></form>
         </div>
       </div>
+      <div class="hidden modal shadow" id="replaceWindow" role="dialog" aria-modal="true" aria-labelledby="replaceTitle">
+        <header id="replaceTitle" class="padding10 chunk alignCenter">Start a new game?</header>
+        <div class="padding10 open">
+          <p>This browser keeps one saved game. A new game replaces <b id="replaceName">your town</b><span id="replaceDate"></span>.</p>
+          <div class="replaceBtns"><button type="button" id="replaceCancel" class="cancel">Keep my save</button><button type="button" id="replaceOK" class="dialogOK">Start new game</button></div>
+        </div>
+      </div>
       <div id="tooltip" class="hidden"></div>
       <div class="hidden modal shadow" id="budget">
         <header id="budgetHeader" class="budgetHeader padding10 chunk alignCenter">

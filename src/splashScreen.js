@@ -56,12 +56,14 @@ function SplashScreen(tileSet, snowTileSet, spriteSheet) {
 
   // Aftersight: Festus starts in one click (its map, name and tuning are fixed); the sandbox (a random map or an
   // empty valley) gets the name, difficulty and map form; a saved game (the game saves itself) can be continued.
-  $('#splashFestus').click(playFestus.bind(this));
+  // The browser keeps one save, so starting a new game over it asks first (see confirmNew).
+  var self = this;
+  $('#splashFestus').click(function(e) { e.preventDefault(); confirmNew.call(self, playFestus); });
   $('#splashSandbox').click(acquireNameAndDifficulty.bind(this));
   $('#splashGenerate').click(regenerateMap.bind(this));
   $('#splashBack').click(backToSplash.bind(this));
   $('#splashLoad').click(handleLoad.bind(this));
-  $('#playForm').submit(play.bind(this));
+  $('#playForm').submit(function(e) { e.preventDefault(); confirmNew.call(self, play); });
   // the start screen's About opens AfterSight's own About window (the game wires it up again once it starts)
   $('#splashAbout').on('click.splash', function(e) { e.preventDefault(); $('#opaque, #aboutWindow').removeClass('hidden'); });
   $('#aboutForm').on('submit.splash', function(e) { e.preventDefault(); $('#opaque, #aboutWindow').addClass('hidden'); });
@@ -70,6 +72,7 @@ function SplashScreen(tileSet, snowTileSet, spriteSheet) {
   $('#saveRequest').prop('disabled', !Storage.canStore);
   var saved = null;
   try { saved = Storage.canStore ? Storage.getSavedGame() : null; } catch (err) { saved = null; }
+  this.saved = saved;
   $('#splashLoad').prop('disabled', !saved);
   if (saved) {
     var meta = saved.alMeta || {};
@@ -89,12 +92,37 @@ function SplashScreen(tileSet, snowTileSet, spriteSheet) {
   var first = saved ? $('#splashLoad')[0] : $('#splashFestus')[0];
   if (first) first.focus({preventScroll: true});
 
-  // Aftersight: ?play=festus (Play again, or a shared link) starts a new Festus game straight away
+  // Aftersight: ?play=festus (Play again, or a shared link) starts a new Festus game straight away. Over a saved game
+  // it asks first, unless the player just chose Play again in the game (panel.js leaves a one-time flag).
   if (/[?&]play=festus\b/.test(window.location.search)) {
     if (window.history && window.history.replaceState) window.history.replaceState(null, '', window.location.pathname);
-    playFestus.call(this, {preventDefault: function() {}});
+    var again = false;
+    try { again = window.sessionStorage.getItem('alPlayAgain') === '1'; window.sessionStorage.removeItem('alPlayAgain'); } catch (err) { again = false; }
+    if (again) playFestus.call(this);
+    else confirmNew.call(this, playFestus);
   }
 }
+
+
+// Aftersight: the browser keeps one saved game and a new game autosaves over it, so with a save present, starting
+// anew asks first. Keep my save goes back to the start screen, where Continue loads it.
+var confirmNew = function(start) {
+  var self = this, saved = this.saved;
+  if (!saved) { start.call(this); return; }
+  var meta = saved.alMeta || {};
+  $('#replaceName').text(meta.town || saved.name || 'your town');
+  $('#replaceDate').text(meta.date ? ' (' + meta.date + ')' : '');
+  var close = function() { $('#opaque, #replaceWindow').addClass('hidden'); $('#replaceOK, #replaceCancel').off('click'); $(document).off('keydown.replace'); };
+  $('#replaceOK').on('click', function(e) { e.preventDefault(); close(); start.call(self); });
+  $('#replaceCancel').on('click', function(e) {
+    e.preventDefault(); close();
+    if ($('#start').is(':visible')) { $('#start').hide(); $('#splash').show(); }
+    if ($('#splashLoad')[0]) $('#splashLoad')[0].focus({preventScroll: true});
+  });
+  $(document).on('keydown.replace', function(e) { if (e.key === 'Escape') $('#replaceCancel').click(); });
+  $('#opaque, #replaceWindow').removeClass('hidden');
+  $('#replaceCancel')[0].focus({preventScroll: true});
+};
 
 
 // Generate a new map at the user's request, and paint it
@@ -136,7 +164,7 @@ var handleLoad = function(e) {
 
 // Aftersight: Festus has its own map, name and tuning (easy), so it starts straight away
 var playFestus = function(e) {
-  e.preventDefault();
+  if (e) e.preventDefault();
   offAll();
   $('#splash').hide();
   $('#alScenFestus').prop('checked', true);
@@ -181,7 +209,7 @@ var backToSplash = function(e) {
 // This function should be called after the name/difficulty form has been submitted. The game will now be launched
 // with the map selected earlier.
 var play = function(e) {
-  e.preventDefault();
+  if (e) e.preventDefault();
 
   // As usual, uninstall event listeners, and hide the UI
   offAll();

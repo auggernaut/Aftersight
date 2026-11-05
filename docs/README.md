@@ -46,7 +46,7 @@ OUT=shots node e2e/festus.cjs     # Festus through the real UI: intro, offer, co
                                   # with houses while crews push rents up, robot crews halving build prices
 OUT=shots node e2e/start.cjs      # what a new player meets: the start screen (Festus first, Sandbox link, disclaimer), one
                                   # click into Festus, the top bar fitting 1280-1920px, the More menu, the counter's buttons in
-                                  # view, first tips, autosave, Continue, ?play=festus, the sandbox form, the phone menu
+                                  # view, first tips, autosave, Continue, asking before a new game replaces the save, Play again, the sandbox form, the phone menu
 OUT=shots node e2e/mobile.cjs     # emulated iPhone 14 and Pixel 7: tap, pan, pinch, toolbar, sheet, Festus cards, alert window
 OUT=shots node e2e/smoke.cjs      # starter town: tools, zoom/pan, policies, 4 game years, events, save
 N=30 node e2e/balance.cjs         # headless Festus balance: win rates for negotiate / firm / yes / no autoplayers (all of

@@ -117,9 +117,11 @@ function AfterlightPanel(game) {
     if (self._paperData && self._paperData.gameOver) self.layer.s.mayor.sandbox = true;   // keep watching as a citizen
     self.paperWindow.close();
   });
-  // Play again: a new Festus game straight away (?play=festus, see splashScreen.js); the sandbox goes to the start screen
+  // Play again: a new Festus game straight away (?play=festus, see splashScreen.js); the sandbox goes to the start screen.
+  // The flag tells the start screen the player chose this, so it doesn't ask before replacing the save.
   $('#alPaperRestart').on('click', function(e) {
     e.preventDefault();
+    if (self.layer.s.scenario === 'festus') { try { window.sessionStorage.setItem('alPlayAgain', '1'); } catch (err) {} }
     window.location.href = window.location.pathname + (self.layer.s.scenario === 'festus' ? '?play=festus' : '');
   });
   var festus = this.layer.s.scenario === 'festus';

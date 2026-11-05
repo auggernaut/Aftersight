@@ -2,7 +2,7 @@
 
 AfterSight is a city-builder sim about living through the arrival of AI, robots and abundance. You are the mayor of a real, contested town in 2026, and a developer wants a $6B AI data center campus there. Your choices decide **who owns the engine** (compute, robots, energy) and whether the town ends up thriving, enclosed, idle, strained or shrinking.
 
-- **Play:** https://aftersight-zeta.vercel.app (unlisted, noindex). `?play=festus` skips the start screen. The game saves itself in your browser; Continue picks it up.
+- **Play:** https://aftersight-zeta.vercel.app (unlisted, noindex). `?play=festus` skips the start screen (it asks first if you have a saved game). The game saves itself in your browser; Continue picks it up.
 - **Feedback:** message augman on X (x.com/augman), or open an issue here.
 - **Start here:** [docs/README.md](docs/README.md) (run, test, deploy, branch map), [AGENTS.md](AGENTS.md) for AI agents
 - **Docs:** [Vision](docs/VISION.md) · [Architecture](docs/ARCHITECTURE.md) · [Decisions](docs/DECISIONS.md) · [Ideas](docs/IDEAS.md) · [Open questions](docs/OPEN_QUESTIONS.md) · [Research](docs/RESEARCH.md)
