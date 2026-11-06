@@ -9,7 +9,8 @@ Helper scripts that aren't part of the game build. The Playwright scripts need P
 | `speed.cjs` | Measures real seconds per game month at Slow, Normal and Fast. Optional `BASE_URL`. |
 | `fast-to-2032.cjs` | Plays Festus at Fast speed in real time (no fast-forward) to a win or loss, answering cards automatically. Checks pacing and console errors over a full game. |
 | `screenshots/shot-*.cjs` | Screenshot sets used in reports: `shot-offer` (offer card), `shot-alerts` (ticker and alert window), `shot-fund` (Festus Fund and projects), `shot-lab` (Research Lab, build menu, breakthrough card). Env: `OUT` (default `shots`), `PREFIX`, `BASE_URL`. |
-| `make-brand-icons.cjs` | Builds the favicon and app icons in `assets/brand/` from the mark, `assets/brand/mark.svg`. Rerun after changing the mark. |
+| `make-brand-icons.cjs` | Builds the favicon and app icons in `assets/brand/` from a crop of the start art (the blue tower on Main Street). Rerun, and check the crop, after remaking the start art. |
+| `make-og.cjs` | Builds the link preview, `assets/brand/og-1200x630.jpg`: the name and headline at the left, the start art on the right. |
 | `make-start-art.cjs` | Renders the start screen's backdrop from the game (Festus in January 2026, interface hidden) into `assets/brand/start-wide.webp` and `start-phone.webp`. Rerun after the Festus map or the renderer changes. |
 
 Example:

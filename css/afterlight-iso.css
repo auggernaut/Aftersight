@@ -28,8 +28,6 @@ header#header {
   font-family: var(--font);
 }
 #brand { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
-#brandMark { width: 22px; height: 22px; align-self: center; border-radius: 6px;
-  background: conic-gradient(from 200deg, #ffd47a, #f2b544, #e07a3a, #a23bd6, #2fbf4a, #ffd47a); box-shadow: 0 0 10px rgba(242,181,68,0.5); }
 #title { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: 0.4px; color: #fff; }
 #brand .alSub { font-size: 11px; color: var(--muted); opacity: 1; }
 #hud { display: flex; align-items: center; gap: 6px; margin-left: 6px; }
@@ -242,7 +240,6 @@ button, input, label, a, .toolButton { touch-action: manipulation; }
   body { -webkit-tap-highlight-color: transparent; }
   header#header { height: 44px; padding: 0 6px; padding-left: max(6px, env(safe-area-inset-left)); padding-right: max(6px, env(safe-area-inset-right)); gap: 6px; }
   #brand .alSub { display: none; }
-  #brandMark { width: 20px; height: 20px; flex: none; }
   body.inGame #title, body.inGame #headerLinks { display: none; }
   body:has(#alPanel:not(.collapsed)) #zoomButtons, body:has(#alPanel:not(.collapsed)) #hint { display: none; }
   #hud { flex: 1 1 auto; min-width: 0; margin-left: 0; gap: 4px; overflow-x: auto; scrollbar-width: none; }
@@ -416,11 +413,8 @@ button, input, label, a, .toolButton { touch-action: manipulation; }
 }
 #alCard[data-type="campaign"] .cardKicker { color: #7a3fa8; }
 
-/* ---- brand: one mark (assets/brand/mark.svg, the wordmark's S with circuit traces) and one wordmark (Inter 800, a blue
-   S) on the start screen, in the game, in the icons and in link previews ---- */
-#brandMark { background: url(../assets/brand/mark.svg) center / contain no-repeat; border-radius: 0; box-shadow: none; }
-#title { font-weight: 800; letter-spacing: -0.2px; }
-#title .si { font-weight: 800; background: linear-gradient(180deg, #eaf5ff 0%, #8cc4f2 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+/* ---- brand: the name in plain type, no mark, the same on the start screen, in the game and in link previews ---- */
+#title { font-weight: 700; letter-spacing: -0.1px; }
 
 /* ---- intro: the start screen and the sandbox form, bright like the link preview ---- */
 :root { --sky1: #dff1ff; --sky2: #f4faff; --warm: #fff0d9; --introInk: #1d2a36; --ink2: #4f5f6d; --blue: #2f7fd1; --blueDark: #1f63ab; --sun: #f5b545; }
@@ -431,7 +425,6 @@ body:not(.inGame) #title { color: var(--introInk); }
 body:not(.inGame) #brand .alSub, body:not(.inGame) #headerLinks a { color: var(--ink2) !important; }
 body:not(.inGame) footer#footer { background: #f3f8fc; color: var(--ink2); border-top: 1px solid rgba(29, 42, 54, 0.08); }
 body:not(.inGame) footer#footer a { color: var(--blueDark); }
-body:not(.inGame) #title .si { background: linear-gradient(180deg, #2f7fd1, #163e6b); -webkit-background-clip: text; background-clip: text; }
 
 /* The start screen shows the game itself: Festus in January 2026 from the iso renderer fills the screen
    (assets/brand/start-*.webp, made by tools/make-start-art.cjs), drifting slowly, and the words sit in a column on a pale
@@ -454,7 +447,6 @@ body:not(.inGame) #start.intro { font-size: 15px; }
 body:not(.inGame) #loadingBanner { left: calc(var(--introCol) / 2); }
 .introCol { min-height: 100%; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; padding: 32px 0; max-width: 470px; }
 #splash .introHead h2 { margin: 0; font-size: clamp(30px, 2.9vw, 42px); line-height: 1.08; font-weight: 800; letter-spacing: -0.02em; color: var(--introInk); text-wrap: balance; }
-#splash .introHead p { margin: 12px 0 0; font-size: clamp(16px, 1.3vw, 19px); line-height: 1.4; color: var(--ink2); }
 #start.intro h2 { margin: 0 0 4px; font-size: 28px; font-weight: 800; letter-spacing: -0.3px; color: var(--introInk); text-align: left; }
 .continueBox { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 28px 0 0; padding: 10px 10px 10px 16px;
   border-radius: 14px; background: #fff; border: 1px solid #cfe0f1; box-shadow: 0 8px 22px rgba(47, 127, 209, 0.14); }
@@ -492,7 +484,6 @@ body:not(.inGame) #loadingBanner { left: calc(var(--introCol) / 2); }
   .introCol { justify-content: flex-start; min-height: 0; max-width: none; padding: 4px 0 calc(16px + env(safe-area-inset-bottom)); }
   #start .introCol { padding-top: 16px; }
   #splash .introHead h2 { font-size: 24px; }
-  #splash .introHead p { font-size: 15px; margin-top: 6px; }
   .continueBox { margin-top: 14px; padding: 8px 8px 8px 12px; }
   #splash .continueText { font-size: 14px; }
   #splashLoad.primary { min-width: 100px; height: 40px !important; }
@@ -521,7 +512,6 @@ body:not(.inGame) #loadingBanner { left: calc(var(--introCol) / 2); }
   body:not(.inGame) #splash.intro, body:not(.inGame) #start.intro { padding: 0 20px 0 max(20px, env(safe-area-inset-left)) !important; }
   .introCol { padding: 12px 0; }
   #splash .introHead h2 { font-size: 21px; }
-  #splash .introHead p { display: none; }
   .continueBox { margin-top: 10px; padding: 6px 6px 6px 12px; gap: 10px; }
   #splash .continueText { font-size: 13px; }
   #splashLoad.primary { height: 36px !important; min-width: 96px; }

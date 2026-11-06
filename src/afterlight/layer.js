@@ -132,7 +132,7 @@ AfterlightLayer.prototype.setScenario = function(name) {
     s.card = {type: 'intro', kicker: 'Festus, Missouri · January 2026', title: 'You are the mayor',
       body: 'Festus is a river town of 12,000, half an hour south of St. Louis. A developer wants a $6 billion data center campus on the farmland by I-55, and the town wants your answer tonight.',
       rows: [['Your job', 'Stay above 50% approval at each election, every two years from April 2028. Residents, farmers, workers, business and schools each weigh in.', 'neutral'],
-             ['What\'s coming', 'Machines take more of the region\'s work every year, campus or no campus. What the town owns decides who gains.', 'neutral'],
+             ['What\'s coming', 'Machines take more of the region\'s work every year, campus or no campus.', 'neutral'],
              ['Goal', 'Win 3 elections, or win one while the town owns 25%+ of local compute and pays a $1,000+ dividend a resident.', 'good']],
       options: [{id: 'go', label: 'Open the meeting', tone: 'good',
                  note: 'Festus is real. Keystone, its offers and everyone you meet are fictional: this is a simulation, not a prediction.'}]};
